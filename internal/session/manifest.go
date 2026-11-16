@@ -135,6 +135,7 @@ type Manifest struct {
 	// Runner is the coding agent this session was assembled with, so every later
 	// boot starts the one that was chosen rather than the workbench's default.
 	Runner     string             `json:"runner,omitempty"`
+	Profile    string             `json:"profile,omitempty"` // empty launches on the runner's default profile
 	CreatedAt  time.Time          `json:"createdAt"`
 	Repos      []ManifestRepo     `json:"repos"`
 	Escalation *EscalationOutcome `json:"escalation,omitempty"`

@@ -9,8 +9,8 @@
   import { begin, end } from "./calls.js";
   import { destination, labels, last, primary, stepKey } from "./steps.js";
 
-  /** @type {{onClose: () => void, gated?: boolean}} */
-  let { onClose, gated = false } = $props();
+  /** @type {{onClose: () => void, gated?: boolean, settingsOpen?: boolean, onSettings?: (tab: import("../settings/tabs.js").SettingsTab) => void}} */
+  let { onClose, gated = false, settingsOpen = false, onSettings } = $props();
 
   const wizard = assembling(() => onClose());
   const repos = wizard.repos;
@@ -26,6 +26,13 @@
   // steps is unaffected: a user who can go back is not at a dead end.
   let trapped = $derived(gated && wizard.step === 0);
   let owned = $state(false);
+
+  // A profile added or signed in while Settings covered the wizard shows once it closes.
+  let covered = false;
+  $effect(() => {
+    if (covered && !settingsOpen) wizard.readRunners();
+    covered = settingsOpen;
+  });
 
   onMount(() => {
     let live = true;
@@ -86,6 +93,9 @@
   <AgentStep
     runners={wizard.runners}
     bind:runner={wizard.form.runner}
+    bind:profile={wizard.form.profile}
+    statuses={wizard.statuses}
+    onManage={onSettings ? () => onSettings("agents") : undefined}
     bind:mode={wizard.form.mode} />
 {/snippet}
 

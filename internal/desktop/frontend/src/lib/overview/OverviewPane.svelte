@@ -44,6 +44,7 @@
   let model = $derived(overview(tree?.nodes ?? []));
   let orchestrator = $derived(model.root);
   let tools = $derived(tree?.tools ?? true);
+  let agent = $derived(tree?.profileLabel ? `${tree.providerLabel} · ${tree.profileLabel}` : (tree?.providerLabel ?? ""));
   let doing = $derived(orchestrator ? nowLine(orchestrator, root) : "");
 
   /** @param {string} path */
@@ -62,7 +63,7 @@
   <SessionDigest {digest} {now} />
   <Tier label="Orchestrator" name="orchestrator">
     <div class="line">
-      <span class="provider">{tree?.providerLabel ?? ""}</span>
+      <span class="provider">{agent}</span>
       {#if orchestrator}
         <span class="words">{rootWords(orchestrator, model.leads, tools)}</span>
         {#if orchestrator.reason}<span class="reason">{orchestrator.reason}</span>{/if}

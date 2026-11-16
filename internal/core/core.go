@@ -54,6 +54,7 @@ type Core struct {
 	Picker       *Picker
 
 	Settings  *Settings
+	Profiles  *Profiles
 	FirstRun  *FirstRun
 	Placement *Placement
 
@@ -95,6 +96,7 @@ func New(opts Options, client Client) *Core {
 	c.Picker = newPicker(opts.Config, reg, c.Repositories, signal)
 	c.Settings = newSettings(opts.Config, client.Emit, opts.ValidateEditor, opts.ValidateLaunch, opts.LinearCommand,
 		opts.LinearEnvironment, withoutTicket(opts.Relaunch), opts.Quit, reg.Touch, ReconfigureVault(c.Vault), runners, client)
+	c.Profiles = newProfiles(opts.Config, ReconfigureVault(c.Vault), runners, opts.Launcher, reg, windows)
 	c.FirstRun = newFirstRun(opts.Config, reg.Touch, pendingRelaunch(opts.Relaunch, c.PendingTicket), opts.Quit,
 		client.ChooseDirectory, ReconfigureVault(c.Vault))
 	c.Placement = newPlacement(opts.Config, reg)
@@ -174,12 +176,13 @@ func (c *Core) wire() {
 		copyImage:   client.CopyImage,
 		copyFile:    client.CopyFile,
 	}
-	reg.trees = newAgentTrees(client.Emit, agentTreeInterval, reg.Current, sessionTree)
+	tree := func(state *SessionState) status.AgentTree { return sessionTree(opts.Config, state) }
+	reg.trees = newAgentTrees(client.Emit, agentTreeInterval, reg.Current, tree)
 	c.Chrome.answerTrees(func(slug string) status.AgentTree {
 		if state := reg.BySlug(slug); state != nil {
-			return sessionTree(state)
+			return tree(state)
 		}
-		return agentTree(agentActivitySnapshot{}, manifestRunner(session.Resumable(opts.Root, slug)), "")
+		return coldTree(opts.Config, session.Resumable(opts.Root, slug))
 	})
 
 	// A supervisor exiting ends only its own session, and a failed one keeps its
@@ -230,7 +233,7 @@ func (c *Core) PendingTicket() (string, string) { return c.Assembly.pendingTicke
 
 // OpenSession boots the session at root and puts it on screen.
 func (c *Core) OpenSession(root string, resume bool) error {
-	opened, err := c.Sessions.start(root, "", resume)
+	opened, err := c.Sessions.start(root, "", "", resume)
 	if err != nil {
 		return err
 	}
@@ -297,24 +300,35 @@ func attend(state *SessionState, shown func() *SessionState, touch, ring func())
 	}
 }
 
-func sessionTree(state *SessionState) status.AgentTree {
+// sessionTree names the profile the session booted on rather than the
+// manifest's: a workbench started from the command line boots the default.
+func sessionTree(cfg *config.Config, state *SessionState) status.AgentTree {
 	snapshot := state.agents.snapshot()
 	fallback := ""
 	if snapshot.Provider == "" {
-		fallback = manifestRunner(state.Root())
+		fallback, _ = manifestAgent(state.Root())
 	}
-	return agentTree(snapshot, fallback, state.Root())
+	tree := agentTree(snapshot, fallback, state.Root())
+	tree.ProfileLabel = profileLabel(cfg, tree.Provider, state.profile)
+	return tree
 }
 
-func manifestRunner(root string) string {
+func coldTree(cfg *config.Config, root string) status.AgentTree {
+	runner, profile := manifestAgent(root)
+	tree := agentTree(agentActivitySnapshot{}, runner, "")
+	tree.ProfileLabel = profileLabel(cfg, runner, profile)
+	return tree
+}
+
+func manifestAgent(root string) (runner, profile string) {
 	if root == "" {
-		return ""
+		return "", ""
 	}
 	m, err := session.Load(root)
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	return m.Runner
+	return m.Runner, m.Profile
 }
 
 // overviewWindow opens the session's Overview tab. Adoption may call it again once

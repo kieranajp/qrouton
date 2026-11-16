@@ -519,3 +519,95 @@ func TestCacheDirFollowsXDGCacheHomeOnEveryPlatform(t *testing.T) {
 		t.Fatalf("CacheDir() = %q, want %q", got, want)
 	}
 }
+
+func TestLoadRejectsDuplicateProfileIDs(t *testing.T) {
+	writeConfig(t, `{"root":"`+t.TempDir()+`","profiles":{"claude":[`+
+		`{"id":"work","label":"Work","dir":"/tmp/a"},{"id":"work","label":"Other","dir":"/tmp/b"}]}}`)
+	_, err := Load()
+	if !errors.Is(err, ErrProfileDuplicate) {
+		t.Fatalf("Load = %v, want %v", err, ErrProfileDuplicate)
+	}
+
+	writeConfig(t, `{"root":"`+t.TempDir()+`","profiles":{"claude":[{"id":"work","label":"Work","dir":"/tmp/a"}],`+
+		`"codex":[{"id":"work","label":"Work","dir":"/tmp/b"}]}}`)
+	if _, err := Load(); err != nil {
+		t.Fatalf("one id under two runners: %v", err)
+	}
+}
+
+func TestLoadRejectsRelativeProfileDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for name, dir := range map[string]string{
+		"relative":       "claude-work",
+		"dot relative":   "./claude-work",
+		"empty":          "",
+		"not clean":      "/tmp/x/../claude-work",
+		"trailing slash": "/tmp/claude-work/",
+	} {
+		writeConfig(t, `{"root":"`+t.TempDir()+`","profiles":{"claude":[{"id":"work","label":"Work","dir":"`+dir+`"}]}}`)
+		if _, err := Load(); !errors.Is(err, ErrProfileDir) {
+			t.Errorf("%s: Load = %v, want %v", name, err, ErrProfileDir)
+		}
+	}
+
+	writeConfig(t, `{"root":"`+t.TempDir()+`","profiles":{"claude":[{"id":"work","label":"Work","dir":"~/.claude-work"}]}}`)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := cfg.Profile("claude", "work"); p.Dir != filepath.Join(home, ".claude-work") {
+		t.Fatalf("~ expanded to %q", p.Dir)
+	}
+}
+
+func TestSnapshotAndReplaceKeepProfiles(t *testing.T) {
+	cfg := &Config{Profiles: map[string][]RunnerProfile{"claude": {{ID: "work", Label: "Work", Dir: "/tmp/work"}}}}
+	snapshot := cfg.Snapshot()
+	cfg.Profiles["claude"][0].Label = "changed"
+	if p, ok := snapshot.Profile("claude", "work"); !ok || p.Label != "Work" {
+		t.Fatalf("snapshot profile = %+v, %v", p, ok)
+	}
+
+	live := &Config{}
+	live.Replace(snapshot)
+	snapshot.Profiles["claude"][0].Label = "mutated snapshot"
+	if p, ok := live.Profile("claude", "work"); !ok || p.Label != "Work" {
+		t.Fatalf("replaced profile = %+v, %v", p, ok)
+	}
+}
+
+func TestLoadRejectsAProfileWithoutAnIDOrLabel(t *testing.T) {
+	for name, profile := range map[string]string{
+		"empty id":    `{"id":"","label":"Work","dir":"/tmp/work"}`,
+		"blank id":    `{"id":" ","label":"Work","dir":"/tmp/work"}`,
+		"empty label": `{"id":"work","label":"","dir":"/tmp/work"}`,
+		"blank label": `{"id":"work","label":" ","dir":"/tmp/work"}`,
+	} {
+		writeConfig(t, `{"root":"`+t.TempDir()+`","profiles":{"claude":[`+profile+`]}}`)
+		if _, err := Load(); !errors.Is(err, ErrProfileID) {
+			t.Errorf("%s: Load = %v, want %v", name, err, ErrProfileID)
+		}
+	}
+}
+
+func TestSaveRejectsAnInvalidProfile(t *testing.T) {
+	writeConfig(t, `{}`)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("QROUTON_ROOT", t.TempDir())
+	cfg := &Config{Root: t.TempDir(), Profiles: map[string][]RunnerProfile{
+		"claude": {{ID: "work", Label: "Work", Dir: "relative/work"}},
+	}}
+	if err := Save(cfg); !errors.Is(err, ErrProfileDir) {
+		t.Fatalf("Save = %v, want %v", err, ErrProfileDir)
+	}
+	saved, err := os.ReadFile(Path())
+	if err != nil || string(saved) != `{}` {
+		t.Fatalf("a refused save rewrote config.json: %s, %v", saved, err)
+	}
+
+	cfg.Profiles["claude"][0].Dir = "~/.claude-work"
+	if err := Save(cfg); err != nil {
+		t.Fatalf("Save with a ~ folder: %v", err)
+	}
+}

@@ -12,6 +12,9 @@ const (
 	runnerFlag  = launch.RunnerFlag
 	runnerUsage = "runner identifier to launch (claude, codex, opencode, agy)"
 
+	profileFlag  = launch.ProfileFlag
+	profileUsage = "runner profile to launch on (the default when absent)"
+
 	workbenchJSONFlag  = launch.WorkbenchJSONFlag
 	workbenchJSONUsage = "workbench handle stamped by the launcher"
 

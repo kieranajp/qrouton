@@ -766,7 +766,7 @@ func codexArgv(t *testing.T, command []string, config string) []string {
 // launch has to raise it before the runner starts.
 func TestCodexIsLaunchedAtTheDepthALeadNeeds(t *testing.T) {
 	argv := codexArgv(t, []string{runnerIDCodex, codexBypassSandboxFlag}, "")
-	if got := codex.MaxDepth(argv); got != codex.RequiredMaxDepth {
+	if got := codex.MaxDepth("", argv); got != codex.RequiredMaxDepth {
 		t.Fatalf("codex would run at depth %d, want %d\nargv: %v", got, codex.RequiredMaxDepth, argv)
 	}
 }
@@ -776,7 +776,7 @@ func TestCodexIsLaunchedAtTheDepthALeadNeeds(t *testing.T) {
 func TestCodexKeepsADeeperConfiguredDepth(t *testing.T) {
 	deeper := codex.RequiredMaxDepth + 2
 	argv := codexArgv(t, []string{runnerIDCodex}, fmt.Sprintf("[agents]\nmax_depth = %d\n", deeper))
-	if got := codex.MaxDepth(argv); got != deeper {
+	if got := codex.MaxDepth("", argv); got != deeper {
 		t.Fatalf("configured depth %d became %d\nargv: %v", deeper, got, argv)
 	}
 }
@@ -787,7 +787,7 @@ func TestCodexKeepsADeeperDepthFromALaunchOverride(t *testing.T) {
 	deeper := codex.RequiredMaxDepth + 1
 	argv := codexArgv(t,
 		[]string{runnerIDCodex, codex.ConfigFlag, codex.MaxDepthSetting(deeper)}, "")
-	if got := codex.MaxDepth(argv); got != deeper {
+	if got := codex.MaxDepth("", argv); got != deeper {
 		t.Fatalf("overridden depth %d became %d\nargv: %v", deeper, got, argv)
 	}
 }

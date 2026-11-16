@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	homeEnvVar  = "CODEX_HOME"
+	HomeEnvVar  = "CODEX_HOME"
 	homeDirName = ".codex"
 	configFile  = "config.toml"
 
@@ -56,7 +56,7 @@ func MaxDepthSetting(depth int) string {
 // Home is the directory Codex keeps its state in: $CODEX_HOME when set,
 // otherwise ~/.codex. It is empty only if neither is discoverable.
 func Home() string {
-	if home := os.Getenv(homeEnvVar); home != "" {
+	if home := os.Getenv(HomeEnvVar); home != "" {
 		return home
 	}
 	userHome, err := os.UserHomeDir()
@@ -67,10 +67,14 @@ func Home() string {
 }
 
 // MaxDepth returns the subagent nesting depth a Codex invocation will run with:
-// the value from its configuration file, overridden by any -c/--config argument
-// in argv, matching Codex's own precedence. Absent both, Codex's default.
-func MaxDepth(argv []string) int {
-	depth := configuredMaxDepth()
+// the value from the configuration file in home, or in Home() when home is
+// empty, overridden by any -c/--config argument in argv, matching Codex's own
+// precedence. Absent both, Codex's default.
+func MaxDepth(home string, argv []string) int {
+	if home == "" {
+		home = Home()
+	}
+	depth := configuredMaxDepth(home)
 	for index := 1; index < len(argv); index++ {
 		var override string
 		switch {
@@ -95,8 +99,8 @@ func MaxDepth(argv []string) int {
 // line by line rather than parsing TOML: this is the only key qrouton cares
 // about, and an unparseable config should leave the default standing rather than
 // fail a launch.
-func configuredMaxDepth() int {
-	file, err := os.Open(filepath.Join(Home(), configFile))
+func configuredMaxDepth(home string) int {
+	file, err := os.Open(filepath.Join(home, configFile))
 	if err != nil {
 		return DefaultMaxDepth
 	}

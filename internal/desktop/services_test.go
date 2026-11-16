@@ -20,6 +20,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/lineartools"
 	"github.com/kieranajp/qrouton/internal/placement"
 	"github.com/kieranajp/qrouton/internal/session"
@@ -77,7 +78,7 @@ func TestEachAdapterMethodReachesItsOwnCoreMethod(t *testing.T) {
 
 func adapterRows() [][]adapterRow {
 	return [][]adapterRow{ollamaRows(), sessionsRows(), termRows(), windowsRows(), bugReportRows(), chromeRows(),
-		assemblyRows(), repositoriesRows(), orgsRows(), pickerRows(), settingsRows(), firstRunRows(), placementRows()}
+		assemblyRows(), repositoriesRows(), orgsRows(), pickerRows(), settingsRows(), profilesRows(), firstRunRows(), placementRows()}
 }
 
 func ollamaRows() []adapterRow {
@@ -914,6 +915,86 @@ func settingsRows() []adapterRow {
 				t.Fatalf("InstallLinear = %+v, %v", view, err)
 			}
 			markedFile(t, config.ExpandHome(lineartools.ConfigPath), "--linear-issue")
+		}},
+	}
+}
+
+// profilesCore is a settings core whose launcher lists Claude Code as installed.
+func profilesCore(t *testing.T) (*core.Core, *config.Config, *stubBoot) {
+	t.Helper()
+	boot := newStubBoot()
+	boot.listed = []assembly.Runner{{ID: "claude", Label: "Claude Code", Installed: true}}
+	kernel, cfg, _ := settingsCore(t, Options{Launcher: boot})
+	return kernel, cfg, boot
+}
+
+func profilesRows() []adapterRow {
+	return []adapterRow{
+		{"Profiles.View", func(t *testing.T) {
+			kernel, _, _ := profilesCore(t)
+			view, err := (&Profiles{profiles: kernel.Profiles}).View()
+			if err != nil || len(view.Runners) != 1 || view.Runners[0].ID != "claude" {
+				t.Fatalf("View = %+v, %v", view, err)
+			}
+		}},
+		{"Profiles.Suggest", func(t *testing.T) {
+			kernel, _, _ := profilesCore(t)
+			if got := (&Profiles{profiles: kernel.Profiles}).Suggest("claude", "Work"); got.Dir != "~/.claude-work" {
+				t.Fatalf("Suggest = %+v", got)
+			}
+		}},
+		{"Profiles.Add", func(t *testing.T) {
+			kernel, cfg, _ := profilesCore(t)
+			if _, err := (&Profiles{profiles: kernel.Profiles}).Add(core.ProfileInput{Runner: "claude", Label: "Work"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := cfg.Profile("claude", "work"); !ok {
+				t.Fatal("Add saved no profile")
+			}
+		}},
+		{"Profiles.Rename", func(t *testing.T) {
+			kernel, cfg, _ := profilesCore(t)
+			if _, err := kernel.Profiles.Add(core.ProfileInput{Runner: "claude", Label: "Work"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := (&Profiles{profiles: kernel.Profiles}).Rename("claude", "work", "Day job"); err != nil {
+				t.Fatal(err)
+			}
+			if got, _ := cfg.Profile("claude", "work"); got.Label != "Day job" {
+				t.Fatalf("Rename left %+v", got)
+			}
+		}},
+		{"Profiles.Delete", func(t *testing.T) {
+			kernel, cfg, _ := profilesCore(t)
+			if _, err := kernel.Profiles.Add(core.ProfileInput{Runner: "claude", Label: "Work"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := (&Profiles{profiles: kernel.Profiles}).Delete("claude", "work"); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := cfg.Profile("claude", "work"); ok {
+				t.Fatal("Delete left the profile")
+			}
+		}},
+		{"Profiles.Status", func(t *testing.T) {
+			kernel, _, boot := profilesCore(t)
+			boot.probe = func(string, config.RunnerProfile) launch.SignIn {
+				return launch.SignIn{State: launch.SignInSignedIn}
+			}
+			got, err := (&Profiles{profiles: kernel.Profiles}).Status()
+			if err != nil || len(got) != 1 || got[0].State != launch.SignInSignedIn {
+				t.Fatalf("Status = %+v, %v", got, err)
+			}
+		}},
+		{"Profiles.SignIn", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			a.boot.signIn = func(string, config.RunnerProfile) ([]string, error) {
+				return []string{"/bin/sh", "-c", `printf signed > "$1"`, "sh", a.marker}, nil
+			}
+			if _, err := (&Profiles{profiles: a.kernel.Profiles}).SignIn("claude", ""); err != nil {
+				t.Fatal(err)
+			}
+			a.marked(t, "signed")
 		}},
 	}
 }

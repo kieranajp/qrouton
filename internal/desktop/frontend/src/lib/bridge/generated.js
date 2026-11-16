@@ -35,6 +35,13 @@ export const PRESENTER_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Pr
 export const PRESENTER_NOTE = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Note";
 export const PRESENTER_OPEN = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Open";
 export const PRESENTER_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Show";
+export const PROFILES_ADD = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Add";
+export const PROFILES_DELETE = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Delete";
+export const PROFILES_RENAME = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Rename";
+export const PROFILES_SIGN_IN = "github.com/kieranajp/qrouton/internal/desktop.Profiles.SignIn";
+export const PROFILES_STATUS = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Status";
+export const PROFILES_SUGGEST = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Suggest";
+export const PROFILES_VIEW = "github.com/kieranajp/qrouton/internal/desktop.Profiles.View";
 export const REPOSITORIES_BRANCHES = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Branches";
 export const REPOSITORIES_CACHED = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Cached";
 export const REPOSITORIES_REFRESH = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Refresh";
@@ -285,6 +292,13 @@ export const SETTINGS_FIELDS = Object.freeze({
   STICKERS: "stickers",
   UI_SCALE: "uiScale",
   THOUGHTS: "thoughts",
+});
+
+/** @typedef {"signed-in"|"signed-out"|"unknown"} SignInState */
+export const SIGN_IN_STATES = Object.freeze({
+  SIGNED_IN: "signed-in",
+  SIGNED_OUT: "signed-out",
+  UNKNOWN: "unknown",
 });
 
 /** @typedef {"running"|"succeeded"|"failed"|"waiting"|"idle"} TabStatus */

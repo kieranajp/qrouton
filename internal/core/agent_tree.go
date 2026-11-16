@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/codex"
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -67,6 +68,20 @@ func agentTree(snapshot agentActivitySnapshot, fallback, root string) status.Age
 		tree.Nodes = append(tree.Nodes, node)
 	}
 	return tree
+}
+
+// profileLabel answers the raw id for a profile config no longer has, so the
+// pane still says which account the session is pinned to.
+func profileLabel(cfg *config.Config, runner, id string) string {
+	if id == "" {
+		return ""
+	}
+	if cfg != nil {
+		if profile, ok := cfg.Profile(runner, id); ok {
+			return profile.Label
+		}
+	}
+	return id
 }
 
 func writtenDocuments(root string, files []string) []status.Document {

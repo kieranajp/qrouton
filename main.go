@@ -250,7 +250,12 @@ func (p workbenchPorts) Agent(req core.AgentRequest) (core.AgentCommand, error) 
 	if id == "" {
 		id = p.spec.Runner
 	}
-	runner, err := pickRunner(p.cfg.Snapshot(), id)
+	cfg := p.cfg.Snapshot()
+	runner, err := pickRunner(cfg, id)
+	if err != nil {
+		return core.AgentCommand{}, err
+	}
+	runner, err = launch.WithProfile(cfg, runner, req.ProfileID)
 	if err != nil {
 		return core.AgentCommand{}, err
 	}
@@ -258,7 +263,7 @@ func (p workbenchPorts) Agent(req core.AgentRequest) (core.AgentCommand, error) 
 	if err != nil {
 		return core.AgentCommand{}, err
 	}
-	return core.AgentCommand{Argv: argv, Env: env, RunnerID: runner.ID}, nil
+	return core.AgentCommand{Argv: argv, Env: env, RunnerID: runner.ID, ProfileID: runner.Profile.ID}, nil
 }
 
 // Shell and Reveal are built per session, because the landing-list path does not
@@ -280,19 +285,40 @@ func (p workbenchPorts) Document(sessionRoot, name string) (workbench.WindowOpti
 	return launch.DocumentWindow(sessionRoot, name, p.spec.Editor, workbench.LineSpan{})
 }
 
+// Runners lists each runner's default account, then its named profiles in
+// config order.
 func (p workbenchPorts) Runners() ([]assembly.Runner, error) {
-	runners, err := launch.Runners(p.cfg.Snapshot())
+	cfg := p.cfg.Snapshot()
+	runners, err := launch.Runners(cfg)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]assembly.Runner, len(runners))
-	for i, r := range runners {
-		out[i] = assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != ""}
+	out := make([]assembly.Runner, 0, len(runners))
+	for _, r := range runners {
+		out = append(out, assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != ""})
 	}
-	return out, nil
+	return assembly.WithProfiles(out, cfg.Profiles), nil
 }
 
 func (p workbenchPorts) Signal(sessionRoot string) { launch.SignalSupervisor(sessionRoot) }
+
+func (p workbenchPorts) SignInCommand(runnerID string, profile config.RunnerProfile) ([]string, error) {
+	runner, err := launch.ByID(p.cfg.Snapshot(), runnerID)
+	if err != nil {
+		return nil, err
+	}
+	runner.Profile = profile
+	return launch.SignInCommand(runner)
+}
+
+func (p workbenchPorts) ProbeSignIn(ctx context.Context, runnerID string, profile config.RunnerProfile) launch.SignIn {
+	runner, err := launch.ByID(p.cfg.Snapshot(), runnerID)
+	if err != nil {
+		return launch.SignIn{State: launch.SignInUnknown}
+	}
+	runner.Profile = profile
+	return launch.ProbeSignIn(ctx, runner)
+}
 
 func (p workbenchPorts) ValidateEditor(argv []string) error {
 	if len(argv) == 0 {

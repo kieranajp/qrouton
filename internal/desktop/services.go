@@ -178,6 +178,28 @@ func (s *Settings) OpenConfig() error { return s.settings.OpenConfig() }
 
 func (s *Settings) InstallLinear() (core.LinearView, error) { return s.settings.InstallLinear() }
 
+type Profiles struct{ profiles *core.Profiles }
+
+func (p *Profiles) View() (core.ProfilesView, error) { return p.profiles.View() }
+
+func (p *Profiles) Suggest(runner, label string) core.ProfileSuggestion {
+	return p.profiles.Suggest(runner, label)
+}
+
+func (p *Profiles) Add(in core.ProfileInput) (core.ProfilesView, error) { return p.profiles.Add(in) }
+
+func (p *Profiles) Rename(runner, id, label string) (core.ProfilesView, error) {
+	return p.profiles.Rename(runner, id, label)
+}
+
+func (p *Profiles) Delete(runner, id string) (core.ProfilesView, error) {
+	return p.profiles.Delete(runner, id)
+}
+
+func (p *Profiles) Status() ([]core.ProfileStatus, error) { return p.profiles.Status() }
+
+func (p *Profiles) SignIn(runner, id string) (string, error) { return p.profiles.SignIn(runner, id) }
+
 type FirstRun struct{ firstRun *core.FirstRun }
 
 func (f *FirstRun) Login() string { return f.firstRun.Login() }

@@ -57,7 +57,7 @@
     </div>
     <span class="tools">
       <UpdateButton />
-      <Button variant="ghost" size="sm" icon="settings" onclick={() => (view.settingsOpen = true)}>Settings</Button>
+      <Button variant="ghost" size="sm" icon="settings" onclick={() => view.openSettings()}>Settings</Button>
     </span>
   </div>
 
@@ -194,7 +194,11 @@
   {:else if fields.placing}
     <PlacementOverlay />
   {:else if view.assembling}
-    <Overlay gated={!fields.slug} onClose={() => (view.requested = false)} />
+    <Overlay
+      gated={!fields.slug}
+      settingsOpen={view.settingsOpen}
+      onSettings={view.openSettings}
+      onClose={() => (view.requested = false)} />
   {:else if view.picker}
     <!-- Keyed on the session, so arriving at another one draws that session's
          picker rather than keeping this one over it. -->
@@ -208,7 +212,7 @@
 
   <!-- Stacked rather than branched: unmounting the assembly overlay ends its draft. -->
   {#if view.settingsOpen}
-    <SettingsOverlay onClose={() => (view.settingsOpen = false)} />
+    <SettingsOverlay tab={view.settingsTab} onClose={() => (view.settingsOpen = false)} />
   {/if}
 
   {#if present.active}

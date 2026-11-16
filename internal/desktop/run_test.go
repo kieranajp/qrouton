@@ -18,6 +18,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/vault"
@@ -140,6 +141,9 @@ type stubBoot struct {
 	openText func(path string) []string
 	// booting runs inside each supervisor request, while the session boots.
 	booting func(core.AgentRequest)
+	signIn  func(runnerID string, profile config.RunnerProfile) ([]string, error)
+	probe   func(runnerID string, profile config.RunnerProfile) launch.SignIn
+	listed  []assembly.Runner
 
 	mu      sync.Mutex
 	sockets map[string]string
@@ -208,7 +212,21 @@ func (b *stubBoot) Document(string, string) (workbench.WindowOptions, error) {
 	return workbench.WindowOptions{}, core.ErrNoEditorCommand
 }
 
-func (b *stubBoot) Runners() ([]assembly.Runner, error) { return nil, nil }
+func (b *stubBoot) Runners() ([]assembly.Runner, error) { return b.listed, nil }
+
+func (b *stubBoot) SignInCommand(runnerID string, profile config.RunnerProfile) ([]string, error) {
+	if b.signIn == nil {
+		return nil, launch.ErrRunnerUnavailable
+	}
+	return b.signIn(runnerID, profile)
+}
+
+func (b *stubBoot) ProbeSignIn(_ context.Context, runnerID string, profile config.RunnerProfile) launch.SignIn {
+	if b.probe == nil {
+		return launch.SignIn{State: launch.SignInUnknown}
+	}
+	return b.probe(runnerID, profile)
+}
 
 func (b *stubBoot) Signal(string) {}
 

@@ -22,6 +22,7 @@ type DraftInput struct {
 	Prefix            string     `json:"prefix"`
 	Mode              string     `json:"mode"`
 	Runner            string     `json:"runner"`
+	Profile           string     `json:"profile"`
 	Repos             []RepoPick `json:"repos"`
 }
 
@@ -164,6 +165,11 @@ func (a *Assembly) Create(in DraftInput) error {
 	if problems := assembly.Check(draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
+	if in.Profile != "" {
+		if _, ok := cfg.Profile(in.Runner, in.Profile); !ok {
+			return missingProfile(in.Runner, in.Profile)
+		}
+	}
 	assembler := a.assembler
 	assembler.Cfg = cfg
 	if problems := assembler.CheckSlug(draft); len(problems) > 0 {
@@ -177,13 +183,13 @@ func (a *Assembly) Create(in DraftInput) error {
 	progress := func(p session.Progress) { a.emit(assemblyProgressEvent, newProgressEvent(slug, p)) }
 	root, err := session.Create(cfg, session.CreateRequest{
 		Name: draft.Name, Slug: slug, Description: draft.Description, Ticket: draft.Ticket,
-		InitialPrompt: a.offers.Prompt(), Prefix: draft.Prefix, Mode: mode, Runner: in.Runner,
+		InitialPrompt: a.offers.Prompt(), Prefix: draft.Prefix, Mode: mode, Runner: in.Runner, Profile: in.Profile,
 		Repos: draft.Repos, Entropy: draft.Entropy,
 	}, progress)
 	if err != nil {
 		return err
 	}
-	return a.sessions.Adopt(root, in.Runner)
+	return a.sessions.Adopt(root, in.Runner, in.Profile)
 }
 
 func (a *Assembly) draft(in DraftInput) assembly.Draft {

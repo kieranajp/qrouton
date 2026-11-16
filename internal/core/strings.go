@@ -247,3 +247,17 @@ const (
 	loginTimeout       = 5 * time.Second
 	githubCheckTimeout = 4 * time.Second
 )
+
+const (
+	profileProbeTimeout = 8 * time.Second
+
+	signInLabelFormat        = "Sign in · %s"
+	signInProfileLabelFormat = "Sign in · %s · %s"
+
+	credentialWarningFormat = "Every %[2]s profile signs in with %[1]s from qrouton's environment, not its own stored login."
+	credentialJoin          = ", "
+
+	profileTakenFormat   = "%w: %q"
+	profileFolderFormat  = "%w: %q"
+	profileMissingFormat = "%w: runner %q has no profile %q"
+)

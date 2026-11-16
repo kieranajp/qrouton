@@ -3,6 +3,8 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import OptionCard from "../forms/OptionCard.svelte";
   import StepHeading from "../forms/StepHeading.svelte";
+  import { badge, statusKey } from "../settings/profiles.js";
+  import SignInBadge from "../settings/SignInBadge.svelte";
 
   import claude from "../assets/agents/claude.png";
   import codex from "../assets/agents/codex.svg";
@@ -11,21 +13,46 @@
 
   const LOGOS = { claude, codex, opencode, agy };
 
-  /** @type {{runners?: {id: string, label: string}[], runner?: string, mode?: import("../bridge/generated.js").SessionMode}} */
-  let { runners = [], runner = $bindable(""), mode = $bindable(SESSION_MODES.RPI) } = $props();
+  /** @type {{runners?: import("./calls.js").RunnerRow[], runner?: string, profile?: string, statuses?: Record<string, import("../settings/calls.js").ProfileStatus> | null, onManage?: () => void, mode?: import("../bridge/generated.js").SessionMode}} */
+  let {
+    runners = [],
+    runner = $bindable(""),
+    profile = $bindable(""),
+    statuses = null,
+    onManage,
+    mode = $bindable(SESSION_MODES.RPI),
+  } = $props();
+
+  // A runner with no named profiles reads exactly as it did before profiles existed.
+  let profiled = $derived(new Set(runners.filter((row) => row.profile).map((row) => row.id)));
+
+  /** @param {import("./calls.js").RunnerRow} row */
+  const title = (row) => (row.profileLabel ? `${row.label} · ${row.profileLabel}` : row.label);
 </script>
 
 <StepHeading title="Who runs it, and how?" />
 
 <div class="group">
-  <CapsLabel>Agent</CapsLabel>
-  {#each runners as option (option.id)}
+  {#if profiled.size && onManage}
+    <div class="heading">
+      <CapsLabel>Agent</CapsLabel>
+      <button type="button" class="link" onclick={onManage}>Manage accounts</button>
+    </div>
+  {:else}
+    <CapsLabel>Agent</CapsLabel>
+  {/if}
+  {#each runners as option (statusKey(option.id, option.profile))}
+    {@const status = profiled.has(option.id) ? statuses?.[statusKey(option.id, option.profile)] : undefined}
     <OptionCard
-      title={option.label}
-      selected={option.id === runner}
+      title={title(option)}
+      selected={option.id === runner && option.profile === profile}
       elevated
-      onclick={() => (runner = option.id)}>
+      onclick={() => {
+        runner = option.id;
+        profile = option.profile;
+      }}>
       {#snippet trailing()}
+        {#if status}<SignInBadge shown={badge(status)} />{/if}
         <img class="logo" class:monochrome={option.id === "opencode"} src={LOGOS[option.id]} alt="" />
       {/snippet}
     </OptionCard>
@@ -73,5 +100,26 @@
   .modes {
     display: flex;
     gap: calc(12px * var(--ui-scale));
+  }
+
+  .heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .link {
+    border: 0;
+    background: none;
+    padding: 0;
+    font: var(--machine-sm);
+    color: var(--text-faint);
+    cursor: pointer;
+  }
+
+  .link:hover,
+  .link:focus-visible {
+    color: var(--text-primary);
+    outline: none;
   }
 </style>

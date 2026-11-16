@@ -175,6 +175,12 @@ export function shell() {
   let requested = $state(false);
   let escalating = $state(false);
   let settingsOpen = $state(false);
+  let settingsTab = $state(/** @type {import("../settings/tabs.js").SettingsTab} */ ("general"));
+  /** @param {import("../settings/tabs.js").SettingsTab} [tab] */
+  const openSettings = (tab = "general") => {
+    settingsTab = tab;
+    settingsOpen = true;
+  };
   let reviewed = $state("");
   let reviewKey = $derived(fields.slug + ":" + fields.bugReportID);
   let reviewing = $derived(Boolean(fields.bugReportID) && reviewed === reviewKey);
@@ -233,7 +239,7 @@ export function shell() {
     const onKey = (event) => {
       if (!opensSettings(event, macOS)) return;
       event.preventDefault();
-      if (!fields.welcoming) settingsOpen = true;
+      if (!fields.welcoming) openSettings();
     };
     window.addEventListener("keydown", onKey);
     return () => {
@@ -373,6 +379,10 @@ export function shell() {
     set settingsOpen(value) {
       settingsOpen = value;
     },
+    get settingsTab() {
+      return settingsTab;
+    },
+    openSettings,
     get requested() {
       return requested;
     },
