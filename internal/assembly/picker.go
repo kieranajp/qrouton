@@ -48,9 +48,7 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 	unrouted := unroutedNotice(a.Cfg, m, updated)
 	if !escalate {
 		notice := strings.TrimSpace(repositoryNotice(m, updated) + " " + unrouted)
-		if notice != "" && session.QueueAgentNotice(dir, notice) == nil && a.Signal != nil {
-			a.Signal(dir)
-		}
+		_ = session.QueueAgentNotice(dir, notice)
 		return nil
 	}
 	_ = session.QueueAgentNotice(dir, unrouted)
