@@ -255,28 +255,57 @@ func TestBoundedCaptureAndVersionDoNotWaitForInheritedOutputPipes(t *testing.T) 
 	for _, version := range []bool{false, true} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) {
 			script := filepath.Join(t.TempDir(), "capture")
-			writeTestFile(t, script, "#!/bin/sh\nprintf 'started\\n'\nsleep 10 &\nwait\n")
+			writeTestFile(t, script, "#!/bin/sh\nprintf 'started\\n'\nsleep 30 &\n: > \"$0.ready\"\nwait\n")
 			if err := os.Chmod(script, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			started := time.Now()
+			var out string
+			var err error
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				if version {
+					out = (Adapter{Bin: script}).Version(ctx)
+				} else {
+					var output []byte
+					output, err = boundedCommand(ctx, script).CombinedOutput()
+					out = string(output)
+				}
+			}()
+
+			startup, stopWaiting := context.WithTimeout(t.Context(), 5*time.Second)
+			defer stopWaiting()
+			// Cancellation must follow both the output and the child's pipe inheritance.
+			for {
+				if _, err := os.Stat(script + ".ready"); err == nil {
+					break
+				} else if !errors.Is(err, os.ErrNotExist) {
+					t.Fatal(err)
+				}
+				select {
+				case <-done:
+					t.Fatalf("capture exited before readiness: %q, %v", out, err)
+				case <-startup.Done():
+					t.Fatal("capture did not become ready")
+				case <-time.After(10 * time.Millisecond):
+				}
+			}
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("inherited pipe delayed cancellation")
+			}
 			if version {
-				if got := (Adapter{Bin: script}).Version(ctx); got == "started" {
+				if out == "started" {
 					t.Fatal("cancelled version returned success")
 				}
 			} else {
-				out, err := boundedCommand(ctx, script).CombinedOutput()
-				if err == nil || !strings.Contains(string(out), "started") {
+				if err == nil || !strings.Contains(out, "started") {
 					t.Fatalf("capture = %q, %v", out, err)
 				}
-			}
-			if elapsed := time.Since(started); elapsed > time.Second {
-				t.Fatalf("inherited pipe delayed cancellation: %s", elapsed)
-			}
-			if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				t.Fatalf("capture did not reach its deadline: %v", ctx.Err())
 			}
 		})
 	}
