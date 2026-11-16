@@ -1,7 +1,11 @@
 package core
 
 import (
+	"context"
+
 	"github.com/kieranajp/qrouton/internal/assembly"
+	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -32,4 +36,7 @@ type Launcher interface {
 	Document(sessionRoot, name string) (workbench.WindowOptions, error)
 	Runners() ([]assembly.Runner, error)
 	Signal(sessionRoot string)
+	// SignInCommand and ProbeSignIn take the zero profile as the runner's default.
+	SignInCommand(runnerID string, profile config.RunnerProfile) ([]string, error)
+	ProbeSignIn(ctx context.Context, runnerID string, profile config.RunnerProfile) launch.SignIn
 }

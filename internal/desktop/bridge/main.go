@@ -38,6 +38,7 @@ const (
 	configPackage    = "../../config"
 	placementPackage = "../../placement"
 	vaultPackage     = "../../vault"
+	launchPackage    = "../../launch"
 	moduleFile       = "../../../go.mod"
 	generatedPage    = "../frontend/src/lib/bridge/generated.js"
 	fixturePalette   = "../frontend/tests/theme.css"
@@ -85,6 +86,7 @@ var valueSets = []valueSet{
 	{name: "REPO_ROLES", typedef: "RepoRole", dir: sessionPackage, goType: "RepoRole", prefix: "RepoRole"},
 	{name: "SESSION_MODES", typedef: "SessionMode", dir: sessionPackage, goType: "SessionMode", prefix: "Mode"},
 	{name: "SETTINGS_FIELDS", typedef: "SettingsField", dir: desktopPackage, prefix: "settingsField"},
+	{name: "SIGN_IN_STATES", typedef: "SignInState", dir: launchPackage, goType: "SignInState", prefix: "SignIn"},
 	{name: "TAB_STATUSES", typedef: "TabStatus", dir: desktopPackage, prefix: "tabStatus"},
 	{name: "UI_SCALE_ACTIONS", typedef: "UIScaleAction", dir: desktopPackage, prefix: "uiScaleAction"},
 	{name: "WINDOW_ICONS", typedef: "WindowIcon", dir: workbenchPackage, goType: "WindowIcon", prefix: "Icon"},

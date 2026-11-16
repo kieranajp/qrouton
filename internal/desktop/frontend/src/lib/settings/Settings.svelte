@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import Icon from "../core/Icon.svelte";
   import AdvancedTab from "./AdvancedTab.svelte";
+  import AgentsTab from "./AgentsTab.svelte";
   import FoldersTab from "./FoldersTab.svelte";
   import GeneralTab from "./GeneralTab.svelte";
   import GitHubTab from "./GitHubTab.svelte";
@@ -13,7 +14,7 @@
   let { panel } = $props();
 
   /** @type {Record<import("./tabs.js").SettingsTab, import("svelte").Snippet>} */
-  const renderers = { general, github, folders, search, stickers, advanced };
+  const renderers = { general, github, folders, search, stickers, agents, advanced };
   let selected = $derived(TABS.find((tab) => tab.key === panel.tab)?.key ?? "advanced");
 
   let errored = $derived(erroredTabs(panel.fields));
@@ -37,6 +38,7 @@
 {#snippet folders()}<FoldersTab {panel} />{/snippet}
 {#snippet search()}<SearchTab />{/snippet}
 {#snippet stickers()}<StickersTab {panel} />{/snippet}
+{#snippet agents()}<AgentsTab />{/snippet}
 {#snippet advanced()}<AdvancedTab {panel} />{/snippet}
 
 <div class="settings">

@@ -1,15 +1,15 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import Dialog from "../assembly/Dialog.svelte";
   import Button from "../core/Button.svelte";
   import Icon from "../core/Icon.svelte";
   import Settings from "./Settings.svelte";
   import { settings } from "./settings.svelte.js";
 
-  /** @type {{onClose: () => void}} */
-  let { onClose } = $props();
+  /** @type {{onClose: () => void, tab?: import("./tabs.js").SettingsTab}} */
+  let { onClose, tab = "general" } = $props();
 
-  const panel = settings(() => onClose());
+  const panel = settings(() => onClose(), untrack(() => tab));
 
   // A Dialog focuses its layer on mount alone, so the one underneath needs it back.
   onMount(() => {

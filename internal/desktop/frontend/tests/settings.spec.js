@@ -27,9 +27,17 @@ test("a config that answered fills the panel and says nothing", async ({ page })
   await expect(status(page)).toHaveText("");
 });
 
-test("settings opens on General with six tabs in index order", async ({ page }) => {
+test("settings opens on General with seven tabs in index order", async ({ page }) => {
   await page.goto("/tests/settings.html");
-  await expect(page.getByRole("tab")).toHaveText(["General", "GitHub", "Folders", "Search", "Stickers", "Advanced"]);
+  await expect(page.getByRole("tab")).toHaveText([
+    "General",
+    "GitHub",
+    "Folders",
+    "Search",
+    "Stickers",
+    "Agents",
+    "Advanced",
+  ]);
   await expect(tab(page, "General")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toContainText("Editor command");
   await expect(page.getByText("Written to config.json")).toBeVisible();
@@ -481,7 +489,7 @@ test("at 150% in the default window a sticker meaning stays wide enough to type 
 test("at 150% in the default window no tab collapses a text field", async ({ page }) => {
   await atLargestScale(page);
   const measured = [];
-  for (const name of ["General", "GitHub", "Folders", "Search", "Stickers", "Advanced"]) {
+  for (const name of ["General", "GitHub", "Folders", "Search", "Stickers", "Agents", "Advanced"]) {
     await open(page, name);
     const fields = page.getByRole("tabpanel").locator("input:not([type=checkbox]):not([type=radio]), textarea");
     for (const field of await fields.all()) {
@@ -508,4 +516,102 @@ test("a placement check that fails stays in settings and says why", async ({ pag
   await page.getByRole("button", { name: "Check session placement" }).click();
   await expect(page.getByText("permission denied")).toBeVisible();
   expect(await page.evaluate(() => window.settingsFixture.closes())).toBe(0);
+});
+
+const profileCalls = (page, method) =>
+  page.evaluate((wanted) => window.settingsFixture.profileCalls().filter((call) => call.method === wanted), method);
+const claudeProfiles = (page) => page.getByRole("list", { name: "Claude Code profiles" });
+
+test("adding a profile offers a folder from its name and saves without the Save button", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Agents");
+  await page.getByRole("button", { name: "Add Claude Code profile" }).click();
+  await page.getByRole("textbox", { name: "Profile name" }).fill("Day Job");
+  await expect(page.getByRole("textbox", { name: "Profile folder" })).toHaveValue("~/.claude-day-job");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+
+  await expect(claudeProfiles(page).getByRole("listitem", { name: "Day Job" })).toContainText("~/.claude-day-job");
+  expect(await profileCalls(page, "Add")).toEqual([
+    { method: "Add", args: [{ runner: "claude", label: "Day Job", dir: "~/.claude-day-job" }] },
+  ]);
+  expect(await saves(page)).toEqual([]);
+});
+
+test("renaming a profile changes its label and keeps its id", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Agents");
+  await page.getByRole("button", { name: "Rename Lifesum" }).click();
+  await page.getByRole("textbox", { name: "New name for Lifesum" }).fill("Lifesum Health");
+  await page.getByRole("button", { name: "Save name" }).click();
+
+  await expect(claudeProfiles(page).getByRole("listitem", { name: "Lifesum Health" })).toBeVisible();
+  expect(await profileCalls(page, "Rename")).toEqual([{ method: "Rename", args: ["claude", "work", "Lifesum Health"] }]);
+});
+
+test("deleting a profile names its pinned sessions and says the folder stays", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Agents");
+  await page.getByRole("button", { name: "Delete Lifesum" }).click();
+  const confirm = claudeProfiles(page).locator(".confirm");
+  await expect(confirm).toContainText("2 sessions are pinned to it");
+  await expect(confirm).toContainText("a profile with id “work” and this folder is added again");
+  await expect(confirm).toContainText("/home/k/.claude-work stays");
+  expect(await profileCalls(page, "Delete")).toEqual([]);
+
+  await page.getByRole("button", { name: "Delete profile" }).click();
+  await expect(claudeProfiles(page).getByRole("listitem", { name: "Lifesum" })).toHaveCount(0);
+  expect(await profileCalls(page, "Delete")).toEqual([{ method: "Delete", args: ["claude", "work"] }]);
+});
+
+test("a delete that could not count the pinned sessions does not say none use it", async ({ page }) => {
+  await page.goto("/tests/settings.html?uncounted=1");
+  await open(page, "Agents");
+  await page.getByRole("button", { name: "Delete Lifesum" }).click();
+  const confirm = claudeProfiles(page).locator(".confirm");
+  await expect(confirm).toContainText("qrouton couldn't count the sessions using it");
+  await expect(confirm).not.toContainText("No sessions use it");
+});
+
+test("double-clicking Sign in opens one sign-in tab", async ({ page }) => {
+  await page.goto("/tests/settings.html?shown=1");
+  await open(page, "Agents");
+  await page.getByRole("button", { name: "Sign in to Claude Code · Lifesum" }).dblclick();
+  await expect(claudeProfiles(page).getByRole("listitem", { name: "Lifesum" })).toContainText("Signing in…");
+  await page.waitForTimeout(250);
+  expect(await profileCalls(page, "SignIn")).toHaveLength(1);
+});
+
+test("with no session shown Sign in is disabled and says to start or open one", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Agents");
+  await expect(page.getByText("Start or open a session to sign in")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in to Claude Code · Default" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Sign in to Claude Code · Lifesum" })).toBeDisabled();
+  await expect(claudeProfiles(page).getByRole("listitem", { name: "Default" })).toContainText(
+    "Signed in as k@example.com",
+  );
+  await expect(claudeProfiles(page).getByRole("listitem", { name: "Lifesum" })).toContainText("Signed out");
+});
+
+test("a sign-in probes the badges again when its tab finishes, even before Sign in answers", async ({ page }) => {
+  await page.goto("/tests/settings.html?shown=1");
+  await open(page, "Agents");
+  const lifesum = claudeProfiles(page).getByRole("listitem", { name: "Lifesum" });
+  await expect(lifesum).toContainText("Signed out");
+  await page.getByRole("button", { name: "Sign in to Claude Code · Lifesum" }).click();
+  await expect(lifesum).toContainText("Signing in…");
+  expect(await profileCalls(page, "SignIn")).toEqual([{ method: "SignIn", args: ["claude", "work"] }]);
+  expect(await profileCalls(page, "Status")).toHaveLength(1);
+
+  await page.evaluate(() => window.settingsFixture.endSignIn("window-9"));
+  await expect.poll(() => profileCalls(page, "Status")).toHaveLength(2);
+  await expect(lifesum).toContainText("Signed out");
+});
+
+test("a credential in qrouton's environment is warned of under its runner", async ({ page }) => {
+  await page.goto("/tests/settings.html?credential=1");
+  await open(page, "Agents");
+  const claude = page.getByRole("region", { name: "Claude Code" });
+  await expect(claude).toContainText("ANTHROPIC_API_KEY from qrouton's environment");
+  await expect(page.getByRole("region", { name: "Codex CLI" })).not.toContainText("environment");
 });

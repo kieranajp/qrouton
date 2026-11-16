@@ -104,6 +104,9 @@ type stubBoot struct {
 	document func(sessionRoot, name string) (workbench.WindowOptions, error)
 	// booting runs inside each supervisor request, while the session boots.
 	booting func(AgentRequest)
+	signIn  func(runnerID string, profile config.RunnerProfile) ([]string, error)
+	probe   func(ctx context.Context, runnerID string, profile config.RunnerProfile) launch.SignIn
+	listed  []assembly.Runner
 
 	mu       sync.Mutex
 	sockets  map[string]string
@@ -151,9 +154,23 @@ func (b *stubBoot) Document(sessionRoot, name string) (workbench.WindowOptions, 
 	return b.document(sessionRoot, name)
 }
 
-func (b *stubBoot) Runners() ([]assembly.Runner, error) { return nil, nil }
+func (b *stubBoot) Runners() ([]assembly.Runner, error) { return b.listed, nil }
 
 func (b *stubBoot) Signal(string) {}
+
+func (b *stubBoot) SignInCommand(runnerID string, profile config.RunnerProfile) ([]string, error) {
+	if b.signIn == nil {
+		return nil, launch.ErrRunnerUnavailable
+	}
+	return b.signIn(runnerID, profile)
+}
+
+func (b *stubBoot) ProbeSignIn(ctx context.Context, runnerID string, profile config.RunnerProfile) launch.SignIn {
+	if b.probe == nil {
+		return launch.SignIn{State: launch.SignInUnknown}
+	}
+	return b.probe(ctx, runnerID, profile)
+}
 
 func (b *stubBoot) served() {
 	b.mu.Lock()

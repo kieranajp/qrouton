@@ -8,8 +8,9 @@ import { addOrg, removeOrg } from "./orgs.js";
 import { addRow, fromView, removeRow, toInput } from "./thoughts.js";
 
 /** Restart-required saves keep the panel open behind the banner.
- * @param {() => void} onClose */
-export function settings(onClose) {
+ * @param {() => void} onClose
+ * @param {import("./tabs.js").SettingsTab} [initialTab] */
+export function settings(onClose, initialTab = "general") {
   const form = $state({
     orgs: /** @type {string[]} */ ([]),
     root: "",
@@ -23,7 +24,7 @@ export function settings(onClose) {
     pinned: { root: false, orgs: false },
     runners: /** @type {{id: string, label: string}[]} */ ([]),
   });
-  let tab = $state("general");
+  let tab = $state(/** @type {string} */ (initialTab));
   let linear = $state(/** @type {import("./calls.js").LinearView} */ ({ path: "", snippet: "", replaces: false }));
   let installed = $state(false);
   let installing = $state(false);

@@ -49,6 +49,11 @@ type runnerSpec struct {
 	// ProfileEnv names the variable that moves the runner's state to a profile
 	// folder, and is empty for a runner without profiles.
 	ProfileEnv string
+	// CredentialEnv are the variables that outrank a stored login.
+	CredentialEnv []string
+	LoginArgs     []string
+	StatusArgs    []string
+	ReadStatus    func(out []byte, exit int) SignIn
 }
 
 type injectContext struct {
@@ -80,16 +85,25 @@ var runnerSpecs = []runnerSpec{
 		Inject:     injectClaude,
 		Hooks:      claudeHooks,
 		ProfileEnv: claudeConfigDirEnvVar,
+		CredentialEnv: []string{claudeUseBedrockEnvVar, claudeUseVertexEnvVar, claudeUseFoundryEnvVar,
+			anthropicAuthTokenEnvVar, anthropicAPIKeyEnvVar, claudeOAuthTokenEnvVar},
+		LoginArgs:  []string{claudeAuthCmd, claudeLoginCmd},
+		StatusArgs: []string{claudeAuthCmd, claudeStatusCmd, claudeJSONFlag},
+		ReadStatus: readClaudeStatus,
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,
-		Command:    []string{runnerIDCodex, codexBypassSandboxFlag},
-		Resume:     resumeWith(codexResumeCmd, codexResumeLast),
-		Prompt:     promptAsArgument,
-		MCP:        codexMCP,
-		Inject:     injectCodex,
-		Hooks:      []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
-		ProfileEnv: codex.HomeEnvVar,
+		Command:       []string{runnerIDCodex, codexBypassSandboxFlag},
+		Resume:        resumeWith(codexResumeCmd, codexResumeLast),
+		Prompt:        promptAsArgument,
+		MCP:           codexMCP,
+		Inject:        injectCodex,
+		Hooks:         []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
+		ProfileEnv:    codex.HomeEnvVar,
+		CredentialEnv: []string{codexAPIKeyEnvVar, codexAccessTokenEnvVar},
+		LoginArgs:     []string{codexLoginCmd},
+		StatusArgs:    []string{codexLoginCmd, codexStatusCmd},
+		ReadStatus:    readCodexStatus,
 	},
 	{
 		ID: runnerIDOpenCode, Label: runnerLabelOpenCode,

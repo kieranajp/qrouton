@@ -145,6 +145,31 @@ const (
 const (
 	profileDirMode           = 0o700
 	profileUnavailableFormat = "%w: runner %q has no profile %q"
+
+	envCommand         = "env"
+	envSep             = "="
+	profileDirHome     = "~"
+	profileDirFormat   = ".%s-%s"
+	codexSignedOutExit = 1
+	statusWaitDelay    = time.Second
+)
+
+const (
+	claudeAuthCmd   = "auth"
+	claudeLoginCmd  = "login"
+	claudeStatusCmd = "status"
+	claudeJSONFlag  = "--json"
+	codexLoginCmd   = "login"
+	codexStatusCmd  = "status"
+
+	claudeUseBedrockEnvVar   = "CLAUDE_CODE_USE_BEDROCK"
+	claudeUseVertexEnvVar    = "CLAUDE_CODE_USE_VERTEX"
+	claudeUseFoundryEnvVar   = "CLAUDE_CODE_USE_FOUNDRY"
+	anthropicAuthTokenEnvVar = "ANTHROPIC_AUTH_TOKEN"
+	anthropicAPIKeyEnvVar    = "ANTHROPIC_API_KEY"
+	claudeOAuthTokenEnvVar   = "CLAUDE_CODE_OAUTH_TOKEN"
+	codexAPIKeyEnvVar        = "CODEX_API_KEY"
+	codexAccessTokenEnvVar   = "CODEX_ACCESS_TOKEN"
 )
 
 // Keys in the runner configuration qrouton injects. Each runner accepts MCP

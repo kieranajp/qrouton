@@ -112,6 +112,7 @@ func Run(opts Options) error {
 	r.register(application.NewService(&Picker{picker: kernel.Picker}))
 	r.register(application.NewService(newPresenter(r, r.Emit)))
 	r.register(application.NewService(&Settings{settings: kernel.Settings}))
+	r.register(application.NewService(&Profiles{profiles: kernel.Profiles}))
 	r.register(application.NewService(&FirstRun{firstRun: kernel.FirstRun}))
 	opts.placement = kernel.Placement
 	r.register(application.NewService(&Placement{placement: kernel.Placement}))

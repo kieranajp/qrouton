@@ -1,7 +1,7 @@
 import "../src/tokens/scale.css";
 import { mount } from "svelte";
 import { emitWailsEvent } from "./wails-runtime.js";
-import { STICKER_DUPLICATE, UI_SCALE_EVENT } from "../src/lib/bridge/generated.js";
+import { STICKER_DUPLICATE, UI_SCALE_EVENT, WINDOW_EXIT_EVENT, WINDOWS_EVENT } from "../src/lib/bridge/generated.js";
 import { startScale } from "../src/lib/scale.svelte.js";
 import SettingsOverlay from "../src/lib/settings/SettingsOverlay.svelte";
 
@@ -28,15 +28,82 @@ const saves = [];
 const calls = [];
 let closes = 0;
 
+// ?shown=1 puts a session on screen for Sign in; ?credential=1 sets ANTHROPIC_API_KEY;
+// ?uncounted=1 is a sessions root that could not be read.
+const shown = params.get("shown") === "1";
+const uncounted = params.get("uncounted") === "1";
+const credential = params.get("credential") === "1";
+const profiles = {
+  claude: [{ id: "work", label: "Lifesum", dir: "/home/k/.claude-work", sessions: uncounted ? 0 : 2, uncounted }],
+  codex: [],
+};
+const profileCalls = [];
+const slug = (label) => label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const profilesView = () => ({
+  sessionShown: shown,
+  runners: [
+    {
+      id: "claude",
+      label: "Claude Code",
+      credentials: credential ? ["ANTHROPIC_API_KEY"] : [],
+      warning: credential
+        ? "Every Claude Code profile signs in with ANTHROPIC_API_KEY from qrouton's environment, not its own stored login."
+        : undefined,
+      profiles: profiles.claude.map((row) => ({ ...row })),
+    },
+    { id: "codex", label: "Codex CLI", credentials: [], profiles: profiles.codex.map((row) => ({ ...row })) },
+  ],
+});
+const profilesCall = (method, args) => {
+  profileCalls.push({ method, args });
+  if (method === "View") return profilesView();
+  if (method === "Suggest") {
+    const [runner, label] = args;
+    const id = slug(label);
+    return id ? { id, dir: `~/.${runner}-${id}` } : { id: "", dir: "" };
+  }
+  if (method === "Add") {
+    const [input] = args;
+    const id = slug(input.label);
+    profiles[input.runner].push({ id, label: input.label.trim(), dir: input.dir, sessions: 0 });
+    return profilesView();
+  }
+  if (method === "Rename") {
+    const [runner, id, label] = args;
+    profiles[runner].find((row) => row.id === id).label = label;
+    return profilesView();
+  }
+  if (method === "Delete") {
+    const [runner, id] = args;
+    profiles[runner] = profiles[runner].filter((row) => row.id !== id);
+    return profilesView();
+  }
+  if (method === "Status")
+    return [
+      { runner: "claude", profile: "", state: "signed-in", email: "k@example.com" },
+      { runner: "claude", profile: "work", state: "signed-out" },
+      { runner: "codex", profile: "", state: "unknown" },
+    ];
+  if (method === "SignIn") return new Promise((resolve) => setTimeout(() => resolve("window-9"), 100));
+  return undefined;
+};
+
 window.settingsFixture = {
+  profileCalls: () => profileCalls.map((call) => ({ ...call })),
+  endSignIn: (id) => {
+    emitWailsEvent(WINDOW_EXIT_EVENT + id, 0);
+    emitWailsEvent(WINDOWS_EVENT, { session: "octopus", selected: id, tabs: [{ id, status: "succeeded" }] });
+  },
   saves: () => [...saves],
   calls: () => [...calls],
   closes: () => closes,
   announceScale: (percent) => emitWailsEvent(UI_SCALE_EVENT, percent),
 };
 
-window.wailsCall = async (name, input) => {
+window.wailsCall = async (name, ...args) => {
+  const [input] = args;
   calls.push(name.split(".").pop());
+  if (name.includes(".Profiles.")) return profilesCall(name.split(".").pop(), args);
   if (name.endsWith("Placement.Check")) window.placementChecks = (window.placementChecks ?? 0) + 1;
   if (failing && name.endsWith("." + failing)) throw new Error("config.json: permission denied");
   if (name.endsWith("Ollama.Check")) return ollama;

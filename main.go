@@ -299,6 +299,24 @@ func (p workbenchPorts) Runners() ([]assembly.Runner, error) {
 
 func (p workbenchPorts) Signal(sessionRoot string) { launch.SignalSupervisor(sessionRoot) }
 
+func (p workbenchPorts) SignInCommand(runnerID string, profile config.RunnerProfile) ([]string, error) {
+	runner, err := launch.ByID(p.cfg.Snapshot(), runnerID)
+	if err != nil {
+		return nil, err
+	}
+	runner.Profile = profile
+	return launch.SignInCommand(runner)
+}
+
+func (p workbenchPorts) ProbeSignIn(ctx context.Context, runnerID string, profile config.RunnerProfile) launch.SignIn {
+	runner, err := launch.ByID(p.cfg.Snapshot(), runnerID)
+	if err != nil {
+		return launch.SignIn{State: launch.SignInUnknown}
+	}
+	runner.Profile = profile
+	return launch.ProbeSignIn(ctx, runner)
+}
+
 func (p workbenchPorts) ValidateEditor(argv []string) error {
 	if len(argv) == 0 {
 		return nil
