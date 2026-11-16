@@ -3,10 +3,12 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -92,9 +94,11 @@ func testProfiles(t *testing.T, cfg *config.Config) (*Profiles, *stubBoot) {
 	}
 	writeConfigFile(t, cfg)
 	boot := newStubBoot("/bin/cat")
-	boot.listed = claudeAndCodex
 	reg, windows, _ := testSessions(t, cfg.Root, boot)
-	return newProfiles(cfg, nil, boot.Runners, boot, reg, windows), boot
+	runners := func() ([]assembly.Runner, error) {
+		return assembly.WithProfiles(claudeAndCodex, cfg.Snapshot().Profiles), nil
+	}
+	return newProfiles(cfg, nil, runners, boot, reg, windows), boot
 }
 
 func savedProfiles(t *testing.T) map[string][]config.RunnerProfile {
@@ -380,5 +384,38 @@ func TestViewMarksPinnedCountsItCouldNotReadAsUncounted(t *testing.T) {
 	}
 	if got := view.Runners[0].Profiles[0]; !got.Uncounted {
 		t.Fatalf("a sessions root that cannot be read gave %+v, which reads as no pinned sessions", got)
+	}
+}
+
+// The runner list repeats a runner once per named profile; the tab must not.
+func TestViewAndStatusListEachRunnerOnceWhenItHasProfiles(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "work")
+	cfg := &config.Config{Profiles: map[string][]config.RunnerProfile{"claude": {
+		{ID: "work", Label: "Work", Dir: dir},
+		{ID: "lifesum", Label: "Lifesum", Dir: dir + "-lifesum"},
+	}}}
+	profiles, boot := testProfiles(t, cfg)
+	var probes atomic.Int32
+	boot.probe = func(context.Context, string, config.RunnerProfile) launch.SignIn {
+		probes.Add(1)
+		return launch.SignIn{State: launch.SignInSignedOut}
+	}
+	view, err := profiles.View()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var groups []string
+	for _, g := range view.Runners {
+		groups = append(groups, fmt.Sprintf("%s:%d", g.ID, len(g.Profiles)))
+	}
+	if want := []string{"claude:2", "codex:0"}; !slices.Equal(groups, want) {
+		t.Fatalf("View groups = %q, want %q", groups, want)
+	}
+	got, err := profiles.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 4 || probes.Load() != 4 {
+		t.Fatalf("Status answered %d rows from %d probes, want 4 of each: %+v", len(got), probes.Load(), got)
 	}
 }

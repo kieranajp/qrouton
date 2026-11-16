@@ -295,14 +295,9 @@ func (p workbenchPorts) Runners() ([]assembly.Runner, error) {
 	}
 	out := make([]assembly.Runner, 0, len(runners))
 	for _, r := range runners {
-		row := assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != ""}
-		out = append(out, row)
-		for _, profile := range cfg.Profiles[r.ID] {
-			row.Profile, row.ProfileLabel = profile.ID, profile.Label
-			out = append(out, row)
-		}
+		out = append(out, assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != ""})
 	}
-	return out, nil
+	return assembly.WithProfiles(out, cfg.Profiles), nil
 }
 
 func (p workbenchPorts) Signal(sessionRoot string) { launch.SignalSupervisor(sessionRoot) }

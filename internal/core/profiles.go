@@ -132,7 +132,7 @@ func (p *Profiles) profiled() ([]assembly.Runner, error) {
 		return nil, err
 	}
 	return slices.DeleteFunc(runners, func(r assembly.Runner) bool {
-		return !r.Installed || !launch.SupportsProfiles(r.ID)
+		return r.Profile != "" || !r.Installed || !launch.SupportsProfiles(r.ID)
 	}), nil
 }
 
