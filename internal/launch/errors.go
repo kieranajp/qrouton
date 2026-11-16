@@ -13,6 +13,10 @@ var (
 
 	ErrRunnerUnavailable = errors.New("runner is unavailable")
 
+	ErrProfileUnavailable = errors.New("runner profile is not configured")
+
+	ErrProfilesUnsupported = errors.New("runner does not support profiles")
+
 	ErrLoginShell = errors.New("login shell could not start")
 
 	// ErrUnsupportedRunner means a Runner reached the launch path with an id no

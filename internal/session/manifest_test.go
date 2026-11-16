@@ -208,3 +208,39 @@ func TestAManifestNamingACheckoutOutsideSrcFailsToLoad(t *testing.T) {
 		})
 	}
 }
+
+func TestManifestWithoutProfileReadsAsDefault(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteManifest(dir, Manifest{Slug: "s", Runner: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(sessionpaths.Manifest(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"profile"`) {
+		t.Fatalf("a default-profile manifest carries a profile key: %s", raw)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Runner != "claude" || m.Profile != "" {
+		t.Fatalf("runner, profile = %q, %q, want claude on the default", m.Runner, m.Profile)
+	}
+}
+
+func TestManifestReadsTheProfileKey(t *testing.T) {
+	dir := t.TempDir()
+	doc := `{"schemaVersion":1,"slug":"s","runner":"claude","profile":"work","createdAt":"2026-11-16T00:00:00Z","repos":[]}`
+	if err := os.WriteFile(sessionpaths.Manifest(dir), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Profile != "work" {
+		t.Fatalf("profile = %q, want work from the manifest's profile key", m.Profile)
+	}
+}

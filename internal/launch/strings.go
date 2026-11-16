@@ -22,6 +22,7 @@ const (
 
 	sessionRootFlag   = flagPrefix + SessionRootFlag
 	runnerFlag        = flagPrefix + RunnerFlag
+	profileFlag       = flagPrefix + ProfileFlag
 	editorJSONFlag    = flagPrefix + EditorJSONFlag
 	workbenchJSONFlag = flagPrefix + WorkbenchJSONFlag
 	generationFlag    = flagPrefix + GenerationFlag
@@ -40,6 +41,7 @@ const (
 
 	SessionRootFlag   = "session-root"
 	RunnerFlag        = "runner"
+	ProfileFlag       = "profile"
 	EditorJSONFlag    = "editor-json"
 	WorkbenchJSONFlag = "workbench-json"
 	GenerationFlag    = "generation"
@@ -135,6 +137,14 @@ const (
 
 	claudeMaintainProjectWorkingDirEnvVar = "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR"
 	claudeMaintainProjectWorkingDirValue  = "1"
+
+	// claudeConfigDirEnvVar moves Claude's whole state, its stored login included.
+	claudeConfigDirEnvVar = "CLAUDE_CONFIG_DIR"
+)
+
+const (
+	profileDirMode           = 0o700
+	profileUnavailableFormat = "%w: runner %q has no profile %q"
 )
 
 // Keys in the runner configuration qrouton injects. Each runner accepts MCP

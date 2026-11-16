@@ -230,7 +230,7 @@ func (c *Core) PendingTicket() (string, string) { return c.Assembly.pendingTicke
 
 // OpenSession boots the session at root and puts it on screen.
 func (c *Core) OpenSession(root string, resume bool) error {
-	opened, err := c.Sessions.start(root, "", resume)
+	opened, err := c.Sessions.start(root, "", "", resume)
 	if err != nil {
 		return err
 	}

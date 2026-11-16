@@ -250,7 +250,12 @@ func (p workbenchPorts) Agent(req core.AgentRequest) (core.AgentCommand, error) 
 	if id == "" {
 		id = p.spec.Runner
 	}
-	runner, err := pickRunner(p.cfg.Snapshot(), id)
+	cfg := p.cfg.Snapshot()
+	runner, err := pickRunner(cfg, id)
+	if err != nil {
+		return core.AgentCommand{}, err
+	}
+	runner, err = launch.WithProfile(cfg, runner, req.ProfileID)
 	if err != nil {
 		return core.AgentCommand{}, err
 	}
@@ -258,7 +263,7 @@ func (p workbenchPorts) Agent(req core.AgentRequest) (core.AgentCommand, error) 
 	if err != nil {
 		return core.AgentCommand{}, err
 	}
-	return core.AgentCommand{Argv: argv, Env: env, RunnerID: runner.ID}, nil
+	return core.AgentCommand{Argv: argv, Env: env, RunnerID: runner.ID, ProfileID: runner.Profile.ID}, nil
 }
 
 // Shell and Reveal are built per session, because the landing-list path does not

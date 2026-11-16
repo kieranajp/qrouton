@@ -105,17 +105,18 @@ type stubBoot struct {
 	// booting runs inside each supervisor request, while the session boots.
 	booting func(AgentRequest)
 
-	mu      sync.Mutex
-	sockets map[string]string
-	resumes map[string]bool
-	runners map[string]string
-	agents  int
-	serves  int
+	mu       sync.Mutex
+	sockets  map[string]string
+	resumes  map[string]bool
+	runners  map[string]string
+	profiles map[string]string
+	agents   int
+	serves   int
 }
 
 func newStubBoot(argv ...string) *stubBoot {
 	return &stubBoot{argv: argv, sockets: map[string]string{}, resumes: map[string]bool{},
-		runners: map[string]string{}}
+		runners: map[string]string{}, profiles: map[string]string{}}
 }
 
 func (b *stubBoot) Agent(req AgentRequest) (AgentCommand, error) {
@@ -128,11 +129,12 @@ func (b *stubBoot) Agent(req AgentRequest) (AgentCommand, error) {
 	b.sockets[req.SessionRoot] = req.Socket
 	b.resumes[req.SessionRoot] = req.Resume
 	b.runners[req.SessionRoot] = req.RunnerID
+	b.profiles[req.SessionRoot] = req.ProfileID
 	resolved := req.RunnerID
 	if resolved == "" {
 		resolved = "codex"
 	}
-	return AgentCommand{Argv: b.argv, Env: os.Environ(), RunnerID: resolved}, nil
+	return AgentCommand{Argv: b.argv, Env: os.Environ(), RunnerID: resolved, ProfileID: req.ProfileID}, nil
 }
 
 func (b *stubBoot) Shell(sessionRoot string) []string {
@@ -2048,7 +2050,7 @@ func TestTheProcessSocketAnswersReadinessAndRefusesAWindowOp(t *testing.T) {
 		t.Fatalf("refusal = %q, want %q", err, ErrNoSession)
 	}
 
-	if err := reg.Adopt(adopted, ""); err != nil {
+	if err := reg.Adopt(adopted, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the adopted session on screen", func() bool {
@@ -2179,7 +2181,7 @@ func TestAdoptingAFreshlyAssembledSessionDoesNotResumeIt(t *testing.T) {
 	shownSession(t, reg)
 
 	assembled := sessionDir(t, opts.Root, "kraken")
-	if err := reg.Adopt(assembled, ""); err != nil {
+	if err := reg.Adopt(assembled, "", ""); err != nil {
 		t.Fatal(err)
 	}
 

@@ -25,6 +25,8 @@ type Runner struct {
 	Command  []string
 	Path     string
 	Override bool
+	// Profile is the account the runner launches on; the zero value is the default.
+	Profile config.RunnerProfile
 }
 
 type runnerSpec struct {
@@ -44,6 +46,9 @@ type runnerSpec struct {
 	// Hooks are the agent-event hooks Inject wires, which is everything the
 	// workbench can learn about the runner's agents.
 	Hooks []string
+	// ProfileEnv names the variable that moves the runner's state to a profile
+	// folder, and is empty for a runner without profiles.
+	ProfileEnv string
 }
 
 type injectContext struct {
@@ -52,6 +57,7 @@ type injectContext struct {
 	handle     workbench.Handle
 	mcpArgs    []string
 	generation uint64
+	profileDir string
 	// override is true when the user replaced this runner's command, which
 	// OpenCode reads before it writes a permission default over their config.
 	override bool
@@ -67,21 +73,23 @@ var claudeHooks = []string{
 var runnerSpecs = []runnerSpec{
 	{
 		ID: runnerIDClaude, Label: runnerLabelClaude,
-		Command: []string{runnerIDClaude, claudeSkipPermissionsFlag},
-		Resume:  resumeWith(claudeContinueFlag),
-		Prompt:  promptAsArgument,
-		MCP:     claudeMCP,
-		Inject:  injectClaude,
-		Hooks:   claudeHooks,
+		Command:    []string{runnerIDClaude, claudeSkipPermissionsFlag},
+		Resume:     resumeWith(claudeContinueFlag),
+		Prompt:     promptAsArgument,
+		MCP:        claudeMCP,
+		Inject:     injectClaude,
+		Hooks:      claudeHooks,
+		ProfileEnv: claudeConfigDirEnvVar,
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,
-		Command: []string{runnerIDCodex, codexBypassSandboxFlag},
-		Resume:  resumeWith(codexResumeCmd, codexResumeLast),
-		Prompt:  promptAsArgument,
-		MCP:     codexMCP,
-		Inject:  injectCodex,
-		Hooks:   []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
+		Command:    []string{runnerIDCodex, codexBypassSandboxFlag},
+		Resume:     resumeWith(codexResumeCmd, codexResumeLast),
+		Prompt:     promptAsArgument,
+		MCP:        codexMCP,
+		Inject:     injectCodex,
+		Hooks:      []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
+		ProfileEnv: codex.HomeEnvVar,
 	},
 	{
 		ID: runnerIDOpenCode, Label: runnerLabelOpenCode,
@@ -172,6 +180,11 @@ func Runners(cfg *config.Config) ([]Runner, error) {
 		out[i].Command = append([]string(nil), command...)
 		out[i].Override = true
 	}
+	for id := range cfg.Profiles {
+		if spec, _ := specFor(id); spec.ProfileEnv == "" {
+			return nil, fmt.Errorf("%w: %q", ErrProfilesUnsupported, id)
+		}
+	}
 	for i := range out {
 		out[i].Path, _ = findExecutable(out[i].Command[0])
 	}
@@ -219,6 +232,21 @@ func FirstInstalled(cfg *config.Config) (Runner, error) {
 	return Runner{}, ErrNoRunnerInstalled
 }
 
+// WithProfile puts r on its profile id, and leaves it on the default for an
+// empty id. A profile missing from cfg is an error, never the default: that
+// would resume the work under another account.
+func WithProfile(cfg *config.Config, r Runner, id string) (Runner, error) {
+	if id == "" {
+		return r, nil
+	}
+	profile, ok := cfg.Profile(r.ID, id)
+	if !ok {
+		return Runner{}, fmt.Errorf(profileUnavailableFormat, ErrProfileUnavailable, r.ID, id)
+	}
+	r.Profile = profile
+	return r, nil
+}
+
 func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle workbench.Handle, generation uint64, resume bool, prompt string) ([]string, []string, error) {
 	// Runner's fields are exported, so a hand-built one can still reach here
 	// without the per-runner wiring the launch path needs.
@@ -226,15 +254,26 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedRunner, r.ID)
 	}
-	return spec.Inject(runnerArgv(spec, r, resume, sessionMode(dir), sessionTicket(dir), prompt), injectContext{
+	if r.Profile.ID != "" && spec.ProfileEnv == "" {
+		return nil, nil, fmt.Errorf("%w: %q", ErrProfilesUnsupported, r.ID)
+	}
+	argv, env, err := spec.Inject(runnerArgv(spec, r, resume, sessionMode(dir), sessionTicket(dir), prompt), injectContext{
 		qroutonBin: qroutonBin,
 		dir:        dir,
 		handle:     handle,
 		generation: generation,
+		profileDir: r.Profile.Dir,
 		mcpArgs: []string{MCPSubcommand, sessionRootFlag, dir,
 			editorJSONFlag, editor.Marshal(), workbenchJSONFlag, handle.Marshal()},
 		override: r.Override,
 	})
+	if err != nil || r.Profile.ID == "" {
+		return argv, env, err
+	}
+	if err := PrepareProfileDir(r.Profile.Dir); err != nil {
+		return nil, nil, err
+	}
+	return argv, workbench.WithEnv(env, spec.ProfileEnv, r.Profile.Dir), nil
 }
 
 func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
@@ -272,7 +311,7 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 	// Codex defaults to one level of nesting, which is a lead that cannot spawn
 	// the specialists qrouton's topology has it delegate to. Raise it, unless
 	// the user's own command already asks for at least as much.
-	if codex.MaxDepth(argv) < codex.RequiredMaxDepth {
+	if codex.MaxDepth(c.profileDir, argv) < codex.RequiredMaxDepth {
 		argv = append(argv, codex.ConfigFlag, codex.MaxDepthSetting(codex.RequiredMaxDepth))
 	}
 	hookCommand := fmt.Sprintf(codexAgentEventCommandFormat, agentevent.QroutonBinEnvVar, AgentEventSubcommand)

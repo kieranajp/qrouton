@@ -61,8 +61,9 @@ type CreateRequest struct {
 	Mode SessionMode
 	// Runner is the coding agent this session is assembled with, so every later
 	// boot starts the one that was chosen. Empty takes the workbench's own.
-	Runner string
-	Repos  []RepoSelection
+	Runner  string
+	Profile string
+	Repos   []RepoSelection
 	// InitialPrompt is an external request the first runner launch receives. It
 	// is carried in a private one-shot file rather than becoming durable
 	// manifest state, so the runner consumes it exactly once.
@@ -118,7 +119,7 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 	}
 
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: req.Name, Slug: slug, Description: req.Description,
-		TicketURL: req.Ticket, Mode: req.Mode.effective(), Runner: req.Runner, CreatedAt: time.Now(), ThoughtsRoot: thoughts.ID}
+		TicketURL: req.Ticket, Mode: req.Mode.effective(), Runner: req.Runner, Profile: req.Profile, CreatedAt: time.Now(), ThoughtsRoot: thoughts.ID}
 	var err error
 	if m, err = ComposeRepos(cfg, m, req.Repos, req.Prefix+branchSeparator+slug, progress); err != nil {
 		return "", err

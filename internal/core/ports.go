@@ -6,20 +6,22 @@ import (
 )
 
 // AgentRequest asks for one session's supervisor. An empty RunnerID means the
-// workbench's own agent.
+// workbench's own agent, and an empty ProfileID that agent's default profile.
 type AgentRequest struct {
 	SessionRoot string
 	Socket      string
 	RunnerID    string
+	ProfileID   string
 	Resume      bool
 }
 
 // AgentCommand is that supervisor. RunnerID is the agent actually selected,
 // which an empty request resolves to.
 type AgentCommand struct {
-	Argv     []string
-	Env      []string
-	RunnerID string
+	Argv      []string
+	Env       []string
+	RunnerID  string
+	ProfileID string
 }
 
 // Launcher builds the commands the core runs on the host. An empty Shell

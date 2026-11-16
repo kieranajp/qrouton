@@ -24,6 +24,7 @@ type SessionState struct {
 	terminal    string
 	agents      *agentActivity
 	provider    string
+	profile     string
 	argv        []string
 	env         []string
 	sessionSlug string
@@ -407,7 +408,7 @@ func (s *Sessions) Reorder(slug, targetSlug string) error {
 // recycling had emptied the window hands the window back rather than leaving it
 // on nothing.
 func (s *Sessions) replace(root string, fallback *SessionState, emptied bool) error {
-	booted, err := s.start(root, "", true)
+	booted, err := s.start(root, "", "", true)
 	if err != nil {
 		if emptied {
 			s.reveal(fallback)
@@ -546,17 +547,17 @@ func (s *Sessions) Cleanup(slug string) error {
 
 // start brings up a session about to be shown, and only one: a terminal under
 // display:none has no layout box, so its PTY would size from the page's defaults.
-func (s *Sessions) start(root, runnerID string, resume bool) (*SessionState, error) {
+func (s *Sessions) start(root, runnerID, profileID string, resume bool) (*SessionState, error) {
 	// A crashed workbench leaves agent.pid behind with nothing on the other end,
 	// so a dead pid boots. A live one is an error rather than a state.
 	if pid, alive := session.AgentAlive(root); alive {
 		return nil, agentAlreadyRunning(filepath.Base(root), pid)
 	}
-	// A session records the agent it was assembled with, so every boot after the
-	// first starts that one rather than whatever the workbench was launched with.
+	// A session records the agent and profile it was assembled with, so every boot
+	// after the first starts those rather than the workbench's own.
 	if runnerID == "" {
 		if m, err := session.Load(root); err == nil {
-			runnerID = m.Runner
+			runnerID, profileID = m.Runner, m.Profile
 		}
 	}
 	socket, err := workbench.NewSocketPath()
@@ -564,13 +565,14 @@ func (s *Sessions) start(root, runnerID string, resume bool) (*SessionState, err
 		return nil, err
 	}
 	command, err := s.boot.agent(AgentRequest{
-		SessionRoot: root, Socket: socket, RunnerID: runnerID, Resume: resume,
+		SessionRoot: root, Socket: socket, RunnerID: runnerID, ProfileID: profileID, Resume: resume,
 	})
 	if err != nil {
 		return nil, err
 	}
 	state := s.add(root, command.Argv, WithTerminalEnv(command.Env))
 	state.provider = command.RunnerID
+	state.profile = command.ProfileID
 	control, err := s.boot.serve(state, socket)
 	if err != nil {
 		s.forget(state)
@@ -586,12 +588,12 @@ func (s *Sessions) start(root, runnerID string, resume bool) (*SessionState, err
 
 // Adopt puts a freshly assembled session on screen. The overlay has no PTY to
 // hand over, so the session boots itself here with nothing to resume.
-func (s *Sessions) Adopt(root, runnerID string) error {
+func (s *Sessions) Adopt(root, runnerID, profileID string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
 	state := s.BySlug(slugFor(root))
 	if state == nil {
-		booted, err := s.start(root, runnerID, false)
+		booted, err := s.start(root, runnerID, profileID, false)
 		if err != nil {
 			return err
 		}
@@ -634,7 +636,7 @@ func (s *Sessions) retireLocked(state *SessionState) {
 	}
 	if fallback == nil {
 		if root := s.nextInactiveRoot(state.Slug()); root != "" {
-			fallback, _ = s.start(root, "", true)
+			fallback, _ = s.start(root, "", "", true)
 		}
 	}
 	s.reveal(fallback)
