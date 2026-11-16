@@ -115,6 +115,7 @@
       adding = null;
     } else if (event.key === "Enter") {
       event.preventDefault();
+      event.stopPropagation();
       add();
     }
   }
@@ -144,6 +145,7 @@
       renaming = null;
     } else if (event.key === "Enter") {
       event.preventDefault();
+      event.stopPropagation();
       rename();
     }
   }

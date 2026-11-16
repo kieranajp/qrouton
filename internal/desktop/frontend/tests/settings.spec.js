@@ -548,6 +548,33 @@ test("renaming a profile changes its label and keeps its id", async ({ page }) =
   expect(await profileCalls(page, "Rename")).toEqual([{ method: "Rename", args: ["claude", "work", "Lifesum Health"] }]);
 });
 
+test("Enter in the new profile's name or folder adds it and leaves Settings open and unsaved", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Agents");
+  for (const [label, field] of [["Day Job", "Profile name"], ["Side Gig", "Profile folder"]]) {
+    await page.getByRole("button", { name: "Add Claude Code profile" }).click();
+    await page.getByRole("textbox", { name: "Profile name" }).fill(label);
+    await page.getByRole("textbox", { name: field }).press("Enter");
+    await expect(claudeProfiles(page).getByRole("listitem", { name: label })).toBeVisible();
+  }
+  expect((await profileCalls(page, "Add")).map((call) => call.args[0].label)).toEqual(["Day Job", "Side Gig"]);
+  expect(await saves(page)).toEqual([]);
+  expect(await page.evaluate(() => window.settingsFixture.closes())).toBe(0);
+});
+
+test("Enter in a profile's new name renames it and leaves Settings open and unsaved", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Agents");
+  await page.getByRole("button", { name: "Rename Lifesum" }).click();
+  await page.getByRole("textbox", { name: "New name for Lifesum" }).fill("Lifesum Health");
+  await page.getByRole("textbox", { name: "New name for Lifesum" }).press("Enter");
+
+  await expect(claudeProfiles(page).getByRole("listitem", { name: "Lifesum Health" })).toBeVisible();
+  expect(await profileCalls(page, "Rename")).toEqual([{ method: "Rename", args: ["claude", "work", "Lifesum Health"] }]);
+  expect(await saves(page)).toEqual([]);
+  expect(await page.evaluate(() => window.settingsFixture.closes())).toBe(0);
+});
+
 test("deleting a profile names its pinned sessions and says the folder stays", async ({ page }) => {
   await page.goto("/tests/settings.html");
   await open(page, "Agents");
