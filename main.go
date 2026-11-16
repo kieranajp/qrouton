@@ -285,14 +285,22 @@ func (p workbenchPorts) Document(sessionRoot, name string) (workbench.WindowOpti
 	return launch.DocumentWindow(sessionRoot, name, p.spec.Editor, workbench.LineSpan{})
 }
 
+// Runners lists each runner's default account, then its named profiles in
+// config order.
 func (p workbenchPorts) Runners() ([]assembly.Runner, error) {
-	runners, err := launch.Runners(p.cfg.Snapshot())
+	cfg := p.cfg.Snapshot()
+	runners, err := launch.Runners(cfg)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]assembly.Runner, len(runners))
-	for i, r := range runners {
-		out[i] = assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != ""}
+	out := make([]assembly.Runner, 0, len(runners))
+	for _, r := range runners {
+		row := assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != ""}
+		out = append(out, row)
+		for _, profile := range cfg.Profiles[r.ID] {
+			row.Profile, row.ProfileLabel = profile.ID, profile.Label
+			out = append(out, row)
+		}
 	}
 	return out, nil
 }

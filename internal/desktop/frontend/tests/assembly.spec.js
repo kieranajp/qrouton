@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { REPOS_REFRESH_EVENT } from "../src/lib/bridge/generated.js";
+import { PROFILES_STATUS, REPOS_REFRESH_EVENT, SIGN_IN_STATES } from "../src/lib/bridge/generated.js";
 
 test("clearing repository searches keeps selected rows first, ahead of the display cap", async ({ page }) => {
   await page.goto("/tests/assembly.html");
@@ -300,4 +300,90 @@ test("Escape after Tab leaves the branch popup closes it without cancelling asse
   await expect(menu).toHaveCount(0);
   await expect(page.locator(".rows button.base")).toBeFocused();
   expect(await page.evaluate(() => window.assembly.closeRequests())).toBe(0);
+});
+
+const PROFILED = [
+  { id: "claude", label: "Claude Code", profile: "", profileLabel: "", installed: true },
+  { id: "claude", label: "Claude Code", profile: "lifesum", profileLabel: "Lifesum", installed: true },
+  { id: "codex", label: "Codex", profile: "", profileLabel: "", installed: true },
+];
+const STATUSES = [
+  { runner: "claude", profile: "", state: SIGN_IN_STATES.SIGNED_IN, email: "k@example.com" },
+  { runner: "claude", profile: "lifesum", state: SIGN_IN_STATES.SIGNED_OUT },
+  { runner: "codex", profile: "", state: SIGN_IN_STATES.SIGNED_IN },
+];
+
+const agentStep = async (page, init, arg) => {
+  if (init) await page.addInitScript(init, arg);
+  await page.goto("/tests/assembly.html");
+  await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
+  await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
+  await page.getByRole("button", { name: "Choose repositories" }).click();
+  await page.getByRole("button", { name: "Choose an agent" }).click();
+  return page.locator(".group").first().locator(".card");
+};
+
+const created = (page) =>
+  page.evaluate(() => window.assembly.calls().find(({ name }) => name.endsWith("Assembly.Create"))?.args[0]);
+
+test("a config with no profiles shows today's tiles, with no badge or accounts link", async ({ page }) => {
+  const tiles = await agentStep(page);
+  await expect(tiles.locator(".title")).toHaveText(["Claude Code", "Codex", "OpenCode", "Antigravity"]);
+  await expect(tiles.first()).toHaveClass(/selected/);
+  await expect(page.locator(".badge")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Manage accounts" })).toHaveCount(0);
+  expect(await page.evaluate((name) => window.assembly.calls().some((call) => call.name === name), PROFILES_STATUS)).toBe(false);
+
+  await page.getByRole("button", { name: "Create session" }).click();
+  await expect.poll(() => created(page)).toMatchObject({ runner: "claude", profile: "" });
+});
+
+test("each profile is its own tile, badged once the status answers, and a signed-out one is selectable", async ({ page }) => {
+  const tiles = await agentStep(page, ([rows, statuses]) => {
+    window.runnerRows = rows;
+    window.profileStatuses = statuses;
+  }, [PROFILED, STATUSES]);
+  await expect(tiles.locator(".title")).toHaveText(["Claude Code", "Claude Code · Lifesum", "Codex"]);
+  await expect(tiles.nth(0)).toHaveClass(/selected/);
+  await expect(tiles.nth(0)).toContainText("Signed in as k@example.com");
+  await expect(tiles.nth(1)).toContainText("Signed out");
+  await expect(tiles.nth(2).locator(".badge")).toHaveCount(0);
+  await expect(tiles.nth(1).locator("img.logo")).toHaveAttribute("src", await tiles.nth(0).locator("img.logo").getAttribute("src"));
+
+  await tiles.nth(1).click();
+  await expect(tiles.nth(1)).toHaveClass(/selected/);
+  await expect(tiles.nth(0)).not.toHaveClass(/selected/);
+  await page.getByRole("button", { name: "Create session" }).click();
+  await expect.poll(() => created(page)).toMatchObject({ runner: "claude", profile: "lifesum" });
+});
+
+test("Manage accounts opens Settings on the Agents tab, and closing Settings reads the runners again, dropping a deleted choice", async ({ page }) => {
+  const tiles = await agentStep(page, ([rows, statuses]) => {
+    window.runnerRows = rows;
+    window.profileStatuses = statuses;
+  }, [PROFILED, STATUSES]);
+  await tiles.nth(1).click();
+  await page.getByRole("button", { name: "Manage accounts" }).click();
+  expect(await page.evaluate(() => window.assembly.settingsRequests())).toEqual(["agents"]);
+
+  await page.evaluate(() => window.assembly.setSettingsOpen(true));
+  await page.evaluate((rows) => {
+    const personal = { id: "claude", label: "Claude Code", profile: "personal", profileLabel: "Personal", installed: true };
+    window.runnerRows = [rows[0], rows[1], personal, rows[2]];
+  }, PROFILED);
+  await page.evaluate(() => window.assembly.setSettingsOpen(false));
+
+  await expect(tiles.locator(".title")).toHaveText(["Claude Code", "Claude Code · Lifesum", "Claude Code · Personal", "Codex"]);
+  await expect(tiles.nth(1)).toHaveClass(/selected/);
+
+  await page.evaluate(() => window.assembly.setSettingsOpen(true));
+  await page.evaluate(() => {
+    window.runnerRows = window.runnerRows.filter((row) => row.profile !== "lifesum");
+  });
+  await page.evaluate(() => window.assembly.setSettingsOpen(false));
+
+  await expect(tiles.locator(".title")).toHaveText(["Claude Code", "Claude Code · Personal", "Codex"]);
+  await expect(tiles.nth(0)).toHaveClass(/selected/);
+  await page.getByRole("button", { name: "Create session" }).click();
+  await expect.poll(() => created(page)).toMatchObject({ runner: "claude", profile: "" });
 });

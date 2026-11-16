@@ -165,6 +165,8 @@ type AgentSummary struct {
 type AgentTree struct {
 	Provider      string `json:"provider"`
 	ProviderLabel string `json:"providerLabel"`
+	// ProfileLabel is empty for the runner's default account.
+	ProfileLabel string `json:"profileLabel"`
 	// Coverage is an optional note about what the runner can report.
 	Coverage string `json:"coverage"`
 	// Tools means the runner reports its tool calls, so an agent between

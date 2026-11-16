@@ -1,12 +1,15 @@
 package assembly
 
-// Runner is one coding agent as the agent step offers it. Installed means
-// launch resolved a path for it; main.go maps launch's own rows onto these so
-// nothing here imports launch.
+// Runner is one coding agent on one account as the agent step offers it.
+// Installed means launch resolved a path for it; main.go maps launch's own rows
+// onto these so nothing here imports launch. An empty Profile is the runner's
+// default account.
 type Runner struct {
-	ID        string `json:"id"`
-	Label     string `json:"label"`
-	Installed bool   `json:"installed"`
+	ID           string `json:"id"`
+	Label        string `json:"label"`
+	Profile      string `json:"profile"`
+	ProfileLabel string `json:"profileLabel"`
+	Installed    bool   `json:"installed"`
 }
 
 // Installed keeps only the runners that can actually be started, which is what

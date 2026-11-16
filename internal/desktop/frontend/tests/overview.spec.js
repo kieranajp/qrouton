@@ -422,3 +422,11 @@ test("a session with no digest has no So far tier", async ({ page }) => {
   await open(page);
   await expect(page.locator(".digest")).toHaveCount(0);
 });
+
+test("the orchestrator names its profile beside the runner, and the default profile names the runner alone", async ({ page }) => {
+  await open(page, "?tree=profiled");
+  await expect(page.locator(".orchestrator .provider")).toHaveText("Claude Code · Lifesum");
+
+  await open(page);
+  await expect(page.locator(".orchestrator .provider")).toHaveText("Claude Code");
+});

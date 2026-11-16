@@ -274,7 +274,7 @@ func TestAColdSessionsTreeNamesItsManifestRunner(t *testing.T) {
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "cold", Runner: agentProviderCodex}); err != nil {
 		t.Fatal(err)
 	}
-	tree := agentTree(agentActivitySnapshot{}, manifestRunner(dir), "")
+	tree := coldTree(nil, dir)
 	if tree.Provider != agentProviderCodex || len(tree.Nodes) != 0 || tree.Coverage != "" {
 		t.Fatalf("cold tree = %+v", tree)
 	}

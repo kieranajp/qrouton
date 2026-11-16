@@ -6,17 +6,13 @@
   import { Events, call } from "../wails.js";
   import * as go from "./calls.js";
   import { badge, byProfile, followSignIn, pinnedNote, statusKey } from "./profiles.js";
+  import SignInBadge from "./SignInBadge.svelte";
   import StatusLine from "./StatusLine.svelte";
   import TabHeader from "./TabHeader.svelte";
 
   /** @typedef {import("./calls.js").RunnerProfiles} RunnerProfiles */
   /** @typedef {import("./calls.js").ProfileRow} ProfileRow */
 
-  const TONES = {
-    success: "var(--state-success)",
-    waiting: "var(--state-waiting)",
-    faint: "var(--text-faint)",
-  };
   const DEFAULT_PROFILE = Object.freeze({ id: "", label: "Default", dir: "", sessions: 0 });
 
   /** @type {{labelledby?: string}} */
@@ -195,7 +191,7 @@
       <span class="dir" class:inherited={!profile.id}>{profile.id ? profile.dir : "Your usual sign-in"}</span>
       {#if renaming?.error && isRenaming(runner, profile)}<span class="failed">{renaming.error}</span>{/if}
     </div>
-    <span class="badge" style:--tone={TONES[shown.tone]}><span class="dot"></span>{shown.text}</span>
+    <SignInBadge {shown} />
     <div class="actions">
       {#if isRenaming(runner, profile)}
         <Button variant="cube" size="sm" onclick={rename}>Save name</Button>
@@ -363,25 +359,6 @@
   .dir.inherited {
     font: var(--machine-xs);
     color: var(--text-faint);
-  }
-
-  .badge {
-    display: flex;
-    align-items: center;
-    gap: calc(8px * var(--ui-scale));
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font: var(--machine-xs);
-    color: var(--text-secondary);
-  }
-
-  .dot {
-    width: calc(7px * var(--ui-scale));
-    height: calc(7px * var(--ui-scale));
-    flex: none;
-    background: var(--tone);
   }
 
   .actions,

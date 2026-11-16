@@ -458,3 +458,31 @@ func TestBootFailsForAMissingProfile(t *testing.T) {
 		t.Fatalf("supervisor %q reports profile %q, want work", command.Argv, command.ProfileID)
 	}
 }
+
+func TestRunnersPortListsDefaultThenNamedProfiles(t *testing.T) {
+	cfg := &config.Config{
+		Launch: map[string][]string{"claude": {"/bin/echo"}, "codex": {"/bin/echo"}},
+		Profiles: map[string][]config.RunnerProfile{"claude": {
+			{ID: "work", Label: "Work", Dir: "/tmp/claude-work"},
+			{ID: "lifesum", Label: "Lifesum", Dir: "/tmp/claude-lifesum"},
+		}},
+	}
+	rows, err := testPorts(cfg, "", launch.EditorCommand{}).Runners()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, row := range rows {
+		if row.ID != "claude" && row.ID != "codex" {
+			continue
+		}
+		if !row.Installed {
+			t.Fatalf("row %+v lost its runner's installed state", row)
+		}
+		got = append(got, row.ID+"/"+row.Profile+"/"+row.ProfileLabel)
+	}
+	want := []string{"claude//", "claude/work/Work", "claude/lifesum/Lifesum", "codex//"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("runner rows = %q, want %q", got, want)
+	}
+}

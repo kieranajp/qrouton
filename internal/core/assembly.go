@@ -165,6 +165,11 @@ func (a *Assembly) Create(in DraftInput) error {
 	if problems := assembly.Check(draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
+	if in.Profile != "" {
+		if _, ok := cfg.Profile(in.Runner, in.Profile); !ok {
+			return missingProfile(in.Runner, in.Profile)
+		}
+	}
 	assembler := a.assembler
 	assembler.Cfg = cfg
 	if problems := assembler.CheckSlug(draft); len(problems) > 0 {

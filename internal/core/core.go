@@ -176,12 +176,13 @@ func (c *Core) wire() {
 		copyImage:   client.CopyImage,
 		copyFile:    client.CopyFile,
 	}
-	reg.trees = newAgentTrees(client.Emit, agentTreeInterval, reg.Current, sessionTree)
+	tree := func(state *SessionState) status.AgentTree { return sessionTree(opts.Config, state) }
+	reg.trees = newAgentTrees(client.Emit, agentTreeInterval, reg.Current, tree)
 	c.Chrome.answerTrees(func(slug string) status.AgentTree {
 		if state := reg.BySlug(slug); state != nil {
-			return sessionTree(state)
+			return tree(state)
 		}
-		return agentTree(agentActivitySnapshot{}, manifestRunner(session.Resumable(opts.Root, slug)), "")
+		return coldTree(opts.Config, session.Resumable(opts.Root, slug))
 	})
 
 	// A supervisor exiting ends only its own session, and a failed one keeps its
@@ -299,24 +300,35 @@ func attend(state *SessionState, shown func() *SessionState, touch, ring func())
 	}
 }
 
-func sessionTree(state *SessionState) status.AgentTree {
+// sessionTree names the profile the session booted on rather than the
+// manifest's: a workbench started from the command line boots the default.
+func sessionTree(cfg *config.Config, state *SessionState) status.AgentTree {
 	snapshot := state.agents.snapshot()
 	fallback := ""
 	if snapshot.Provider == "" {
-		fallback = manifestRunner(state.Root())
+		fallback, _ = manifestAgent(state.Root())
 	}
-	return agentTree(snapshot, fallback, state.Root())
+	tree := agentTree(snapshot, fallback, state.Root())
+	tree.ProfileLabel = profileLabel(cfg, tree.Provider, state.profile)
+	return tree
 }
 
-func manifestRunner(root string) string {
+func coldTree(cfg *config.Config, root string) status.AgentTree {
+	runner, profile := manifestAgent(root)
+	tree := agentTree(agentActivitySnapshot{}, runner, "")
+	tree.ProfileLabel = profileLabel(cfg, runner, profile)
+	return tree
+}
+
+func manifestAgent(root string) (runner, profile string) {
 	if root == "" {
-		return ""
+		return "", ""
 	}
 	m, err := session.Load(root)
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	return m.Runner
+	return m.Runner, m.Profile
 }
 
 // overviewWindow opens the session's Overview tab. Adoption may call it again once
