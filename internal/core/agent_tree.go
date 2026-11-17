@@ -123,6 +123,7 @@ type agentTrees struct {
 	interval time.Duration
 	shown    func() *SessionState
 	build    func(*SessionState) status.AgentTree
+	after    func(time.Duration, func())
 
 	mu      sync.Mutex
 	pending map[*SessionState]bool
@@ -132,6 +133,7 @@ type agentTrees struct {
 func newAgentTrees(emit Emitter, interval time.Duration, shown func() *SessionState, build func(*SessionState) status.AgentTree) *agentTrees {
 	return &agentTrees{
 		emit: emit, interval: interval, shown: shown, build: build,
+		after:   func(d time.Duration, f func()) { time.AfterFunc(d, f) },
 		pending: map[*SessionState]bool{}, last: map[string]status.AgentTree{},
 	}
 }
@@ -146,7 +148,7 @@ func (t *agentTrees) schedule(state *SessionState) {
 		return
 	}
 	t.pending[state] = true
-	time.AfterFunc(t.interval, func() { t.flush(state) })
+	t.after(t.interval, func() { t.flush(state) })
 }
 
 func (t *agentTrees) flush(state *SessionState) {
