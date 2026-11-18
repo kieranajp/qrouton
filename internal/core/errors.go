@@ -63,6 +63,7 @@ var (
 	ErrNoSuchAsset            = errors.New("no open deck or gallery serves that asset")
 	ErrNoAgentCommand         = errors.New("workbench has no agent command to run")
 	ErrNoConfig               = errors.New("workbench has no configuration to assemble sessions against")
+	ErrAddRunning             = errors.New("this session is already adding repositories")
 )
 
 var (

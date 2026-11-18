@@ -45,7 +45,7 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 	// docs is a reference checkout, detached and pinned; scribbling on it must
 	// not turn it into something with progress to report.
 	docs := filepath.Join(dir, "src", "docs")
-	if gitOK(dirFlag, docs, "symbolic-ref", quietFlag, headRef) {
+	if gitOK(t.Context(), dirFlag, docs, "symbolic-ref", quietFlag, headRef) {
 		t.Fatal("reference checkout is not detached")
 	}
 	gittest.WriteFile(t, docs, "notes.md", "scribble")
@@ -102,7 +102,7 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureMirror(root, "org", "svc", origin, "main", nil); err != nil {
+	if err := ensureMirror(t.Context(), root, "org", "svc", origin, "main", nil); err != nil {
 		t.Fatal(err)
 	}
 	// Without the fetch the base never moves and the rest proves nothing.

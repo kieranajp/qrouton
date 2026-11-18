@@ -1,11 +1,18 @@
 package session
 
 import (
+	"context"
+	"errors"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/kieranajp/qrouton/internal/gittest"
 )
 
 const cloneStderr = "Cloning into bare repository 'svc.git'...\n" +
@@ -31,9 +38,15 @@ func (r *updatePerRead) Read(p []byte) (int, error) {
 	return n, nil
 }
 
+func scan(r io.Reader, onProgress func(string, int)) string {
+	s := &progressScanner{onProgress: onProgress, lastPercent: -1}
+	_, _ = io.Copy(s, r)
+	return s.tail()
+}
+
 func scanAll(r io.Reader) ([]progressUpdate, string) {
 	var got []progressUpdate
-	tail := scanProgress(r, func(phase string, percent int) {
+	tail := scan(r, func(phase string, percent int) {
 		got = append(got, progressUpdate{phase, percent})
 	})
 	return got, tail
@@ -64,19 +77,166 @@ func TestScanProgressReportsOnlyTheNewestUpdateInOneRead(t *testing.T) {
 // A nil callback is the silent path (resume, tests); it must not panic and must
 // still capture the tail for error reporting.
 func TestScanProgressToleratesNoConsumer(t *testing.T) {
-	tail := scanProgress(strings.NewReader("fatal: Could not read from remote repository.\n"), nil)
+	tail := scan(strings.NewReader("fatal: Could not read from remote repository.\n"), nil)
 	if !strings.Contains(tail, "Could not read from remote") {
 		t.Fatalf("tail = %q", tail)
 	}
 }
 
-func TestVerbosityFlagAsksForProgressOnlyWhenDrawn(t *testing.T) {
-	// Without --progress git stays silent on a pipe, so a drawn bar would never move.
-	if got := verbosityFlag(func(string, int) {}); got != progressFlag {
-		t.Fatalf("verbosityFlag with a consumer = %q, want %q", got, progressFlag)
+// fakeGit puts a shell script named git first on PATH for the rest of the test.
+func fakeGit(t *testing.T, script string) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, gitBin), []byte("#!/bin/sh\n"+script), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if got := verbosityFlag(nil); got != quietLongFlag {
-		t.Fatalf("verbosityFlag without a consumer = %q, want %q", got, quietLongFlag)
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func shortenStalls(t *testing.T, first, next time.Duration) {
+	t.Helper()
+	savedFirst, savedNext := gitFirstOutputStall, gitOutputStall
+	gitFirstOutputStall, gitOutputStall = first, next
+	t.Cleanup(func() { gitFirstOutputStall, gitOutputStall = savedFirst, savedNext })
+}
+
+// The stall watch hears only what git writes, and git writes progress to a pipe
+// only when asked, so a quiet mirror with nobody drawing a bar would be killed.
+func TestCloneAndFetchAlwaysAskForProgress(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "args")
+	t.Setenv("FAKE_GIT_LOG", log)
+	fakeGit(t, `echo "$@" >>"$FAKE_GIT_LOG"
+if [ "$1" = clone ]; then for a; do target=$a; done; mkdir -p "$target"; fi
+`)
+	if err := ensureMirror(t.Context(), t.TempDir(), "org", "svc", "git@example.invalid:org/svc.git", "main", nil); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slow := 0
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		fields := strings.Fields(line)
+		if !slices.Contains(fields, cloneCmd) && !slices.Contains(fields, fetchCmd) {
+			continue
+		}
+		slow++
+		if !slices.Contains(fields, progressFlag) {
+			t.Errorf("git %s ran without %s", line, progressFlag)
+		}
+	}
+	if slow != 2 {
+		t.Fatalf("saw %d clones and fetches, want one of each:\n%s", slow, body)
+	}
+}
+
+func TestASilentGitIsKilledAfterTheStallWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name, script string
+		first, next  time.Duration
+		window       string
+	}{
+		{"before its first output", "sleep 30\n", 200 * time.Millisecond, time.Hour, "nothing in its first 200ms"},
+		{"after reporting once", "printf 'Receiving objects:  10%%\\r' >&2\nsleep 30\n", 3 * time.Second, 200 * time.Millisecond, "no progress for 200ms"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeGit(t, tc.script)
+			shortenStalls(t, tc.first, tc.next)
+			start := time.Now()
+			err := gitSlow(t.Context(), nil, fetchCmd, progressFlag)
+			if !errors.Is(err, ErrGitStalled) {
+				t.Fatalf("gitSlow = %v, want a stall", err)
+			}
+			if !strings.Contains(err.Error(), tc.window) {
+				t.Fatalf("stall error %q does not say %q", err, tc.window)
+			}
+			// sleep is git's child here, so only a group kill frees the pipe sooner.
+			if elapsed := time.Since(start); elapsed >= gitWaitDelay {
+				t.Fatalf("stopping took %s; the child outlived git", elapsed)
+			}
+		})
+	}
+}
+
+func TestAReportingGitOutlivesTheStallWindow(t *testing.T) {
+	fakeGit(t, `i=0
+while [ $i -lt 40 ]; do printf 'Receiving objects: %d%%\r' $((i * 2)) >&2; sleep 0.02; i=$((i + 1)); done
+`)
+	shortenStalls(t, 3*time.Second, 300*time.Millisecond)
+	var reported int
+	if err := gitSlow(t.Context(), func(string, int) { reported++ }, fetchCmd, progressFlag); err != nil {
+		t.Fatalf("a git that kept reporting well past the window was stopped: %v", err)
+	}
+	if reported == 0 {
+		t.Fatal("no progress reached the callback")
+	}
+}
+
+func TestGitRunsWithoutATerminal(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "env")
+	t.Setenv("FAKE_GIT_OUT", out)
+	fakeGit(t, `exec >"$FAKE_GIT_OUT" 2>&1
+echo "prompt=$GIT_TERMINAL_PROMPT"
+tty
+if (: </dev/tty) 2>/dev/null; then echo "controlling=yes"; else echo "controlling=no"; fi
+`)
+	for name, run := range map[string]func() error{
+		"git":     func() error { return git(t.Context(), statusCmd) },
+		"gitSlow": func() error { return gitSlow(t.Context(), nil, fetchCmd, progressFlag) },
+	} {
+		if err := run(); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		body, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := string(body)
+		for _, want := range []string{"prompt=0", "not a tty", "controlling=no"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("%s ran git with %q, missing %q", name, got, want)
+			}
+		}
+	}
+}
+
+func TestACancelledCloneLeavesNoMirror(t *testing.T) {
+	fakeGit(t, `for a; do target=$a; done
+mkdir -p "$target/objects"
+printf 'Receiving objects:  10%%\r' >&2
+sleep 30
+`)
+	root := t.TempDir()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	err := ensureMirror(ctx, root, "org", "svc", "git@example.invalid:org/svc.git", "main",
+		func(string, int) { cancel() })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ensureMirror = %v, want cancelled", err)
+	}
+	mp := mirrorPath(root, "org", "svc")
+	for _, path := range []string{mp, mp + partialCloneSuffix} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Errorf("%s survived the cancel: %v", path, err)
+		}
+	}
+}
+
+// A partial clone a crash left behind is replaced, not fetched into.
+func TestAStalePartialCloneDoesNotBlockTheMirror(t *testing.T) {
+	requireGit(t)
+	root := t.TempDir()
+	mp := mirrorPath(root, "org", "svc")
+	gittest.WriteFile(t, mp+partialCloneSuffix, "HEAD", "junk")
+	if err := ensureMirror(t.Context(), root, "org", "svc", gittest.Origin(t, "svc"), "main", nil); err != nil {
+		t.Fatal(err)
+	}
+	if !gitOK(t.Context(), dirFlag, mp, showRefCmd, verifyFlag, quietLongFlag, localBranchRef+"main") {
+		t.Fatal("the mirror has no main branch")
+	}
+	if _, err := os.Lstat(mp + partialCloneSuffix); !os.IsNotExist(err) {
+		t.Fatalf("the partial clone is still there: %v", err)
 	}
 }
 

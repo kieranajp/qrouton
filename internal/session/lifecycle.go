@@ -61,13 +61,13 @@ func Delete(root string, m Manifest) error {
 			continue
 		}
 		mirror := mirrorPath(root, repo.Org, repo.Name)
-		if err := git(dirFlag, mirror, worktreeCmd, worktreeRemove, forceFlag, path); err != nil {
+		if err := git(context.Background(), dirFlag, mirror, worktreeCmd, worktreeRemove, forceFlag, path); err != nil {
 			// Broken or missing worktree metadata should not strand a session.
 			// The user has already confirmed destructive deletion at this point.
 			if removeErr := os.RemoveAll(path); removeErr != nil {
 				return fmt.Errorf("remove %s/%s worktree after git cleanup failed: %w", repo.Org, repo.Name, removeErr)
 			}
-			_ = git(dirFlag, mirror, worktreeCmd, worktreePrune)
+			_ = git(context.Background(), dirFlag, mirror, worktreeCmd, worktreePrune)
 		}
 	}
 	if err := os.RemoveAll(dir); err != nil {

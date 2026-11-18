@@ -1,7 +1,9 @@
 package core
 
 import (
+	"context"
 	"strings"
+	"sync"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -44,11 +46,18 @@ type Picker struct {
 	sessions  *Sessions
 	repos     *Repositories
 	assembler assembly.Assembler
+
+	// ctx ends every add when the core shuts down.
+	ctx     context.Context
+	mu      sync.Mutex
+	adding  map[string]context.CancelFunc
+	running sync.WaitGroup
 }
 
-func newPicker(cfg *config.Config, reg *Sessions, repos *Repositories, signal func(string)) *Picker {
+func newPicker(ctx context.Context, cfg *config.Config, reg *Sessions, repos *Repositories, signal func(string)) *Picker {
 	return &Picker{cfg: cfg, sessions: reg, repos: repos,
-		assembler: assembly.Assembler{Cfg: cfg, Signal: signal}}
+		assembler: assembly.Assembler{Cfg: cfg, Signal: signal},
+		ctx:       ctx, adding: map[string]context.CancelFunc{}}
 }
 
 // Escalate opens a persistent escalation picker from the session header. An
@@ -91,11 +100,16 @@ func (p *Picker) Load(slug string) (PickerFields, error) {
 	return PickerFields{Branch: m.Branch(), Repos: held}, nil
 }
 
-func (p *Picker) Confirm(slug string, in PickerInput) error {
+func (p *Picker) Confirm(ctx context.Context, slug string, in PickerInput) error {
 	state, root, err := p.root(slug)
 	if err != nil {
 		return err
 	}
+	ctx, done, err := p.begin(ctx, root)
+	if err != nil {
+		return err
+	}
+	defer done()
 	escalation := state.PendingPicker()
 	m, err := session.Load(root)
 	if err != nil {
@@ -107,12 +121,47 @@ func (p *Picker) Confirm(slug string, in PickerInput) error {
 	}
 	assembler := p.assembler
 	assembler.Cfg = p.cfg.Snapshot()
-	if err := assembler.Confirm(root, draft, escalation != nil, nil); err != nil {
+	if err := assembler.Confirm(ctx, root, draft, escalation != nil, nil); err != nil {
 		return err
 	}
 	state.ClearPicker()
 	p.sessions.RepositoriesChanged(root)
 	return nil
+}
+
+// begin registers an add for root, refusing a second while the first runs. Its
+// context ends with the caller's or the core's, whichever ends first.
+func (p *Picker) begin(ctx context.Context, root string) (context.Context, func(), error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, ok := p.adding[root]; ok {
+		return nil, nil, ErrAddRunning
+	}
+	if err := p.ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	unlink := context.AfterFunc(p.ctx, cancel)
+	p.adding[root] = cancel
+	p.running.Add(1)
+	return ctx, func() {
+		unlink()
+		cancel()
+		p.mu.Lock()
+		delete(p.adding, root)
+		p.mu.Unlock()
+		p.running.Done()
+	}, nil
+}
+
+// stop cancels every running add and waits for each to return.
+func (p *Picker) stop() {
+	p.mu.Lock()
+	for _, cancel := range p.adding {
+		cancel()
+	}
+	p.mu.Unlock()
+	p.running.Wait()
 }
 
 func (p *Picker) Cancel(slug string) error {

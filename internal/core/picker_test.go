@@ -1,7 +1,11 @@
 package core
 
 import (
+	"context"
+	"errors"
+	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -56,7 +60,7 @@ func TestPickerLoadReportsTheSessionsBranchAndLocksWhatItHolds(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{Root: filepath.Dir(shown)}
-	p := newPicker(cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil)
+	p := newPicker(context.Background(), cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil)
 
 	fields, err := p.Load("shown")
 	if err != nil {
@@ -90,7 +94,7 @@ func TestPickerLoadReportsTheSessionsBranchAndLocksWhatItHolds(t *testing.T) {
 func TestHeaderEscalationQueuesAPersistentPickerOnlyForAssistant(t *testing.T) {
 	kernel, shown, _ := pickerCore(t)
 	reg := kernel.Sessions
-	p := newPicker(&config.Config{Root: filepath.Dir(shown)}, reg,
+	p := newPicker(context.Background(), &config.Config{Root: filepath.Dir(shown)}, reg,
 		&Repositories{errs: map[string]error{}}, nil)
 
 	if err := p.Escalate("shown"); err != nil {
@@ -126,7 +130,7 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 	cfg := &config.Config{Root: filepath.Dir(shown)}
 	repo := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
-	p := newPicker(cfg, reg, repos, nil)
+	p := newPicker(context.Background(), cfg, reg, repos, nil)
 
 	if err := reg.QueuePicker(workbench.PickerRequest{SessionRoot: shown, Deadline: time.Now().Add(time.Minute)}); err != nil {
 		t.Fatal(err)
@@ -149,7 +153,7 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := PickerInput{Repos: []RepoPick{{ID: "org/svc", Role: "editing"}}}
-	if err := p.Confirm("shown", in); err != nil {
+	if err := p.Confirm(t.Context(), "shown", in); err != nil {
 		t.Fatal(err)
 	}
 	if reg.Current().PendingPicker() != nil {
@@ -173,9 +177,9 @@ func TestConfirmAndCancelRefuseASessionThisWorkbenchIsNotRunning(t *testing.T) {
 	kernel, shown, _ := pickerCore(t)
 	reg := kernel.Sessions
 	cfg := &config.Config{Root: filepath.Dir(shown)}
-	p := newPicker(cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil)
+	p := newPicker(context.Background(), cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil)
 
-	if err := p.Confirm("kraken", PickerInput{}); err == nil {
+	if err := p.Confirm(t.Context(), "kraken", PickerInput{}); err == nil {
 		t.Fatal("a picker confirmed for a session this workbench is not running")
 	}
 	if err := p.Cancel("kraken"); err == nil {
@@ -203,10 +207,10 @@ func TestConfirmTakesUpAHeldReferenceRepoAndIgnoresTheRest(t *testing.T) {
 	if err := reg.Show(filepath.Base(dir)); err != nil {
 		t.Fatal(err)
 	}
-	p := newPicker(cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil)
+	p := newPicker(context.Background(), cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil)
 
 	in := PickerInput{Upgrades: []string{"org/docs", "org/docs", "org/kraken"}}
-	if err := p.Confirm("reading", in); err != nil {
+	if err := p.Confirm(t.Context(), "reading", in); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -240,11 +244,84 @@ func TestAPickerRowCarriesItsChosenBaseIntoTheDraft(t *testing.T) {
 	cfg := &config.Config{}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{},
 		repos: []github.Repo{{Org: "org", Name: "svc", DefaultBranch: "main"}}}
-	p := newPicker(cfg, nil, repos, nil)
+	p := newPicker(context.Background(), cfg, nil, repos, nil)
 
 	got := p.draft(session.Manifest{Slug: "shown", Name: "Webhook retry"}, nil,
 		PickerInput{Repos: []RepoPick{{ID: "org/svc", Role: "editing", Base: "release/24.4"}}})
 	if len(got.Repos) != 1 || got.Repos[0].Base != "release/24.4" {
 		t.Fatalf("draft repos = %+v", got.Repos)
+	}
+}
+
+// holdClones puts a git on PATH whose clone makes its target, as git does, then
+// never finishes. It reports once a clone has started; anything else fails at once.
+func holdClones(t *testing.T) func() bool {
+	t.Helper()
+	dir := t.TempDir()
+	started := filepath.Join(dir, "cloning")
+	script := "#!/bin/sh\nif [ \"$1\" = clone ]; then for a; do target=$a; done; mkdir -p \"$target\"; : >" +
+		strconv.Quote(started) + "; exec sleep 60; fi\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return func() bool {
+		_, err := os.Stat(started)
+		return err == nil
+	}
+}
+
+func addingPicker(ctx context.Context, kernel *Core, shown string) *Picker {
+	cfg := &config.Config{Root: filepath.Dir(shown)}
+	repo := github.Repo{Org: "org", Name: "svc", SSHURL: "git@example.invalid:org/svc.git", DefaultBranch: "main"}
+	return newPicker(ctx, cfg, kernel.Sessions, &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}, nil)
+}
+
+var pickSvc = PickerInput{Repos: []RepoPick{{ID: "org/svc", Role: "editing"}}}
+
+func TestASecondAddForTheSameSessionIsRefused(t *testing.T) {
+	cloning := holdClones(t)
+	kernel, shown, _ := pickerCore(t)
+	p := addingPicker(context.Background(), kernel, shown)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	first := make(chan error, 1)
+	go func() { first <- p.Confirm(ctx, "shown", pickSvc) }()
+	waitFor(t, "the first add to start cloning", cloning)
+
+	if err := p.Confirm(t.Context(), "shown", pickSvc); !errors.Is(err, ErrAddRunning) {
+		t.Fatalf("a second add while the first runs = %v, want %v", err, ErrAddRunning)
+	}
+	cancel()
+	if err := <-first; !errors.Is(err, context.Canceled) {
+		t.Fatalf("the cancelled add = %v", err)
+	}
+	ended, end := context.WithCancel(t.Context())
+	end()
+	if err := p.Confirm(ended, "shown", pickSvc); errors.Is(err, ErrAddRunning) {
+		t.Fatal("an add that has returned still refuses the next one")
+	}
+}
+
+func TestShutdownStopsARunningAdd(t *testing.T) {
+	cloning := holdClones(t)
+	kernel, shown, _ := pickerCore(t)
+	kernel.Picker = addingPicker(kernel.ctx, kernel, shown)
+	added := make(chan error, 1)
+	go func() { added <- kernel.Picker.Confirm(context.Background(), "shown", pickSvc) }()
+	waitFor(t, "the add to start cloning", cloning)
+
+	kernel.Shutdown()
+	partial := filepath.Join(filepath.Dir(shown), ".mirrors", "org", "svc.git.partial")
+	if _, err := os.Lstat(partial); !os.IsNotExist(err) {
+		t.Fatalf("Shutdown returned before the add cleaned up its partial clone: %v", err)
+	}
+	select {
+	case err := <-added:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("the add Shutdown stopped = %v", err)
+		}
+	case <-time.After(waitCeiling):
+		t.Fatal("the add never returned")
 	}
 }

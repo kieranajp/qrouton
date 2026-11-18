@@ -816,7 +816,7 @@ func pickerRows() []adapterRow {
 		}},
 		{"Picker.Confirm", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
-			if err := (&Picker{picker: a.kernel.Picker}).Confirm(a.slug(), core.PickerInput{}); !refusedFor(err, assembly.FieldRepos) {
+			if err := (&Picker{picker: a.kernel.Picker}).Confirm(t.Context(), a.slug(), core.PickerInput{}); !refusedFor(err, assembly.FieldRepos) {
 				t.Fatalf("confirming no editing repository = %v", err)
 			}
 		}},

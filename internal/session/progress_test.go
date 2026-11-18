@@ -76,10 +76,8 @@ func TestStepReportsAFailureAndReturnsIt(t *testing.T) {
 	}
 }
 
-// gitSlow asks git for --progress or --quiet purely on whether its callback is
-// nil (see verbosityFlag). So a reporter with nobody listening must hand the
-// work a nil advance, not a closure that discards — otherwise every clone and
-// fetch starts spraying progress at a stderr no one reads.
+// A reporter with nobody listening hands the work a nil advance, so git's
+// progress is not parsed for a bar nobody draws.
 func TestAReporterWithNoListenerHandsTheWorkNoCallback(t *testing.T) {
 	rep := reporter{}
 	var advance func(string, int)
@@ -94,25 +92,6 @@ func TestAReporterWithNoListenerHandsTheWorkNoCallback(t *testing.T) {
 		t.Fatal("step did not run its work")
 	}
 	if advance != nil {
-		t.Fatal("a reporter with no listener handed the work a callback, so git would be asked for --progress")
-	}
-	if got := verbosityFlag(advance); got != quietLongFlag {
-		t.Fatalf("git would be asked for %q, want %q", got, quietLongFlag)
-	}
-}
-
-// The mirror step is where this matters in practice, so pin the pairing rather
-// than only the reporter in isolation.
-func TestAListeningReporterAsksGitForProgress(t *testing.T) {
-	rep := reporter{fn: func(Progress) {}}
-	var advance func(string, int)
-	if err := rep.step(ProgressMirror, func(a func(string, int)) error {
-		advance = a
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if got := verbosityFlag(advance); got != progressFlag {
-		t.Fatalf("git would be asked for %q, want %q", got, progressFlag)
+		t.Fatal("a reporter with no listener handed the work a callback")
 	}
 }

@@ -19,7 +19,7 @@ type RepoRef struct {
 
 // UpgradeRepos validates every reference before moving any checkout to the session branch.
 // The caller rewrites the manifest after all disk changes succeed.
-func UpgradeRepos(cfg *config.Config, m Manifest, refs []RepoRef, branch string, progress ProgressFunc) error {
+func UpgradeRepos(ctx context.Context, cfg *config.Config, m Manifest, refs []RepoRef, branch string, progress ProgressFunc) error {
 	if len(refs) == 0 {
 		return nil
 	}
@@ -35,7 +35,7 @@ func UpgradeRepos(cfg *config.Config, m Manifest, refs []RepoRef, branch string,
 		}
 	}
 	for _, r := range pending {
-		if err := upgradeRepo(cfg, dir, r, branch, progress); err != nil {
+		if err := upgradeRepo(ctx, cfg, dir, r, branch, progress); err != nil {
 			return err
 		}
 	}
@@ -101,36 +101,36 @@ func upgradable(m Manifest, dir string, ref RepoRef, branch string) (ManifestRep
 	return r, true, nil
 }
 
-func upgradeRepo(cfg *config.Config, dir string, r ManifestRepo, branch string, progress ProgressFunc) error {
+func upgradeRepo(ctx context.Context, cfg *config.Config, dir string, r ManifestRepo, branch string, progress ProgressFunc) error {
 	repo := github.Repo{Name: r.Name, Org: r.Org, DefaultBranch: r.DefaultBranch, SSHURL: r.SSHURL}
 	rep := reporter{fn: progress, repo: &repo, role: RepoRoleEditing}
 	// The mirror is already there; this is the fetch that brings the base
 	// branch's tip within reach of the new session branch.
 	if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
-		return ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, r.DefaultBranch, advance)
+		return ensureMirror(ctx, cfg.Root, r.Org, r.Name, r.SSHURL, r.DefaultBranch, advance)
 	}); err != nil {
 		return err
 	}
 	mirror := mirrorPath(cfg.Root, r.Org, r.Name)
 	wt := r.Dir(dir)
 	return rep.step(ProgressWorktree, func(func(string, int)) error {
-		return branchWorktree(mirror, wt, r, branch)
+		return branchWorktree(ctx, mirror, wt, r, branch)
 	})
 }
 
 // branchWorktree switches an existing checkout in place rather than replacing it,
 // which keeps whatever the directory holds that git does not track — an .env, a
 // node_modules — and refuses rather than clobbering uncommitted work.
-func branchWorktree(mirror, wt string, r ManifestRepo, branch string) error {
+func branchWorktree(ctx context.Context, mirror, wt string, r ManifestRepo, branch string) error {
 	startRef := r.BaseRef()
 	if _, err := os.Stat(wt); err != nil {
-		return addWorktree(mirror, wt, branch, startRef)
+		return addWorktree(ctx, mirror, wt, branch, startRef)
 	}
 	var err error
-	if mirrorHasBranch(mirror, branch) {
-		err = git(dirFlag, wt, checkoutCmd, quietFlag, branch)
+	if mirrorHasBranch(ctx, mirror, branch) {
+		err = git(ctx, dirFlag, wt, checkoutCmd, quietFlag, branch)
 	} else {
-		err = git(dirFlag, wt, checkoutCmd, quietFlag, branchFlag, branch, startRef)
+		err = git(ctx, dirFlag, wt, checkoutCmd, quietFlag, branchFlag, branch, startRef)
 	}
 	if err == nil {
 		return nil

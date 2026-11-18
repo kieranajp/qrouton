@@ -74,7 +74,7 @@ func TestUpgradeReposMovesAReferenceCheckoutOntoTheSessionBranch(t *testing.T) {
 	gittest.Run(t, origins[0], "commit", "-m", "advance")
 	tip := gitIn(t, origins[0], "rev-parse", "HEAD")
 
-	if err := UpgradeRepos(cfg, m, []RepoRef{{Org: "ORG", Name: "DOCS"}}, "feat/docs", nil); err != nil {
+	if err := UpgradeRepos(t.Context(), cfg, m, []RepoRef{{Org: "ORG", Name: "DOCS"}}, "feat/docs", nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := gitIn(t, wt, "branch", "--show-current"); got != "feat/docs" {
@@ -130,7 +130,7 @@ func TestUpgradeReposCutsFromTheRecordedBaseBranch(t *testing.T) {
 	gittest.Run(t, origin, "add", ".")
 	gittest.Run(t, origin, "commit", "-m", "advance main")
 
-	if err := UpgradeRepos(cfg, m, refs("docs"), "feat/based", nil); err != nil {
+	if err := UpgradeRepos(t.Context(), cfg, m, refs("docs"), "feat/based", nil); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(dir, m.Repos[0].WorktreePath)
@@ -154,7 +154,7 @@ func TestUpgradeReposReusesTheExistingMirror(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := UpgradeRepos(cfg, m, refs("shared"), "feat/shared", nil); err != nil {
+	if err := UpgradeRepos(t.Context(), cfg, m, refs("shared"), "feat/shared", nil); err != nil {
 		t.Fatal(err)
 	}
 	after, err := os.Stat(mirror)
@@ -186,7 +186,7 @@ func TestUpgradeReposKeepsWhatGitDoesNotTrack(t *testing.T) {
 		}
 	}
 
-	if err := UpgradeRepos(cfg, m, refs("built"), "feat/built", nil); err != nil {
+	if err := UpgradeRepos(t.Context(), cfg, m, refs("built"), "feat/built", nil); err != nil {
 		t.Fatal(err)
 	}
 	for name, want := range kept {
@@ -215,7 +215,7 @@ func TestUpgradeReposRefusesACheckoutThatHasMovedOffItsPin(t *testing.T) {
 	gittest.Run(t, wt, "commit", "-m", "local work")
 	local := gitIn(t, wt, "rev-parse", "HEAD")
 
-	err = UpgradeRepos(cfg, m, refs("moved"), "feat/moved", nil)
+	err = UpgradeRepos(t.Context(), cfg, m, refs("moved"), "feat/moved", nil)
 	if !errors.Is(err, ErrReferenceMoved) {
 		t.Fatalf("take-up of a moved checkout = %v", err)
 	}
@@ -246,10 +246,10 @@ func TestUpgradeReposRefusesAnythingButAReferenceRepoItHolds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := UpgradeRepos(cfg, m, refs("svc"), "feat/held", nil); !errors.Is(err, ErrNotReference) {
+	if err := UpgradeRepos(t.Context(), cfg, m, refs("svc"), "feat/held", nil); !errors.Is(err, ErrNotReference) {
 		t.Fatalf("take-up of an editing repo = %v", err)
 	}
-	if err := UpgradeRepos(cfg, m, refs("kraken"), "feat/held", nil); !errors.Is(err, ErrNotHeld) {
+	if err := UpgradeRepos(t.Context(), cfg, m, refs("kraken"), "feat/held", nil); !errors.Is(err, ErrNotHeld) {
 		t.Fatalf("take-up of an unheld repo = %v", err)
 	}
 	if _, err := ApplyUpgrades(m, refs("kraken"), "feat/held"); !errors.Is(err, ErrNotHeld) {
@@ -268,7 +268,7 @@ func TestUpgradeReposTouchesNothingWhenOneOfTheBatchIsRefused(t *testing.T) {
 	bravo := filepath.Join(dir, m.Repos[1].WorktreePath)
 	gittest.Run(t, bravo, "commit", "--allow-empty", "-m", "local work")
 
-	err = UpgradeRepos(cfg, m, refs("alpha", "bravo"), "feat/both", nil)
+	err = UpgradeRepos(t.Context(), cfg, m, refs("alpha", "bravo"), "feat/both", nil)
 	if !errors.Is(err, ErrReferenceMoved) {
 		t.Fatalf("batch with one refusal = %v", err)
 	}
@@ -291,7 +291,7 @@ func TestUpgradeReposCompletesATakeUpWhoseWriteNeverLanded(t *testing.T) {
 	gittest.Run(t, origins[0], "add", ".")
 	gittest.Run(t, origins[0], "commit", "-m", "advance")
 
-	if err := UpgradeRepos(cfg, m, refs("again"), "feat/again", nil); err != nil {
+	if err := UpgradeRepos(t.Context(), cfg, m, refs("again"), "feat/again", nil); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(dir, m.Repos[0].WorktreePath)
@@ -299,7 +299,7 @@ func TestUpgradeReposCompletesATakeUpWhoseWriteNeverLanded(t *testing.T) {
 		t.Fatal("the checkout did not move off its pin, so the retry proves nothing")
 	}
 
-	if err := UpgradeRepos(cfg, m, refs("again"), "feat/again", nil); err != nil {
+	if err := UpgradeRepos(t.Context(), cfg, m, refs("again"), "feat/again", nil); err != nil {
 		t.Fatal("a take-up already on disk was not completable:", err)
 	}
 	if got := gitIn(t, wt, "branch", "--show-current"); got != "feat/again" {
@@ -318,7 +318,7 @@ func TestUpgradeReposMaterialisesAPrunedCheckoutStraightOntoTheBranch(t *testing
 	if err := os.RemoveAll(wt); err != nil {
 		t.Fatal(err)
 	}
-	if err := UpgradeRepos(cfg, m, refs("pruned"), "feat/pruned", nil); err != nil {
+	if err := UpgradeRepos(t.Context(), cfg, m, refs("pruned"), "feat/pruned", nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := gitIn(t, wt, "branch", "--show-current"); got != "feat/pruned" {
@@ -336,7 +336,7 @@ func TestUpgradeReposReportsItsFetchAndItsWorktree(t *testing.T) {
 		t.Fatal(err)
 	}
 	var events []Progress
-	if err := UpgradeRepos(cfg, m, refs("watched"), "feat/watched",
+	if err := UpgradeRepos(t.Context(), cfg, m, refs("watched"), "feat/watched",
 		func(event Progress) { events = append(events, event) }); err != nil {
 		t.Fatal(err)
 	}
@@ -383,7 +383,7 @@ func TestUpgradeReposRefusesToOverwriteUncommittedWork(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = UpgradeRepos(cfg, m, refs("edited"), "feat/edited", nil)
+	err = UpgradeRepos(t.Context(), cfg, m, refs("edited"), "feat/edited", nil)
 	if !errors.Is(err, ErrCheckoutHasWork) {
 		t.Fatalf("take-up over conflicting work = %v", err)
 	}
@@ -414,7 +414,7 @@ func TestUpgradeReposCarriesWorkGitCanKeep(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(wt, "version"), []byte("mine"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := UpgradeRepos(cfg, m, refs("carried"), "feat/carried", nil); err != nil {
+	if err := UpgradeRepos(t.Context(), cfg, m, refs("carried"), "feat/carried", nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := gitIn(t, wt, "branch", "--show-current"); got != "feat/carried" {
