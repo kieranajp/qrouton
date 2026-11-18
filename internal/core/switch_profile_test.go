@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -59,19 +58,33 @@ func newSwitchFixture(t *testing.T, runner string, argv ...string) *switchFixtur
 }
 
 // record writes the conversation into profile a and names it in the session.
-func (f *switchFixture) record(t *testing.T) {
+func (f *switchFixture) record(t *testing.T) { f.recordID(t, switchID) }
+
+func (f *switchFixture) recordID(t *testing.T, id string) {
 	t.Helper()
-	dir := filepath.Join(f.profiles["a"], "projects", "-octopus")
-	if err := os.MkdirAll(filepath.Join(dir, switchID, "subagents"), 0o700); err != nil {
+	if err := session.RecordConversation(f.root, f.write(t, id)); err != nil {
 		t.Fatal(err)
 	}
-	transcript := filepath.Join(dir, switchID+".jsonl")
+}
+
+// write puts a conversation in profile a without naming it in the session.
+func (f *switchFixture) write(t *testing.T, id string) session.Conversation {
+	t.Helper()
+	dir := filepath.Join(f.profiles["a"], "projects", "-octopus")
+	if err := os.MkdirAll(filepath.Join(dir, id, "subagents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	transcript := filepath.Join(dir, id+".jsonl")
 	if err := os.WriteFile(transcript, []byte("root\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := session.RecordConversation(f.root, session.Conversation{ID: switchID, Transcript: transcript}); err != nil {
-		t.Fatal(err)
-	}
+	return session.Conversation{ID: id, Transcript: transcript}
+}
+
+// copied reports whether profile b holds the conversation id.
+func (f *switchFixture) copied(id string) bool {
+	_, err := os.Stat(filepath.Join(f.profiles["b"], "projects", "-octopus", id+".jsonl"))
+	return err == nil
 }
 
 func (f *switchFixture) manifestProfile(t *testing.T) string {
@@ -189,27 +202,39 @@ func TestSwitchProfileCopiesOnlyOnceTheRunnerHasExited(t *testing.T) {
 	f.before.mu.Lock()
 	f.before.process.grace = 50 * time.Millisecond
 	f.before.mu.Unlock()
-	var runner int
-	waitFor(t, "the runner's pid", func() bool {
-		b, err := os.ReadFile(marker)
-		if err != nil {
-			return false
-		}
-		runner, err = strconv.Atoi(strings.TrimSpace(string(b)))
-		return err == nil && runner > 0
-	})
+	runner := readPID(t, marker)
 	t.Cleanup(func() { _ = syscall.Kill(runner, syscall.SIGKILL) })
 	var runnerAlive bool
-	var runnerErr error
-	f.boot.booting = func(AgentRequest) { runnerAlive, runnerErr = running(runner) }
+	f.boot.booting = func(AgentRequest) { runnerAlive = executing(t, runner) }
 	if err := f.reg.SwitchProfile("octopus", "b"); err != nil {
 		t.Fatal(err)
 	}
-	if runnerErr != nil {
-		t.Fatal(runnerErr)
-	}
 	if runnerAlive {
 		t.Fatal("the switch copied and rebooted while the previous runner was still running")
+	}
+}
+
+// Catches a switch copying the conversation while a runner it could not kill
+// may still be writing it.
+func TestSwitchProfileWhoseDrainFailsBootsBackWithoutCopying(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "runner.pid")
+	f := newSwitchFixture(t, "claude", "/bin/sh", "-c", "(trap '' TERM HUP; exec sleep 300) & echo $! > "+marker+"; wait")
+	f.record(t)
+	runner := readPID(t, marker)
+	t.Cleanup(func() { _ = syscall.Kill(runner, syscall.SIGKILL) })
+	f.before.mu.Lock()
+	f.before.process.grace = 50 * time.Millisecond
+	f.before.process.signal = ignoreSIGKILL
+	f.before.mu.Unlock()
+	if err := f.reg.SwitchProfile("octopus", "b"); !errors.Is(err, ErrGroupNotDrained) {
+		t.Fatalf("SwitchProfile = %v, want %v", err, ErrGroupNotDrained)
+	}
+	if _, err := os.Stat(filepath.Join(f.profiles["b"], "projects")); !os.IsNotExist(err) {
+		t.Fatalf("the conversation was copied: %v", err)
+	}
+	if agents, _ := f.boot.counts(); agents != 2 || f.manifestProfile(t) != "a" || f.boot.profiles[f.root] != "a" || !f.boot.resumed(t, f.root) {
+		t.Fatalf("asked for %d supervisors, last on %q, manifest on %q; want one resumed reboot on a",
+			agents, f.boot.profiles[f.root], f.manifestProfile(t))
 	}
 }
 

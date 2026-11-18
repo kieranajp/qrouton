@@ -247,24 +247,31 @@ func (s *SessionState) serve(control io.Closer) bool {
 
 // stop ends the session's process tree and closes the listener it was served on.
 // Both are cleared under the lock, so neither can be torn down twice.
-func (s *SessionState) stop() { s.halt((*PTY).Stop) }
+func (s *SessionState) stop() {
+	_ = s.halt(func(p *PTY) error {
+		p.Stop()
+		return nil
+	})
+}
 
 // drain is stop that also waits for the runner the supervisor ran to exit.
-func (s *SessionState) drain() { s.halt((*PTY).StopGroup) }
+func (s *SessionState) drain() error { return s.halt((*PTY).StopGroup) }
 
-func (s *SessionState) halt(end func(*PTY)) {
+func (s *SessionState) halt(end func(*PTY) error) error {
 	s.mu.Lock()
 	s.stopped = true
 	s.pruneBugReports(time.Now())
 	process, control := s.process, s.control
 	s.process, s.control = nil, nil
 	s.mu.Unlock()
+	var err error
 	if process != nil {
-		end(process)
+		err = end(process)
 	}
 	if control != nil {
 		_ = control.Close()
 	}
+	return err
 }
 
 type booting struct {
@@ -497,7 +504,10 @@ func (s *Sessions) SwitchProfile(slug, profileID string) error {
 	var fallback *SessionState
 	var emptied bool
 	if state != nil {
-		fallback, emptied = s.recycleDrained(state)
+		var drained error
+		if fallback, emptied, drained = s.recycleDrained(state); drained != nil {
+			return errors.Join(drained, s.replace(root, fallback, emptied))
+		}
 	}
 	moved := launch.CopyConversation(manifest.Runner, conversation.Transcript, stateDir)
 	if moved == nil {
@@ -718,12 +728,13 @@ func (s *Sessions) recycle(state *SessionState) (fallback *SessionState, wasShow
 	return s.forget(state)
 }
 
-// recycleDrained is recycle that returns only once the runner has exited, so
-// nothing is still writing the conversation.
-func (s *Sessions) recycleDrained(state *SessionState) (fallback *SessionState, wasShown bool) {
+// recycleDrained is recycle that waits for the runner to exit, so nothing is
+// still writing the conversation. An error means something may be.
+func (s *Sessions) recycleDrained(state *SessionState) (fallback *SessionState, wasShown bool, err error) {
 	s.boot.teardown(state)
-	state.drain()
-	return s.forget(state)
+	err = state.drain()
+	fallback, wasShown = s.forget(state)
+	return fallback, wasShown, err
 }
 
 // retire ends one session without ending the app.

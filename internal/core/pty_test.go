@@ -113,42 +113,64 @@ func ptySize(p *PTY) (cols, rows int, err error) {
 func TestStopGroupReturnsOnlyOnceAGrandchildIgnoringSIGTERMIsGone(t *testing.T) {
 	marker := t.TempDir() + "/grandchild.pid"
 	p := startTestPTY(t, "/bin/sh", "-c", "(trap '' TERM HUP; exec sleep 300) & echo $! > "+marker+"; wait")
-	var grandchild int
-	waitFor(t, "the grandchild's pid", func() bool {
-		b, err := os.ReadFile(marker)
-		if err != nil {
-			return false
-		}
-		grandchild, err = strconv.Atoi(strings.TrimSpace(string(b)))
-		return err == nil && grandchild > 0
-	})
+	grandchild := readPID(t, marker)
 	t.Cleanup(func() { _ = syscall.Kill(grandchild, syscall.SIGKILL) })
 
-	stopped := make(chan struct{})
-	go func() {
-		p.StopGroup()
-		close(stopped)
-	}()
+	stopped := make(chan error, 1)
+	go func() { stopped <- p.StopGroup() }()
 	select {
-	case <-stopped:
+	case err := <-stopped:
+		if err != nil {
+			t.Fatalf("StopGroup = %v, want a drained group", err)
+		}
 	case <-time.After(waitCeiling):
 		t.Fatal("StopGroup never returned")
 	}
-	if alive, err := running(grandchild); err != nil {
-		t.Fatal(err)
-	} else if alive {
+	if executing(t, grandchild) {
 		t.Fatal("StopGroup returned with the grandchild still running")
 	}
 }
 
-// running is false for a zombie: a killed orphan stays one until its reaper gets
-// to it, and kill(pid, 0) answers for it.
-func running(pid int) (bool, error) {
-	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
-	state := strings.TrimSpace(string(out))
-	var exit *exec.ExitError
-	if err != nil && !(errors.As(err, &exit) && state == "") {
-		return false, err
+// Catches StopGroup reporting a drained group while a process it could not kill
+// is still running, which lets a switch copy under a live writer.
+func TestStopGroupReportsAGroupThatOutlivesSIGKILL(t *testing.T) {
+	marker := t.TempDir() + "/grandchild.pid"
+	p := startTestPTY(t, "/bin/sh", "-c", "(trap '' TERM HUP; exec sleep 300) & echo $! > "+marker+"; wait")
+	grandchild := readPID(t, marker)
+	t.Cleanup(func() { _ = syscall.Kill(grandchild, syscall.SIGKILL) })
+	p.signal = ignoreSIGKILL
+
+	if err := p.StopGroup(); !errors.Is(err, ErrGroupNotDrained) {
+		t.Fatalf("StopGroup = %v, want %v", err, ErrGroupNotDrained)
 	}
-	return state != "" && !strings.HasPrefix(state, "Z"), nil
+}
+
+func ignoreSIGKILL(pid int, sig syscall.Signal) error {
+	if sig == syscall.SIGKILL {
+		return nil
+	}
+	return syscall.Kill(pid, sig)
+}
+
+func readPID(t *testing.T, path string) int {
+	t.Helper()
+	var pid int
+	waitFor(t, "a pid in "+path, func() bool {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return false
+		}
+		pid, err = strconv.Atoi(strings.TrimSpace(string(b)))
+		return err == nil && pid > 0
+	})
+	return pid
+}
+
+// executing is false for a pid that has gone and for a zombie, which kill(pid, 0)
+// still answers for until its parent reaps it.
+func executing(t *testing.T, pid int) bool {
+	t.Helper()
+	out, _ := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	state := strings.TrimSpace(string(out))
+	return state != "" && !strings.HasPrefix(state, "Z")
 }

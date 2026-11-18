@@ -20,6 +20,7 @@ type PTY struct {
 	exited chan struct{}
 	code   int
 	grace  time.Duration
+	signal func(pid int, sig syscall.Signal) error
 }
 
 func StartPTY(argv, env []string, dir string, cols, rows int) (*PTY, error) {
@@ -29,7 +30,7 @@ func StartPTY(argv, env []string, dir string, cols, rows int) (*PTY, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &PTY{file: file, cmd: cmd, exited: make(chan struct{}), grace: terminateGrace}
+	p := &PTY{file: file, cmd: cmd, exited: make(chan struct{}), grace: terminateGrace, signal: syscall.Kill}
 	go func() {
 		err := cmd.Wait()
 		p.mu.Lock()
@@ -121,32 +122,36 @@ func (p *PTY) Stop() {
 	if cmd == nil || cmd.Process == nil {
 		return
 	}
-	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	_ = p.signal(-cmd.Process.Pid, syscall.SIGTERM)
 	select {
 	case <-p.exited:
 	case <-time.After(p.grace):
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		_ = p.signal(-cmd.Process.Pid, syscall.SIGKILL)
 		<-p.exited
 	}
 	_ = file.Close()
 }
 
-// StopGroup is Stop that returns only once every process the child spawned has
-// exited too, killing the group if any outlives the grace.
-func (p *PTY) StopGroup() {
+// StopGroup is Stop that waits for every process the child spawned to exit too,
+// killing the group if any outlives the grace. ErrGroupNotDrained means one
+// outlived the kill as well.
+func (p *PTY) StopGroup() error {
 	p.mu.Lock()
 	cmd := p.cmd
 	p.mu.Unlock()
 	p.Stop()
 	if cmd == nil || cmd.Process == nil {
-		return
+		return nil
 	}
 	group := cmd.Process.Pid
 	if groupGone(group, p.grace) {
-		return
+		return nil
 	}
-	_ = syscall.Kill(-group, syscall.SIGKILL)
-	groupGone(group, p.grace)
+	_ = p.signal(-group, syscall.SIGKILL)
+	if !groupGone(group, p.grace) {
+		return ErrGroupNotDrained
+	}
+	return nil
 }
 
 func groupGone(group int, within time.Duration) bool {
