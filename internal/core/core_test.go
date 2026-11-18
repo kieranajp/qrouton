@@ -39,6 +39,7 @@ type fakeClient struct {
 	inFront  atomic.Bool
 	reveal   func(path string) error
 	openText func(path string) error
+	choose   func() (string, error)
 	rung     []string
 }
 
@@ -66,7 +67,9 @@ func (f *fakeClient) SessionShown(root string) {
 	f.shown = append(f.shown, root)
 }
 
-func (f *fakeClient) Supports(c Capability) bool { return c == CapabilityOpenText && f.openText != nil }
+func (f *fakeClient) Supports(c Capability) bool {
+	return (c == CapabilityOpenText && f.openText != nil) || (c == CapabilityChooseDirectory && f.choose != nil)
+}
 
 func (f *fakeClient) Reveal(path string) error {
 	if f.reveal == nil {
@@ -86,7 +89,12 @@ func (f *fakeClient) CopyImage(string) error { return ErrUnavailable }
 
 func (f *fakeClient) CopyFile(string) error { return ErrUnavailable }
 
-func (f *fakeClient) ChooseDirectory() (string, error) { return "", ErrUnavailable }
+func (f *fakeClient) ChooseDirectory() (string, error) {
+	if f.choose == nil {
+		return "", ErrUnavailable
+	}
+	return f.choose()
+}
 
 func (f *fakeClient) Chime(sessionRoot string) {
 	f.mu.Lock()

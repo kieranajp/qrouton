@@ -37,6 +37,7 @@ export const PRESENTER_NOTE = "github.com/kieranajp/qrouton/internal/desktop.Pre
 export const PRESENTER_OPEN = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Open";
 export const PRESENTER_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Show";
 export const PROFILES_ADD = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Add";
+export const PROFILES_CHOOSE_FOLDER = "github.com/kieranajp/qrouton/internal/desktop.Profiles.ChooseFolder";
 export const PROFILES_DELETE = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Delete";
 export const PROFILES_RENAME = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Rename";
 export const PROFILES_SIGN_IN = "github.com/kieranajp/qrouton/internal/desktop.Profiles.SignIn";

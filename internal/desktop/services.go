@@ -206,6 +206,8 @@ func (p *Profiles) Status() ([]core.ProfileStatus, error) { return p.profiles.St
 
 func (p *Profiles) SignIn(runner, id string) (string, error) { return p.profiles.SignIn(runner, id) }
 
+func (p *Profiles) ChooseFolder() (string, error) { return p.profiles.ChooseFolder() }
+
 type FirstRun struct{ firstRun *core.FirstRun }
 
 func (f *FirstRun) Login() string { return f.firstRun.Login() }
