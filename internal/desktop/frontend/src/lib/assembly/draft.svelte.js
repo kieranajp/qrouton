@@ -1,11 +1,11 @@
 import { debounced } from "../async.js";
-import { ASSEMBLY_PROGRESS_EVENT, SESSION_MODES } from "../bridge/generated.js";
+import { SESSION_MODES } from "../bridge/generated.js";
 import { profileStatus } from "../settings/calls.js";
 import { byProfile } from "../settings/profiles.js";
-import { call, Events } from "../wails.js";
+import { call } from "../wails.js";
 import { browsing } from "./browse.svelte.js";
 import * as go from "./calls.js";
-import { record } from "./progress.js";
+import { following } from "./following.svelte.js";
 import { blocks, folder, last, refusal } from "./steps.js";
 import { loader } from "./ticket.js";
 
@@ -43,7 +43,6 @@ export function assembling(done) {
   let hint = $state({ text: "", tone: "success" });
   let fetching = $state(false);
   let creating = $state(false);
-  let progress = $state(/** @type {import("./progress.js").Row[]} */ ([]));
 
   /** @param {string} text */
   const report = (text) => (failure ||= text);
@@ -95,15 +94,8 @@ export function assembling(done) {
     return branches.cancel;
   });
 
-  // Every page in the process hears this, and the slug the session will have is
-  // the folder the previewed branch names.
-  $effect(() =>
-    Events.On(ASSEMBLY_PROGRESS_EVENT, (event) => {
-      const advance = event.data ?? {};
-      if (advance.session !== folder(branch)) return;
-      progress = record(progress, advance);
-    }),
-  );
+  // The slug the session will have is the folder the previewed branch names.
+  const progress = following(() => folder(branch));
 
   const tickets = loader(form, go.fetchTicket, {
     fetching(active) {
@@ -203,7 +195,7 @@ export function assembling(done) {
       return creating;
     },
     get progress() {
-      return progress;
+      return progress.rows;
     },
     back,
     next,

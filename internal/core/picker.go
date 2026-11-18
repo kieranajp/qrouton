@@ -45,6 +45,7 @@ type Picker struct {
 	cfg       *config.Config
 	sessions  *Sessions
 	repos     *Repositories
+	emit      Emitter
 	assembler assembly.Assembler
 
 	// ctx ends every add when the core shuts down.
@@ -54,8 +55,8 @@ type Picker struct {
 	running sync.WaitGroup
 }
 
-func newPicker(ctx context.Context, cfg *config.Config, reg *Sessions, repos *Repositories, signal func(string)) *Picker {
-	return &Picker{cfg: cfg, sessions: reg, repos: repos,
+func newPicker(ctx context.Context, cfg *config.Config, reg *Sessions, repos *Repositories, emit Emitter, signal func(string)) *Picker {
+	return &Picker{cfg: cfg, sessions: reg, repos: repos, emit: emit,
 		assembler: assembly.Assembler{Cfg: cfg, Signal: signal},
 		ctx:       ctx, adding: map[string]context.CancelFunc{}}
 }
@@ -121,7 +122,7 @@ func (p *Picker) Confirm(ctx context.Context, slug string, in PickerInput) error
 	}
 	assembler := p.assembler
 	assembler.Cfg = p.cfg.Snapshot()
-	if err := assembler.Confirm(ctx, root, draft, escalation != nil, nil); err != nil {
+	if err := assembler.Confirm(ctx, root, draft, escalation != nil, progressTo(p.emit, slug)); err != nil {
 		return err
 	}
 	state.ClearPicker()
@@ -152,6 +153,20 @@ func (p *Picker) begin(ctx context.Context, root string) (context.Context, func(
 		p.mu.Unlock()
 		p.running.Done()
 	}, nil
+}
+
+// Abort cancels slug's running add, if any. That add's Confirm returns after its cleanup.
+func (p *Picker) Abort(slug string) error {
+	_, root, err := p.root(slug)
+	if err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if cancel, ok := p.adding[root]; ok {
+		cancel()
+	}
+	return nil
 }
 
 // stop cancels every running add and waits for each to return.

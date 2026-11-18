@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { PROFILES_STATUS, REPOS_REFRESH_EVENT, SIGN_IN_STATES } from "../src/lib/bridge/generated.js";
+import { ASSEMBLY_PROGRESS_EVENT, PROFILES_STATUS, REPOS_REFRESH_EVENT, SIGN_IN_STATES } from "../src/lib/bridge/generated.js";
 
 test("clearing repository searches keeps selected rows first, ahead of the display cap", async ({ page }) => {
   await page.goto("/tests/assembly.html");
@@ -386,4 +386,25 @@ test("Manage accounts opens Settings on the Agents tab, and closing Settings rea
   await expect(tiles.nth(0)).toHaveClass(/selected/);
   await page.getByRole("button", { name: "Create session" }).click();
   await expect.poll(() => created(page)).toMatchObject({ runner: "claude", profile: "" });
+});
+
+// The new-session modal and the add modal share one progress follower; this is
+// the new-session half, keyed on the slug the previewed branch names.
+test("creating draws progress for the session being created and ignores another's", async ({ page }) => {
+  await page.addInitScript(() => (window.previewBranch = "feat/api-cleanup-4f3a"));
+  await page.goto("/tests/assembly.html");
+  await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
+  await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
+  await page.getByRole("button", { name: "Choose repositories" }).click();
+  await page.getByRole("button", { name: "Choose an agent" }).click();
+  await expect(page.locator(".footer .status")).toHaveText("0 repos into api-cleanup-4f3a");
+  await page.getByRole("button", { name: "Create session" }).click();
+  await expect.poll(() => created(page)).toBeTruthy();
+
+  await page.evaluate((name) => {
+    window.assembly.emit(name, { session: "api-cleanup-4f3a", step: "scaffold", status: "completed", percent: 0 });
+    window.assembly.emit(name, { session: "squid", step: "scaffold", status: "completed", percent: 0 });
+    window.assembly.emit(name, { session: "api-cleanup-4f3a", step: "mirror", status: "started", repo: "acme/api", percent: 0 });
+  }, ASSEMBLY_PROGRESS_EVENT);
+  await expect(page.locator(".progress .step .label")).toHaveText(["scaffold", "acme/api mirror"]);
 });

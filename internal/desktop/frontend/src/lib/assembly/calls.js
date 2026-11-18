@@ -10,6 +10,7 @@ import {
   ASSEMBLY_PREVIEW,
   ASSEMBLY_RUNNERS,
   ORGS_LIST,
+  PICKER_ABORT,
   PICKER_CANCEL,
   PICKER_CONFIRM,
   PICKER_ESCALATE,
@@ -97,6 +98,10 @@ export const escalate = (slug) => Call.ByName(PICKER_ESCALATE, slug);
  * @param {{repos: {id: string, role: string, base: string}[], upgrades: string[]}} answer
  */
 export const addRepos = (slug, answer) => Call.ByName(PICKER_CONFIRM, slug, answer);
+
+/** abortAdd cancels the running add, whose own call then answers with the reason.
+ * @param {string} slug */
+export const abortAdd = (slug) => Call.ByName(PICKER_ABORT, slug);
 
 /** @param {string} slug */
 export const cancelPicker = (slug) => Call.ByName(PICKER_CANCEL, slug);

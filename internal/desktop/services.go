@@ -166,6 +166,8 @@ func (p *Picker) Confirm(ctx context.Context, slug string, in core.PickerInput) 
 
 func (p *Picker) Cancel(slug string) error { return p.picker.Cancel(slug) }
 
+func (p *Picker) Abort(slug string) error { return p.picker.Abort(slug) }
+
 type Settings struct{ settings *core.Settings }
 
 func (s *Settings) Load() core.SettingsView { return s.settings.Load() }

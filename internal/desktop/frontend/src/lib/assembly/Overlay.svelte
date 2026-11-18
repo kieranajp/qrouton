@@ -1,9 +1,9 @@
 <script>
   import { onMount } from "svelte";
-  import AssemblyStep from "./AssemblyStep.svelte";
   import AgentStep from "./AgentStep.svelte";
   import DescribeStep from "./DescribeStep.svelte";
   import Dialog from "./Dialog.svelte";
+  import ProgressRows from "./ProgressRows.svelte";
   import RepositoriesStep from "./RepositoriesStep.svelte";
   import { assembling } from "./draft.svelte.js";
   import { begin, end } from "./calls.js";
@@ -113,24 +113,9 @@
   onPrimary={wizard.next}
   onEscape={trapped ? undefined : onClose}>
   {#if wizard.creating}
-    <div class="progress">
-      {#each wizard.progress as row, i (i)}
-        <AssemblyStep
-          state={row.state}
-          label={row.label}
-          detail={row.detail}
-          percent={row.percent} />
-      {/each}
-    </div>
+    <ProgressRows rows={wizard.progress} />
   {:else}
     {@render renderers[stepKey(wizard.step)]()}
   {/if}
 </Dialog>
 {/if}
-
-<style>
-  .progress {
-    display: flex;
-    flex-direction: column;
-  }
-</style>

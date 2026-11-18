@@ -23,6 +23,7 @@ export const OLLAMA_CANCEL_PULL = "github.com/kieranajp/qrouton/internal/desktop
 export const OLLAMA_CHECK = "github.com/kieranajp/qrouton/internal/desktop.Ollama.Check";
 export const OLLAMA_PULL = "github.com/kieranajp/qrouton/internal/desktop.Ollama.Pull";
 export const ORGS_LIST = "github.com/kieranajp/qrouton/internal/desktop.Orgs.List";
+export const PICKER_ABORT = "github.com/kieranajp/qrouton/internal/desktop.Picker.Abort";
 export const PICKER_CANCEL = "github.com/kieranajp/qrouton/internal/desktop.Picker.Cancel";
 export const PICKER_CONFIRM = "github.com/kieranajp/qrouton/internal/desktop.Picker.Confirm";
 export const PICKER_ESCALATE = "github.com/kieranajp/qrouton/internal/desktop.Picker.Escalate";

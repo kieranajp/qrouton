@@ -1,5 +1,6 @@
 <script>
   import Dialog from "./Dialog.svelte";
+  import ProgressRows from "./ProgressRows.svelte";
   import RepositoriesStep from "./RepositoriesStep.svelte";
   import { picking } from "./picker.svelte.js";
   import { joining } from "./steps.js";
@@ -19,23 +20,28 @@
   primaryIcon="forward"
   status={footer}
   busy={picker.answering}
+  cancellable
   onSecondary={picker.cancel}
   onPrimary={picker.confirm}
   onEscape={picker.cancel}>
-  <RepositoriesStep
-    bind:query={repos.query}
-    orgs={repos.orgs}
-    owners={repos.owners}
-    failed={repos.failed}
-    rows={repos.rows}
-    shown={repos.shown}
-    total={repos.total}
-    tally={repos.tally}
-    picks={repos.picks}
-    refreshing={repos.refreshing}
-    onOwner={repos.owner}
-    onRefresh={repos.refetch}
-    onRole={repos.role}
-    onBase={repos.base}
-    onBaseOpen={repos.loadBranches} />
+  {#if picker.adding}
+    <ProgressRows rows={picker.progress} />
+  {:else}
+    <RepositoriesStep
+      bind:query={repos.query}
+      orgs={repos.orgs}
+      owners={repos.owners}
+      failed={repos.failed}
+      rows={repos.rows}
+      shown={repos.shown}
+      total={repos.total}
+      tally={repos.tally}
+      picks={repos.picks}
+      refreshing={repos.refreshing}
+      onOwner={repos.owner}
+      onRefresh={repos.refetch}
+      onRole={repos.role}
+      onBase={repos.base}
+      onBaseOpen={repos.loadBranches} />
+  {/if}
 </Dialog>

@@ -832,6 +832,15 @@ func pickerRows() []adapterRow {
 				t.Fatal("Cancel left the picker pending")
 			}
 		}},
+		{"Picker.Abort", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			if err := (&Picker{picker: a.kernel.Picker}).Abort(a.slug()); err != nil {
+				t.Fatalf("aborting with no add running = %v", err)
+			}
+			if err := (&Picker{picker: a.kernel.Picker}).Abort("kraken"); err == nil {
+				t.Fatal("aborted an add for a session this workbench is not running")
+			}
+		}},
 	}
 }
 
