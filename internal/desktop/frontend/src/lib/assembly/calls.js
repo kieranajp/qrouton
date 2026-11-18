@@ -101,7 +101,8 @@ export const escalate = (slug) => Call.ByName(PICKER_ESCALATE, slug);
 export const addRepos = (slug, requestID, answer) => Call.ByName(PICKER_CONFIRM, slug, requestID, answer);
 
 /** abortAdd cancels the running add, whose own call then answers with the reason.
- * @param {string} slug */
+ * @param {string} slug
+ * @returns {Promise<boolean>} whether an add was running */
 export const abortAdd = (slug) => Call.ByName(PICKER_ABORT, slug);
 
 /**

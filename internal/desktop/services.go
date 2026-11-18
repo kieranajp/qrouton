@@ -166,7 +166,7 @@ func (p *Picker) Confirm(ctx context.Context, slug, requestID string, in core.Pi
 
 func (p *Picker) Cancel(slug, requestID string) error { return p.picker.Cancel(slug, requestID) }
 
-func (p *Picker) Abort(slug string) error { return p.picker.Abort(slug) }
+func (p *Picker) Abort(slug string) (bool, error) { return p.picker.Abort(slug) }
 
 type Settings struct{ settings *core.Settings }
 

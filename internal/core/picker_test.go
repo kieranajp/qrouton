@@ -373,8 +373,8 @@ func TestAbortEndsTheRunningAddOnly(t *testing.T) {
 	cloning := holdClones(t)
 	kernel, shown, _ := pickerCore(t)
 	p := addingPicker(context.Background(), kernel, shown)
-	if err := p.Abort("background"); err != nil {
-		t.Fatalf("aborting with no add running = %v", err)
+	if ran, err := p.Abort("background"); ran || err != nil {
+		t.Fatalf("aborting with no add running = %v, %v", ran, err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -382,20 +382,20 @@ func TestAbortEndsTheRunningAddOnly(t *testing.T) {
 	go func() { added <- p.Confirm(ctx, "shown", "", pickSvc) }()
 	waitFor(t, "the add to start cloning", cloning)
 
-	if err := p.Abort("background"); err != nil {
-		t.Fatal(err)
+	if ran, err := p.Abort("background"); ran || err != nil {
+		t.Fatalf("aborting the idle session = %v, %v", ran, err)
 	}
 	select {
 	case err := <-added:
 		t.Fatalf("aborting another session ended this add: %v", err)
 	case <-time.After(100 * time.Millisecond):
 	}
-	if err := p.Abort("shown"); err != nil {
-		t.Fatal(err)
+	if ran, err := p.Abort("shown"); !ran || err != nil {
+		t.Fatalf("aborting the running add = %v, %v", ran, err)
 	}
 	select {
 	case err := <-added:
-		if !errors.Is(err, context.Canceled) {
+		if !errors.Is(err, ErrAddCancelled) {
 			t.Fatalf("the aborted add = %v", err)
 		}
 	case <-time.After(waitCeiling):

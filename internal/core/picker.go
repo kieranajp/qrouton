@@ -51,14 +51,14 @@ type Picker struct {
 	// ctx ends every add when the core shuts down.
 	ctx     context.Context
 	mu      sync.Mutex
-	adding  map[string]context.CancelFunc
+	adding  map[string]context.CancelCauseFunc
 	running sync.WaitGroup
 }
 
 func newPicker(ctx context.Context, cfg *config.Config, reg *Sessions, repos *Repositories, emit Emitter, signal func(string)) *Picker {
 	return &Picker{cfg: cfg, sessions: reg, repos: repos, emit: emit,
 		assembler: assembly.Assembler{Cfg: cfg, Signal: signal},
-		ctx:       ctx, adding: map[string]context.CancelFunc{}}
+		ctx:       ctx, adding: map[string]context.CancelCauseFunc{}}
 }
 
 // Escalate opens a persistent escalation picker from the session header. An
@@ -158,13 +158,13 @@ func (p *Picker) begin(ctx context.Context, root string) (context.Context, func(
 	if err := p.ctx.Err(); err != nil {
 		return nil, nil, err
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	unlink := context.AfterFunc(p.ctx, cancel)
+	ctx, cancel := context.WithCancelCause(ctx)
+	unlink := context.AfterFunc(p.ctx, func() { cancel(nil) })
 	p.adding[root] = cancel
 	p.running.Add(1)
 	return ctx, func() {
 		unlink()
-		cancel()
+		cancel(nil)
 		p.mu.Lock()
 		delete(p.adding, root)
 		p.mu.Unlock()
@@ -172,25 +172,27 @@ func (p *Picker) begin(ctx context.Context, root string) (context.Context, func(
 	}, nil
 }
 
-// Abort cancels slug's running add, if any. That add's Confirm returns after its cleanup.
-func (p *Picker) Abort(slug string) error {
+// Abort cancels slug's running add and reports whether one was running. That
+// add's Confirm returns after its cleanup.
+func (p *Picker) Abort(slug string) (bool, error) {
 	_, root, err := p.root(slug)
 	if err != nil {
-		return err
+		return false, err
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if cancel, ok := p.adding[root]; ok {
-		cancel()
+	cancel, ok := p.adding[root]
+	if ok {
+		cancel(ErrAddCancelled)
 	}
-	return nil
+	return ok, nil
 }
 
 // stop cancels every running add and waits for each to return.
 func (p *Picker) stop() {
 	p.mu.Lock()
 	for _, cancel := range p.adding {
-		cancel()
+		cancel(nil)
 	}
 	p.mu.Unlock()
 	p.running.Wait()

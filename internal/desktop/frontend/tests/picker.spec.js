@@ -36,9 +36,9 @@ test("Cancel aborts a running add, and its refusal returns to the list with the 
   await expect.poll(() => page.evaluate(() => window.picker.aborts())).toEqual([["octopus"]]);
   await expect(page.locator(".progress")).toHaveCount(1);
 
-  await page.evaluate(() => window.picker.refuse("context canceled"));
+  await page.evaluate(() => window.picker.refuse("adding repositories was cancelled"));
   await expect(page.locator(".rows .name")).toHaveText(["acme/api"]);
-  await expect(page.locator(".footer .status")).toHaveText("context canceled");
+  await expect(page.locator(".footer .status")).toHaveText("adding repositories was cancelled");
   expect(await page.evaluate(() => window.picker.closeRequests())).toBe(0);
 });
 
@@ -61,4 +61,32 @@ test("a retry after a refusal starts with no rows", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.picker.confirms())).toBe(2);
   await expect(page.locator(".progress")).toHaveCount(1);
   await expect(page.locator(".progress .step")).toHaveCount(0);
+});
+
+// An abort that reaches Go before the add registers stops nothing, and a dead
+// Cancel would then leave that add no way out.
+test("Cancel stays live when an abort finds no add running yet", async ({ page }) => {
+  await add(page);
+  await page.evaluate(() => window.picker.abortFinds(false));
+  const cancel = page.getByRole("button", { name: "Cancel" });
+  await cancel.click();
+  await expect.poll(() => page.evaluate(() => window.picker.aborts().length)).toBe(1);
+  await page.evaluate(() => window.picker.abortFinds(true));
+  await cancel.click();
+  await expect.poll(() => page.evaluate(() => window.picker.aborts().length)).toBe(2);
+});
+
+// The abort guard must reset with each add, or a retry could not be cancelled.
+test("a retried add can be aborted too", async ({ page }) => {
+  await add(page);
+  const cancel = page.getByRole("button", { name: "Cancel" });
+  await cancel.click();
+  await expect.poll(() => page.evaluate(() => window.picker.aborts().length)).toBe(1);
+  await page.evaluate(() => window.picker.refuse("adding repositories was cancelled"));
+  await expect(page.locator(".rows .name")).toHaveText(["acme/api"]);
+
+  await page.getByRole("button", { name: "Add repositories" }).click();
+  await expect.poll(() => page.evaluate(() => window.picker.confirms())).toBe(2);
+  await cancel.click();
+  await expect.poll(() => page.evaluate(() => window.picker.aborts().length)).toBe(2);
 });

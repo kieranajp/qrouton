@@ -835,10 +835,17 @@ func pickerRows() []adapterRow {
 		}},
 		{"Picker.Abort", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
-			if err := (&Picker{picker: a.kernel.Picker}).Abort(a.slug()); err != nil {
-				t.Fatalf("aborting with no add running = %v", err)
+			if err := (&Picker{picker: a.kernel.Picker}).Escalate(a.slug()); err != nil {
+				t.Fatal(err)
 			}
-			if err := (&Picker{picker: a.kernel.Picker}).Abort("kraken"); err == nil {
+			// Abort stops an add and answers nothing, so a waiting escalation survives it.
+			if ran, err := (&Picker{picker: a.kernel.Picker}).Abort(a.slug()); ran || err != nil {
+				t.Fatalf("aborting with no add running = %v, %v", ran, err)
+			}
+			if a.kernel.Sessions.Current().PendingPicker() == nil {
+				t.Fatal("Abort answered the pending escalation")
+			}
+			if _, err := (&Picker{picker: a.kernel.Picker}).Abort("kraken"); err == nil {
 				t.Fatal("aborted an add for a session this workbench is not running")
 			}
 		}},

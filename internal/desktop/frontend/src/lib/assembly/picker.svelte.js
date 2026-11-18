@@ -50,14 +50,13 @@ export function picking(slug, requestID, done) {
   }
 
   // An aborted add answers through its own pending call, which restores the list.
+  // An abort that finds no add yet leaves Cancel live to press again.
   async function abort() {
     if (aborting) return;
     aborting = true;
     const aborted = await call(go.abortAdd(slug()));
-    if (!aborted.ok) {
-      aborting = false;
-      status = refusal(aborted.error);
-    }
+    if (!aborted.ok) status = refusal(aborted.error);
+    if (!aborted.ok || !aborted.value) aborting = false;
   }
 
   async function cancel() {
