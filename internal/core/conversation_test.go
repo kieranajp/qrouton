@@ -76,8 +76,8 @@ func TestARepeatedPairIsWrittenOnce(t *testing.T) {
 	}
 }
 
-// Catches a conversation picked with /resume staying unrecorded until its first
-// prompt: SessionStart alone has to move the record.
+// Catches the reducer or the recorder passing over a SessionStart, so a conversation
+// picked with /resume stays unrecorded until its first prompt.
 func TestASessionStartMovesTheRecordWithoutAPrompt(t *testing.T) {
 	const picked = "c0ffee00-0000-4000-8000-000000000000"
 	state := conversationState(t)

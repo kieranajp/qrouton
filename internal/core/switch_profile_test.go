@@ -297,11 +297,12 @@ func TestSwitchProfileBootsTheConversationItCopied(t *testing.T) {
 	const later = "c0ffee00-0000-4000-8000-000000000000"
 	for name, tc := range map[string]struct {
 		teardown, boot func(t *testing.T, f *switchFixture)
+		want           string
 	}{
-		"write during teardown": {teardown: func(t *testing.T, f *switchFixture) { f.recordID(t, later) }},
+		"write during teardown": {teardown: func(t *testing.T, f *switchFixture) { f.recordID(t, later) }, want: later},
 		"root hook landing after the drain": {boot: func(t *testing.T, f *switchFixture) {
 			f.before.keepConversation(claudeEventWith(1, f.write(t, later)))
-		}},
+		}, want: switchID},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newSwitchFixture(t, "claude")
@@ -326,8 +327,8 @@ func TestSwitchProfileBootsTheConversationItCopied(t *testing.T) {
 			if err := f.reg.SwitchProfile("octopus", "b"); err != nil {
 				t.Fatal(err)
 			}
-			if !held {
-				t.Fatalf("the replacement resumes %q, which the switch did not copy", resumes)
+			if !held || resumes != tc.want {
+				t.Fatalf("the replacement resumes %q (copied: %v), want %q copied", resumes, held, tc.want)
 			}
 		})
 	}
