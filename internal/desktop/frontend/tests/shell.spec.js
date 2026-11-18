@@ -66,8 +66,8 @@ test("assistant mode replaces RPI marks with a cube escalation action", async ({
   await expect(page.locator(".dialog").getByRole("button", { name: "Escalate", exact: true })).toBeVisible();
 });
 
-// Keyed on the session, a mid-add escalation relabelled the running add and then
-// inherited its spent state, leaving both buttons dead.
+// An overlay keyed on the session relabels a running add when an escalation
+// arrives, then keeps its spent state, leaving both buttons dead.
 test("an escalation arriving during an add waits for it, then opens with live buttons", async ({ page }) => {
   await open(page, "window-1", "ASSISTANT");
   await page.getByRole("button", { name: "Add repos", exact: true }).click();

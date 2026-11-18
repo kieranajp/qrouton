@@ -56,7 +56,7 @@ type SessionState struct {
 // request replaces an earlier one: both pollers then read the one stanza the
 // confirm writes.
 func (s *SessionState) RequestPicker(req workbench.PickerRequest) {
-	req.ID = randomid.Hex(8)
+	req.ID = randomid.Hex(pickerIDBytes)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.picker = &req

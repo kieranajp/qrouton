@@ -141,7 +141,7 @@ func TestASilentGitIsKilledAfterTheStallWindow(t *testing.T) {
 		window       string
 	}{
 		{"before its first output", "sleep 30\n", 200 * time.Millisecond, time.Hour, "nothing in its first 200ms"},
-		{"after reporting once", "printf 'Receiving objects:  10%%\\r' >&2\nsleep 30\n", 3 * time.Second, 200 * time.Millisecond, "no progress for 200ms"},
+		{"after reporting once", "printf 'Receiving objects:  10%%\\r' >&2\nsleep 30\n", 2 * gitWaitDelay, 200 * time.Millisecond, "no progress for 200ms"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeGit(t, tc.script)

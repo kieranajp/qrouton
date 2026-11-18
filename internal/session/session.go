@@ -232,7 +232,7 @@ func materialise(ctx context.Context, cfg *config.Config, dir string, sel RepoSe
 			mr.Branch = branch
 			return addWorktree(ctx, mirror, path, branch, from)
 		}
-		revision, err := resolveRevision(mirror, from)
+		revision, err := resolveRevision(ctx, mirror, from)
 		if err != nil {
 			return err
 		}
@@ -297,10 +297,12 @@ func hasRepo(repos []ManifestRepo, org, name string) bool {
 }
 
 // HeadRevision is the full SHA a worktree's HEAD points at.
-func HeadRevision(worktree string) (string, error) { return resolveRevision(worktree, headRef) }
+func HeadRevision(worktree string) (string, error) {
+	return resolveRevision(context.Background(), worktree, headRef)
+}
 
-func resolveRevision(mirror, ref string) (string, error) {
-	out, err := gitOutput(context.Background(), dirFlag, mirror, revParseCmd, verifyFlag, ref+commitRefSuffix)
+func resolveRevision(ctx context.Context, mirror, ref string) (string, error) {
+	out, err := gitOutput(ctx, dirFlag, mirror, revParseCmd, verifyFlag, ref+commitRefSuffix)
 	if err != nil {
 		return "", err
 	}

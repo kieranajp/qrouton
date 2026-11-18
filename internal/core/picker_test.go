@@ -411,8 +411,8 @@ func queueEscalation(t *testing.T, reg *Sessions, root string) *workbench.Picker
 	return reg.BySlug(slugFor(root)).PendingPicker()
 }
 
-// A plain add's confirm once cleared whatever was pending, so an escalation that
-// arrived mid-add was dropped and the agent's escalate call polled until it timed out.
+// A plain add that clears whatever is pending drops an escalation that arrived
+// mid-add, and the agent's escalate call then polls until it times out.
 func TestAnEscalationArrivingDuringAnAddStaysPending(t *testing.T) {
 	kernel, shown, _ := pickerCore(t)
 	reg := kernel.Sessions
@@ -441,8 +441,8 @@ func TestAnEscalationArrivingDuringAnAddStaysPending(t *testing.T) {
 	}
 }
 
-// Cancel once read whatever was pending at cancel time, so dismissing a plain add
-// recorded a newer escalation as cancelled and cleared it unseen.
+// A Cancel that reads whatever is pending at cancel time records a newer
+// escalation as cancelled when the user only dismissed a plain add.
 func TestCancellingAnAddLeavesAPendingEscalationAlone(t *testing.T) {
 	kernel, shown, _ := pickerCore(t)
 	p := addingPicker(context.Background(), kernel, shown)

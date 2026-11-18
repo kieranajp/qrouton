@@ -127,11 +127,13 @@ func (p *Picker) Confirm(ctx context.Context, slug, requestID string, in PickerI
 	}
 	assembler := p.assembler
 	assembler.Cfg = p.cfg.Snapshot()
-	if err := assembler.Confirm(ctx, root, draft, escalation != nil, progressTo(p.emit, slug)); err != nil {
+	err = assembler.Confirm(ctx, root, draft, escalation != nil, progressTo(p.emit, slug))
+	// A failed or cancelled add can still have kept the repositories it finished.
+	p.sessions.RepositoriesChanged(root)
+	if err != nil {
 		return err
 	}
 	state.ClearPickerIf(requestID)
-	p.sessions.RepositoriesChanged(root)
 	return nil
 }
 

@@ -106,7 +106,7 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Without the fetch the base never moves and the rest proves nothing.
-	if base, _ := resolveRevision(worktree, remoteRefPrefix+"main"); base != revisionOf(t, upstream, headRef) {
+	if base, _ := resolveRevision(t.Context(), worktree, remoteRefPrefix+"main"); base != revisionOf(t, upstream, headRef) {
 		t.Fatal("the fetch left the base branch where it was")
 	}
 	want := RepoStat{Org: "org", Name: "svc", Role: RepoRoleEditing, Path: worktree,
@@ -182,7 +182,7 @@ func TestRepoStatsLeavesAnEmptyDefaultBranchUnmeasured(t *testing.T) {
 
 func revisionOf(t *testing.T, dir, ref string) string {
 	t.Helper()
-	sha, err := resolveRevision(dir, ref)
+	sha, err := resolveRevision(t.Context(), dir, ref)
 	if err != nil {
 		t.Fatal(err)
 	}

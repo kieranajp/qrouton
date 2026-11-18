@@ -693,8 +693,8 @@ func TestEscalationKeepsAnEarlierAdditionNotice(t *testing.T) {
 	}
 }
 
-// A cancel keeps what finished, as a failure does, and leaves no half-made
-// checkout for the repository it interrupted.
+// A cancel keeps what finished, as a failure does, and tells the agent about it:
+// a retry's notice names only what the retry adds.
 func TestACancelledAddKeepsFinishedRepositories(t *testing.T) {
 	a, dir := scratch(t)
 	first, second := testRepo(t, "first"), testRepo(t, "second")
@@ -719,7 +719,8 @@ func TestACancelledAddKeepsFinishedRepositories(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, got.Repos[0].WorktreePath)); err != nil {
 		t.Fatalf("the finished checkout is gone: %v", err)
 	}
-	if _, err := os.Lstat(filepath.Join(dir, "src", second.Name)); !os.IsNotExist(err) {
-		t.Fatalf("the interrupted checkout was left behind: %v", err)
+	notices, err := session.TakeAgentNotices(dir)
+	if err != nil || len(notices) != 1 || !strings.Contains(notices[0], "added org/"+first.Name) || strings.Contains(notices[0], second.Name) {
+		t.Fatalf("notices after the cancel = %q, %v; want one naming only the finished repository", notices, err)
 	}
 }

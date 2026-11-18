@@ -91,7 +91,7 @@ func upgradable(m Manifest, dir string, ref RepoRef, branch string) (ManifestRep
 	if r.Revision == "" {
 		return r, false, refuseRepo(ErrNoPinnedRevision, r.Org, r.Name)
 	}
-	head, err := resolveRevision(wt, headRef)
+	head, err := resolveRevision(context.Background(), wt, headRef)
 	if err != nil {
 		return r, false, err
 	}

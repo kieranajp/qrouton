@@ -28,10 +28,17 @@ func (a Assembler) Confirm(ctx context.Context, dir string, d Draft, escalate bo
 		if len(composed.Repos) == len(m.Repos) {
 			return err
 		}
-		// Completed checkouts must be discoverable so a retry keeps their work.
-		return errors.Join(err, session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {
-			return session.MergeRepos(out, composed.Repos), nil
-		}))
+		// Completed checkouts must be discoverable so a retry keeps their work, and
+		// the agent hears of them now: a retry's notice names only what it adds.
+		var kept session.Manifest
+		merged := session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {
+			kept = session.MergeRepos(out, composed.Repos)
+			return kept, nil
+		})
+		if merged == nil {
+			_ = session.QueueAgentNotice(dir, repositoryNotice(m, kept))
+		}
+		return errors.Join(err, merged)
 	}
 	var updated session.Manifest
 	if err := session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {

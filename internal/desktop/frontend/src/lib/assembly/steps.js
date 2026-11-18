@@ -52,12 +52,9 @@ export const assemblyOpen = (requested, settled, slug) => !!settled && (!!reques
 
 export const ADD_KEY = "add";
 
-/** pickerKey names the request the overlay answers: "add" while an add runs over
- * the shown session, so a mid-add escalation waits its turn, then that escalation's
- * id. Empty is no overlay.
- * @param {string} added the session add-repos was pressed on
- * @param {string} shown
- * @param {string} pendingID the shown session's waiting escalation */
+/** pickerKey is the request the overlay answers: an add keeps it until it ends, so
+ * an escalation arriving mid-add waits its turn. Empty is no overlay.
+ * @param {string} added @param {string} shown @param {string} pendingID */
 export const pickerKey = (added, shown, pendingID) => {
   if (!shown) return "";
   if (added === shown) return ADD_KEY;

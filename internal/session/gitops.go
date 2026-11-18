@@ -19,13 +19,14 @@ import (
 
 // gitCommand runs git in a session of its own with stdin on the null device, so
 // SSH can find no terminal to prompt on and fails with its own message instead.
-// Cancelling kills the whole group, so an SSH child dies with git.
+// Cancelling sends SIGTERM to the whole group, so git removes its lock files and an
+// SSH child dies with it; WaitDelay later kills a git that ignores it.
 func gitCommand(ctx context.Context, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, gitBin, args...)
 	cmd.Env = append(os.Environ(), gitNoPromptEnv)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Cancel = func() error {
-		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); errors.Is(err, syscall.ESRCH) {
+		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM); errors.Is(err, syscall.ESRCH) {
 			return os.ErrProcessDone
 		}
 		return nil
