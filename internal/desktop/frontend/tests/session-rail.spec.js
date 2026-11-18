@@ -884,7 +884,7 @@ const openRowMenu = (page, name) => page.getByRole("button", { name: new RegExp(
 const topLevel = (page) => page.locator(".menu > div > button.item");
 const profileChoices = (page) => page.locator(".menu .submenu button.item");
 
-// Catches the switch going missing from a claude row, or listing profiles of another runner.
+// Catches the switch going missing from a claude row, or dropping the default profile.
 test("a claude row's menu offers Switch profile under Reload, listing Default and each named profile", async ({ page }) => {
   await openRowMenu(page, "Checkout migration");
   await expect(topLevel(page).nth(1)).toHaveText("Switch profile");
@@ -907,11 +907,14 @@ test("the current profile is marked, reads current and cannot be picked", async 
 // Catches a pick reaching the wrong session or the wrong profile.
 test("picking another profile switches that row to it", async ({ page }) => {
   await openRowMenu(page, "Checkout migration");
+  await page.keyboard.press("Escape");
+  await openRowMenu(page, "Session 3");
   await topLevel(page).nth(1).hover();
-  await profileChoices(page).filter({ hasText: "Default" }).click();
+  await expect(profileChoices(page).filter({ hasText: "Default" })).toBeDisabled();
+  await profileChoices(page).filter({ hasText: "Work" }).click();
   await expect(page.locator(".menu")).toBeHidden();
   expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
-    { method: "switchProfile", slug: "checkout", profile: "" },
+    { method: "switchProfile", slug: "session-3", profile: "work" },
   ]);
 });
 
