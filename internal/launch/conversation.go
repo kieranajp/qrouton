@@ -18,11 +18,13 @@ type conversationSpec struct {
 	// HomeDir is the state folder the default profile uses when nothing in the
 	// environment moves it.
 	HomeDir string
-	// Copy puts the conversation at transcript into the state folder stateDir.
-	Copy func(transcript, stateDir string) error
+	// Locate is where the conversation at transcript belongs in the state folder stateDir.
+	Locate func(transcript, stateDir string) (string, error)
+	// Copy puts the conversation at transcript where Locate placed it.
+	Copy func(transcript, located string) error
 }
 
-var claudeConversation = &conversationSpec{HomeDir: claudeHomeDirName, Copy: copyClaudeConversation}
+var claudeConversation = &conversationSpec{HomeDir: claudeHomeDirName, Locate: claudeTranscriptIn, Copy: copyClaudeConversation}
 
 func SwitchesProfiles(runnerID string) bool {
 	spec, _ := specFor(runnerID)
@@ -50,25 +52,42 @@ func StateDir(runnerID string, profile config.RunnerProfile, environ []string) (
 	return filepath.Join(home, spec.Conversation.HomeDir), nil
 }
 
-// CopyConversation puts the conversation at transcript into another profile's
-// state folder, replacing any older copy there.
-func CopyConversation(runnerID, transcript, stateDir string) error {
+// TranscriptIn is where the conversation at transcript belongs in the state folder stateDir.
+func TranscriptIn(runnerID, transcript, stateDir string) (string, error) {
 	spec, _ := specFor(runnerID)
 	if spec.Conversation == nil {
-		return fmt.Errorf("%w: %q", ErrProfileSwitchUnsupported, runnerID)
+		return "", fmt.Errorf("%w: %q", ErrProfileSwitchUnsupported, runnerID)
 	}
-	return spec.Conversation.Copy(transcript, stateDir)
+	return spec.Conversation.Locate(transcript, stateDir)
+}
+
+// CopyConversation puts the conversation at transcript into another profile's
+// state folder, replacing any older copy there, and returns the copy's transcript.
+func CopyConversation(runnerID, transcript, stateDir string) (string, error) {
+	located, err := TranscriptIn(runnerID, transcript, stateDir)
+	if err != nil {
+		return "", err
+	}
+	spec, _ := specFor(runnerID)
+	if err := spec.Conversation.Copy(transcript, located); err != nil {
+		return "", err
+	}
+	return located, nil
+}
+
+// claudeTranscriptIn keeps the project folder name Claude chose for the transcript.
+func claudeTranscriptIn(transcript, stateDir string) (string, error) {
+	project := filepath.Base(filepath.Dir(transcript))
+	if project == string(filepath.Separator) || project == "." || project == ".." {
+		return "", fmt.Errorf("%w: %s", ErrUnplacedTranscript, transcript)
+	}
+	return filepath.Join(stateDir, claudeProjectsDirName, project, filepath.Base(transcript)), nil
 }
 
 // copyClaudeConversation copies the transcript and the folder beside it, which
-// holds its subagents and tool results, under the project folder name Claude
-// chose for it.
-func copyClaudeConversation(transcript, stateDir string) error {
-	project := filepath.Base(filepath.Dir(transcript))
-	if project == string(filepath.Separator) || project == "." || project == ".." {
-		return fmt.Errorf("%w: %s", ErrUnplacedTranscript, transcript)
-	}
-	dest := filepath.Join(stateDir, claudeProjectsDirName, project)
+// holds its subagents and tool results.
+func copyClaudeConversation(transcript, located string) error {
+	dest := filepath.Dir(located)
 	if err := os.MkdirAll(dest, profileDirMode); err != nil {
 		return err
 	}
@@ -80,7 +99,7 @@ func copyClaudeConversation(transcript, stateDir string) error {
 	if err != nil {
 		return err
 	}
-	if err := atomicfile.Replace(filepath.Join(dest, filepath.Base(transcript)), content, info.Mode().Perm()); err != nil {
+	if err := atomicfile.Replace(located, content, info.Mode().Perm()); err != nil {
 		return err
 	}
 	id := strings.TrimSuffix(filepath.Base(transcript), filepath.Ext(transcript))

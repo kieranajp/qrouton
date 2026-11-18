@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -523,17 +524,52 @@ func (s *Sessions) SwitchProfile(slug, profileID string) error {
 	if !ok {
 		return errors.Join(ErrNoConversation, s.replace(root, fallback, emptied))
 	}
-	moved := launch.CopyConversation(manifest.Runner, conversation.Transcript, stateDir)
-	if moved == nil {
-		moved = session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
-			if m.Slug != slug {
-				return m, UnknownSession(slug)
-			}
-			m.Profile = profileID
-			return m, nil
-		})
+	return errors.Join(s.move(root, manifest, profileID, stateDir, conversation), s.replace(root, fallback, emptied))
+}
+
+// move copies the conversation into the target profile and commits the switch:
+// first the manifest names the profile, then the record names the copy. A record
+// that cannot follow puts the manifest back, so the two never disagree.
+func (s *Sessions) move(root string, from session.Manifest, profileID, stateDir string, c session.Conversation) error {
+	copied, err := launch.CopyConversation(from.Runner, s.committedTranscript(from, c), stateDir)
+	if err != nil {
+		return err
 	}
-	return errors.Join(moved, s.replace(root, fallback, emptied))
+	if err := setProfile(root, from.Slug, profileID); err != nil {
+		return err
+	}
+	if err := session.RecordConversation(root, session.Conversation{ID: c.ID, Transcript: copied}); err != nil {
+		return errors.Join(err, setProfile(root, from.Slug, from.Profile))
+	}
+	return nil
+}
+
+// committedTranscript is the committed profile's own copy of the conversation
+// when it holds one: a switch that stopped before rewriting the record leaves it
+// naming the profile it left.
+func (s *Sessions) committedTranscript(m session.Manifest, c session.Conversation) string {
+	dir, err := s.stateDir(m.Runner, m.Profile)
+	if err != nil {
+		return c.Transcript
+	}
+	own, err := launch.TranscriptIn(m.Runner, c.Transcript, dir)
+	if err != nil {
+		return c.Transcript
+	}
+	if _, err := os.Stat(own); err != nil {
+		return c.Transcript
+	}
+	return own
+}
+
+func setProfile(root, slug, profileID string) error {
+	return session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
+		if m.Slug != slug {
+			return m, UnknownSession(slug)
+		}
+		m.Profile = profileID
+		return m, nil
+	})
 }
 
 // stateDir is the folder the target profile keeps the runner's state in.

@@ -144,6 +144,7 @@ func TestSwitchProfileBootsOnceOnTheTargetWithTheConversationCopied(t *testing.T
 func TestSwitchProfileThatCannotCopyBootsBackOnTheOldProfile(t *testing.T) {
 	f := newSwitchFixture(t, "claude")
 	f.record(t)
+	before, _ := session.ReadConversation(f.root)
 	if err := os.WriteFile(filepath.Join(f.profiles["b"], "projects"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -152,6 +153,9 @@ func TestSwitchProfileThatCannotCopyBootsBackOnTheOldProfile(t *testing.T) {
 	}
 	if got := f.manifestProfile(t); got != "a" {
 		t.Fatalf("manifest names %q after a failed copy, want a", got)
+	}
+	if got, _ := session.ReadConversation(f.root); got != before {
+		t.Fatalf("the record names %+v after a failed copy, want %+v", got, before)
 	}
 	if agents, _ := f.boot.counts(); agents != 2 || f.boot.profiles[f.root] != "a" || !f.boot.resumed(t, f.root) {
 		t.Fatalf("asked for %d supervisors, last on %q; want one resumed reboot on a", agents, f.boot.profiles[f.root])
@@ -326,4 +330,80 @@ func claudeEventWith(generation uint64, c session.Conversation) workbench.AgentE
 	return claudeEvent(agentevent.HookUserPromptSubmit, func(e *workbench.AgentEventRequest) {
 		e.Generation, e.ConversationID, e.TranscriptPath = generation, c.ID, c.Transcript
 	})
+}
+
+// Catches the record still pointing into the profile a switch left, which a
+// second switch then copies from even though that folder may be gone.
+func TestSwitchProfileRecordsTheCopyItCommitted(t *testing.T) {
+	f := newSwitchFixture(t, "claude")
+	f.record(t)
+	f.profiles["c"] = t.TempDir()
+	if err := f.reg.SwitchProfile("octopus", "b"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(f.profiles["b"], "projects", "-octopus", switchID+".jsonl")
+	if got, _ := session.ReadConversation(f.root); got.Transcript != want {
+		t.Fatalf("the record names %q after the switch, want the copy at %q", got.Transcript, want)
+	}
+	if err := os.RemoveAll(f.profiles["a"]); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.reg.SwitchProfile("octopus", "c"); err != nil {
+		t.Fatalf("a second switch after the first profile's folder went: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.profiles["c"], "projects", "-octopus", switchID+".jsonl")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Catches a switch that stops after copying leaving the record on a copy the
+// manifest never committed to, or the manifest on a profile the record does not name.
+func TestSwitchProfileThatCannotRecordTheCopyBootsBackOnTheOldProfile(t *testing.T) {
+	f := newSwitchFixture(t, "claude")
+	f.record(t)
+	before, _ := session.ReadConversation(f.root)
+	dir := sessionpaths.Dir(f.root)
+	teardown := f.reg.boot.teardown
+	f.reg.boot.teardown = func(state *SessionState) {
+		if err := os.Chmod(dir, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		teardown(state)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	if err := f.reg.SwitchProfile("octopus", "b"); err == nil {
+		t.Fatal("a switch that could not record its copy reported success")
+	}
+	if got, _ := session.ReadConversation(f.root); got != before {
+		t.Fatalf("the record names %+v, want it left on %+v", got, before)
+	}
+	if got := f.manifestProfile(t); got != "a" || f.boot.profiles[f.root] != "a" || !f.boot.resumed(t, f.root) {
+		t.Fatalf("manifest on %q, rebooted on %q; want a resumed reboot on a", got, f.boot.profiles[f.root])
+	}
+}
+
+// Catches a record left on the old profile by an interrupted switch sending the
+// next switch to a folder that has gone, when the committed profile holds the copy.
+func TestSwitchProfileCopiesFromTheCommittedProfile(t *testing.T) {
+	f := newSwitchFixture(t, "claude")
+	f.record(t)
+	if _, err := launch.CopyConversation("claude", filepath.Join(f.profiles["a"], "projects", "-octopus", switchID+".jsonl"), f.profiles["b"]); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.UpdateManifest(f.root, func(m session.Manifest) (session.Manifest, error) {
+		m.Profile = "b"
+		return m, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(f.profiles["a"]); err != nil {
+		t.Fatal(err)
+	}
+	f.profiles["c"] = t.TempDir()
+	if err := f.reg.SwitchProfile("octopus", "c"); err != nil {
+		t.Fatalf("switch from the committed profile: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.profiles["c"], "projects", "-octopus", switchID+".jsonl")); err != nil {
+		t.Fatal(err)
+	}
 }

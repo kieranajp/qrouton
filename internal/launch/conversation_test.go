@@ -48,7 +48,7 @@ func TestCopyConversationLandsUnderTheTranscriptsOwnProjectFolder(t *testing.T) 
 	const project = "-Users-me-Work-odd_name-v2"
 	transcript := claudeTranscript(t, t.TempDir(), project, true)
 	target := t.TempDir()
-	if err := CopyConversation(runnerIDClaude, transcript, target); err != nil {
+	if _, err := CopyConversation(runnerIDClaude, transcript, target); err != nil {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(target, claudeProjectsDirName, project)
@@ -74,7 +74,7 @@ func TestCopyConversationReplacesAnOlderCopy(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := CopyConversation(runnerIDClaude, transcript, target); err != nil {
+	if _, err := CopyConversation(runnerIDClaude, transcript, target); err != nil {
 		t.Fatal(err)
 	}
 	if got := readFile(t, filepath.Join(stale, "agent-a1.jsonl")); got != "child\n" {
@@ -96,7 +96,7 @@ func TestCopyConversationReplacesAnOlderCopy(t *testing.T) {
 func TestCopyConversationCopiesATranscriptWithNoFolderAlone(t *testing.T) {
 	transcript := claudeTranscript(t, t.TempDir(), "-s", false)
 	target := t.TempDir()
-	if err := CopyConversation(runnerIDClaude, transcript, target); err != nil {
+	if _, err := CopyConversation(runnerIDClaude, transcript, target); err != nil {
 		t.Fatal(err)
 	}
 	if got := readFile(t, filepath.Join(target, claudeProjectsDirName, "-s", switchedID+".jsonl")); got != "root\n" {
@@ -134,7 +134,22 @@ func TestOnlyClaudeSwitchesProfiles(t *testing.T) {
 			t.Errorf("SwitchesProfiles(%q) = %v", spec.ID, got)
 		}
 	}
-	if err := CopyConversation(runnerIDCodex, "/p/-s/x.jsonl", t.TempDir()); !errors.Is(err, ErrProfileSwitchUnsupported) {
+	if _, err := CopyConversation(runnerIDCodex, "/p/-s/x.jsonl", t.TempDir()); !errors.Is(err, ErrProfileSwitchUnsupported) {
 		t.Fatalf("CopyConversation for codex = %v, want ErrProfileSwitchUnsupported", err)
+	}
+}
+
+// Catches the switch recording a transcript location other than the one its copy
+// landed at, which a later switch would then read from.
+func TestCopyConversationReturnsWhereTheCopyLanded(t *testing.T) {
+	transcript := claudeTranscript(t, t.TempDir(), "-s", false)
+	target := t.TempDir()
+	want := filepath.Join(target, claudeProjectsDirName, "-s", switchedID+".jsonl")
+	got, err := CopyConversation(runnerIDClaude, transcript, target)
+	if err != nil || got != want {
+		t.Fatalf("CopyConversation = %q, %v, want %q", got, err, want)
+	}
+	if located, err := TranscriptIn(runnerIDClaude, transcript, target); err != nil || located != want {
+		t.Fatalf("TranscriptIn = %q, %v, want %q", located, err, want)
 	}
 }
