@@ -16,6 +16,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 func profiledSession(t *testing.T, root, slug, runner, profile string) string {
@@ -75,6 +76,26 @@ func TestARefusedProfileLeavesTheSessionUnbooted(t *testing.T) {
 	}
 	if reg.BySlug("octopus") != nil {
 		t.Fatal("a session whose profile is gone was booted")
+	}
+}
+
+// Breaks if a manifest that exists but will not load boots the workbench's runner
+// on the default account instead of refusing.
+func TestAnUnreadableManifestLeavesTheSessionUnbooted(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	manifest := sessionpaths.Manifest(profiledSession(t, root, "octopus", "claude", "work"))
+	if err := os.WriteFile(manifest, []byte("{\"runner\": "), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := reg.Show("octopus")
+	if !errors.Is(err, ErrManifestUnreadable) || !strings.Contains(err.Error(), manifest) {
+		t.Fatalf("Show = %v, want %v naming %s", err, ErrManifestUnreadable, manifest)
+	}
+	if agents, _ := boot.counts(); agents != 0 || reg.BySlug("octopus") != nil {
+		t.Fatalf("a session whose manifest will not load asked for %d supervisors", agents)
 	}
 }
 

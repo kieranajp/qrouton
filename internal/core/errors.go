@@ -76,10 +76,11 @@ var (
 	ErrOpenConfig       = errors.New("config.json could not be opened")
 	ErrNoRelaunch       = errors.New("workbench has no way to relaunch itself into a new sessions root")
 
-	ErrNoSessionShown = errors.New("sign in opens in a session: start or open one first")
-	ErrProfileLabel   = errors.New("a profile needs a name")
-	ErrProfileTaken   = errors.New("this runner already has a profile with that name")
-	ErrProfileFolder  = errors.New("a profile's folder must be an absolute path")
+	ErrNoSessionShown     = errors.New("sign in opens in a session: start or open one first")
+	ErrManifestUnreadable = errors.New("session manifest could not be loaded")
+	ErrProfileLabel       = errors.New("a profile needs a name")
+	ErrProfileTaken       = errors.New("this runner already has a profile with that name")
+	ErrProfileFolder      = errors.New("a profile's folder must be an absolute path")
 
 	ErrNoRevealCommand    = Unavailable("workbench has no command to reveal a session's directory with")
 	ErrNoOpenTextCommand  = Unavailable("workbench has no command to open a file in a text editor")
@@ -114,4 +115,8 @@ func unknownOperation(op string) error {
 // rejects with, so pressing Create on an invalid form says which field.
 func draftRefused(p assembly.Problem) error {
 	return fmt.Errorf("%s: %s", p.Field, p.Message)
+}
+
+func manifestUnreadable(path string, err error) error {
+	return fmt.Errorf("%w: %s: %w", ErrManifestUnreadable, path, err)
 }
