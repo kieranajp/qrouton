@@ -12,7 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/gittest"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 const cloneStderr = "Cloning into bare repository 'svc.git'...\n" +
@@ -161,9 +164,10 @@ func TestASilentGitIsKilledAfterTheStallWindow(t *testing.T) {
 
 func TestAReportingGitOutlivesTheStallWindow(t *testing.T) {
 	fakeGit(t, `i=0
-while [ $i -lt 40 ]; do printf 'Receiving objects: %d%%\r' $((i * 2)) >&2; sleep 0.02; i=$((i + 1)); done
+while [ $i -lt 40 ]; do printf 'Receiving objects: %d%%\r' $((i * 2)) >&2; sleep 0.05; i=$((i + 1)); done
 `)
-	shortenStalls(t, 3*time.Second, 300*time.Millisecond)
+	// Twice the first window: only the reset on each report keeps git alive.
+	shortenStalls(t, time.Second, 300*time.Millisecond)
 	var reported int
 	if err := gitSlow(t.Context(), func(string, int) { reported++ }, fetchCmd, progressFlag); err != nil {
 		t.Fatalf("a git that kept reporting well past the window was stopped: %v", err)
@@ -180,6 +184,7 @@ func TestGitRunsWithoutATerminal(t *testing.T) {
 echo "prompt=$GIT_TERMINAL_PROMPT"
 tty
 if (: </dev/tty) 2>/dev/null; then echo "controlling=yes"; else echo "controlling=no"; fi
+echo "group=$(ps -o pgid= -p $$ | tr -d ' ') self=$$"
 `)
 	for name, run := range map[string]func() error{
 		"git":     func() error { return git(t.Context(), statusCmd) },
@@ -193,7 +198,7 @@ if (: </dev/tty) 2>/dev/null; then echo "controlling=yes"; else echo "controllin
 			t.Fatal(err)
 		}
 		got := string(body)
-		for _, want := range []string{"prompt=0", "not a tty", "controlling=no"} {
+		for _, want := range []string{"prompt=0", "not a tty", "controlling=no", groupLeader(got)} {
 			if !strings.Contains(got, want) {
 				t.Errorf("%s ran git with %q, missing %q", name, got, want)
 			}
@@ -259,5 +264,72 @@ func TestCurrentBranchReadsADetachedHeadAsNoBranch(t *testing.T) {
 	}
 	if branch, err := currentBranch(dir); err != nil || branch != "" {
 		t.Fatalf("detached: currentBranch = %q, %v; want no branch", branch, err)
+	}
+}
+
+// groupLeader is the line a git that leads its own process group prints, which
+// is what lets a cancel kill git and its SSH child together.
+func groupLeader(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		if self, ok := strings.CutPrefix(line, "group="); ok {
+			if _, pid, ok := strings.Cut(self, " self="); ok {
+				return "group=" + pid + " self=" + pid
+			}
+		}
+	}
+	return "group="
+}
+
+// Sessions share mirrors, so two adds of the same new repository must not both
+// clone it, nor remove each other's partial clone.
+func TestConcurrentAddsCloneASharedMirrorOnce(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "clones")
+	t.Setenv("FAKE_GIT_LOG", log)
+	fakeGit(t, `if [ "$1" = clone ]; then for a; do target=$a; done; echo clone >>"$FAKE_GIT_LOG"; mkdir -p "$target"; sleep 0.3; fi
+`)
+	root := t.TempDir()
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			errs <- ensureMirror(t.Context(), root, "org", "svc", "git@example.invalid:org/svc.git", "main", nil)
+		}()
+	}
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if body, _ := os.ReadFile(log); strings.Count(string(body), "clone") != 1 {
+		t.Fatalf("the mirror was cloned %d times", strings.Count(string(body), "clone"))
+	}
+}
+
+// A worktree step that fails after git made the checkout must not leave it
+// behind, or a retry trips over a directory the manifest never recorded.
+func TestAFailedWorktreeStepLeavesNoCheckoutBehind(t *testing.T) {
+	requireGit(t)
+	real, err := exec.LookPath(gitBin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	origin := gittest.Origin(t, "svc")
+	t.Setenv("REAL_GIT", real)
+	fakeGit(t, `"$REAL_GIT" "$@"; status=$?
+if [ "$3 $4" = "worktree add" ]; then exit 1; fi
+exit $status
+`)
+	cfg := &config.Config{Root: t.TempDir()}
+	repo := github.Repo{Org: "org", Name: "svc", SSHURL: origin, DefaultBranch: "main"}
+	_, err = ComposeRepos(t.Context(), cfg, Manifest{Slug: "s"}, []RepoSelection{{Repo: repo, Role: RepoRoleEditing}}, "feat/s", nil)
+	if err == nil {
+		t.Fatal("the failing worktree step reported success")
+	}
+	checkout := filepath.Join(cfg.Root, "s", sessionpaths.SrcDirName, "svc")
+	if _, err := os.Lstat(checkout); !os.IsNotExist(err) {
+		t.Fatalf("the half-made checkout is still there: %v", err)
+	}
+	list, err := gitOutput(t.Context(), dirFlag, mirrorPath(cfg.Root, "org", "svc"), worktreeCmd, "list")
+	if err != nil || strings.Contains(list, checkout) {
+		t.Fatalf("the mirror still lists the checkout: %q, %v", list, err)
 	}
 }

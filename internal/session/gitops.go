@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -186,6 +187,11 @@ func mirrorPath(root, org, repo string) string {
 // is advanced separately after each fetch.
 func ensureMirror(ctx context.Context, root, org, repo, url, defaultBranch string, onProgress func(phase string, percent int)) error {
 	mp := mirrorPath(root, org, repo)
+	unlock, err := lockMirror(ctx, mp)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	if _, err := os.Stat(mp); os.IsNotExist(err) {
 		if err := cloneMirror(ctx, url, mp, onProgress); err != nil {
 			return err
@@ -205,6 +211,20 @@ func ensureMirror(ctx context.Context, root, org, repo, url, defaultBranch strin
 		return nil
 	}
 	return git(ctx, dirFlag, mp, updateRefCmd, localBranchRef+defaultBranch, remoteRefPrefix+defaultBranch)
+}
+
+// mirrorLocks holds one slot per mirror path. Sessions share mirrors, and two adds
+// cloning the same one would remove each other's partial clone.
+var mirrorLocks sync.Map
+
+func lockMirror(ctx context.Context, mp string) (func(), error) {
+	slot, _ := mirrorLocks.LoadOrStore(mp, make(chan struct{}, 1))
+	select {
+	case slot.(chan struct{}) <- struct{}{}:
+		return func() { <-slot.(chan struct{}) }, nil
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
+	}
 }
 
 // cloneMirror clones beside the mirror and renames into place, so a clone that

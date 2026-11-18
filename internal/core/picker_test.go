@@ -290,7 +290,10 @@ func TestASecondAddForTheSameSessionIsRefused(t *testing.T) {
 	go func() { first <- p.Confirm(ctx, "shown", pickSvc) }()
 	waitFor(t, "the first add to start cloning", cloning)
 
-	if err := p.Confirm(t.Context(), "shown", pickSvc); !errors.Is(err, ErrAddRunning) {
+	// A deadline, so a broken refusal fails here rather than after the held clone.
+	second, stop := context.WithTimeout(t.Context(), 2*time.Second)
+	defer stop()
+	if err := p.Confirm(second, "shown", pickSvc); !errors.Is(err, ErrAddRunning) {
 		t.Fatalf("a second add while the first runs = %v, want %v", err, ErrAddRunning)
 	}
 	cancel()
