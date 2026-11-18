@@ -301,8 +301,7 @@ func attend(state *SessionState, shown func() *SessionState, touch, ring func())
 	}
 }
 
-// sessionTree names the profile the session booted on rather than the
-// manifest's: a workbench started from the command line boots the default.
+// sessionTree names the profile the session booted on rather than the manifest's.
 func sessionTree(cfg *config.Config, state *SessionState) status.AgentTree {
 	snapshot := state.agents.snapshot()
 	fallback := ""
