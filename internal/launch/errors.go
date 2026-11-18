@@ -23,6 +23,8 @@ var (
 
 	ErrUnplacedTranscript = errors.New("transcript is not inside a project folder")
 
+	ErrResumeFailed = errors.New("the runner could not resume its conversation, which is kept for Reload to try again")
+
 	ErrLoginShell = errors.New("login shell could not start")
 
 	// ErrUnsupportedRunner means a Runner reached the launch path with an id no

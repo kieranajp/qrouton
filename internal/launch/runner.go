@@ -33,9 +33,11 @@ type runnerSpec struct {
 	ID      string
 	Label   string
 	Command []string
-	// Resume turns a fresh argv into one continuing the conversation, which is the
-	// recorded one when its ID is known and the runner can name it.
-	Resume func(argv []string, conversation string) []string
+	// Resume turns a fresh argv into one continuing the last conversation.
+	Resume func(argv []string) []string
+	// ResumeID continues the conversation it names. A runner without one cannot
+	// name a conversation, so it always resumes the last.
+	ResumeID func(argv []string, conversation string) []string
 	// Prompt appends the opening message the way this runner accepts it.
 	Prompt func(argv []string, message string) []string
 	// MCP points the runner at a qrouton MCP server, which is the part of the
@@ -81,7 +83,8 @@ var runnerSpecs = []runnerSpec{
 	{
 		ID: runnerIDClaude, Label: runnerLabelClaude,
 		Command:    []string{runnerIDClaude, claudeSkipPermissionsFlag},
-		Resume:     resumeClaude,
+		Resume:     resumeWith(claudeContinueFlag),
+		ResumeID:   resumeClaude,
 		Prompt:     promptAsArgument,
 		MCP:        claudeMCP,
 		Inject:     injectClaude,
@@ -159,17 +162,23 @@ func specFor(id string) (runnerSpec, bool) {
 	return runnerSpec{}, false
 }
 
-func resumeWith(flags ...string) func([]string, string) []string {
-	return func(argv []string, _ string) []string { return append(argv, flags...) }
+func resumeWith(flags ...string) func([]string) []string {
+	return func(argv []string) []string { return append(argv, flags...) }
 }
 
-// resumeClaude names the conversation when one is recorded. A missing one then
-// fails the launch, where --continue would silently start afresh.
+// resumeClaude names the conversation. A missing one then fails the launch,
+// where --continue would silently start afresh.
 func resumeClaude(argv []string, conversation string) []string {
-	if conversation == "" {
-		return append(argv, claudeContinueFlag)
-	}
 	return append(argv, claudeResumeFlag, conversation)
+}
+
+// namedConversation is the recorded conversation a resume names, for a runner
+// that can name one.
+func namedConversation(r Runner, dir string) (session.Conversation, bool) {
+	if spec, ok := specFor(r.ID); !ok || spec.ResumeID == nil {
+		return session.Conversation{}, false
+	}
+	return session.ReadConversation(dir)
 }
 
 func promptAsArgument(argv []string, message string) []string {
@@ -285,8 +294,8 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 	}
 	var conversation string
 	if resume {
-		recorded, _ := session.ReadConversation(dir)
-		conversation = recorded.ID
+		named, _ := namedConversation(r, dir)
+		conversation = named.ID
 	}
 	argv, env, err := spec.Inject(runnerArgv(spec, r, resume, conversation, sessionMode(dir), sessionTicket(dir), prompt), injectContext{
 		qroutonBin: qroutonBin,
@@ -623,7 +632,11 @@ func ShellQuote(s string) string {
 func runnerArgv(spec runnerSpec, r Runner, resume bool, conversation, mode, provider, prompt string) []string {
 	argv := slices.Clone(r.Command)
 	if resume {
-		argv = spec.Resume(argv, conversation)
+		if conversation != "" && spec.ResumeID != nil {
+			argv = spec.ResumeID(argv, conversation)
+		} else {
+			argv = spec.Resume(argv)
+		}
 		if resumed := strings.TrimSpace(prompt); resumed != "" {
 			argv = spec.Prompt(argv, resumed)
 		}

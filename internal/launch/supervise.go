@@ -2,6 +2,9 @@ package launch
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -79,6 +82,10 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 				return err
 			}
 		}
+		var named session.Conversation
+		if resume {
+			named, _ = namedConversation(r, dir)
+		}
 		argv, env, err := runnerLaunch(r, qroutonBin, dir, editor, handle, generation, resume, prompt)
 		if err != nil {
 			return err
@@ -86,6 +93,9 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		initialPrompt = ""
 		env = workbench.WithEnv(env, EditorEnvVar, editor.Marshal())
 		signalled, err := runAgent(argv, env, dir, relaunch)
+		if err != nil && !signalled && resume && transcriptKept(named) {
+			return keepForReload(dir, named.ID, notice, err)
+		}
 		// A missing transcript gets one fresh start with the notice as its opening prompt.
 		if err != nil && !signalled && resume && freshStart {
 			freshStart = false
@@ -101,6 +111,26 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		generation++
 		resume = true
 	}
+}
+
+// transcriptKept is true for a named conversation whose transcript is not known
+// to be gone, so a failed resume of it is not a reason to start afresh.
+func transcriptKept(c session.Conversation) bool {
+	if c.ID == "" {
+		return false
+	}
+	_, err := os.Stat(c.Transcript)
+	return !errors.Is(err, fs.ErrNotExist)
+}
+
+// keepForReload ends the supervisor on a failed resume, leaving the record and
+// the notice the launch consumed for the next one.
+func keepForReload(dir, conversation, notice string, failed error) error {
+	var requeued error
+	if notice != "" {
+		requeued = session.QueueAgentNotice(dir, notice)
+	}
+	return errors.Join(fmt.Errorf("%w: %s: %w", ErrResumeFailed, conversation, failed), requeued)
 }
 
 var firstRunnerGeneration = func() uint64 { return uint64(time.Now().UnixNano()) }
