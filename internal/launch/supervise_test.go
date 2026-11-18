@@ -542,14 +542,24 @@ func TestSuperviseCarriesTheNoticeOntoTheFreshStart(t *testing.T) {
 
 const supervisedConversation = "b8aaffa4-120a-4a6d-bf40-cc703dc147b8"
 
-func recordSupervisedConversation(t *testing.T, dir string) {
+// recordSupervisedConversation records a conversation whose transcript is in the
+// folder the default profile's runner reads, and returns that transcript.
+func recordSupervisedConversation(t *testing.T, dir string) string {
 	t.Helper()
-	err := session.RecordConversation(dir, session.Conversation{
-		ID: supervisedConversation, Transcript: "/home/user/.claude/projects/-s/" + supervisedConversation + ".jsonl",
-	})
+	state := t.TempDir()
+	t.Setenv(claudeConfigDirEnvVar, state)
+	transcript := filepath.Join(state, claudeProjectsDirName, "-s", supervisedConversation+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(transcript, []byte("root\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := session.RecordConversation(dir, session.Conversation{ID: supervisedConversation, Transcript: transcript})
 	if err != nil {
 		t.Fatal(err)
 	}
+	return transcript
 }
 
 func resumesRecorded(argv []string) bool {
@@ -593,26 +603,31 @@ func TestSuperviseClearsTheRecordOnEveryFreshLaunch(t *testing.T) {
 	}
 }
 
-// Catches the fresh-start fallback keeping an ID whose transcript has gone.
-func TestSuperviseClearsTheRecordWhenItFallsBackToAFreshStart(t *testing.T) {
+// Catches a conversation whose transcript has gone being sent to a resume that
+// cannot find it, or the fresh start that replaces it keeping its ID.
+func TestSuperviseStartsFreshWhenTheRecordedTranscriptHasGone(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeRPI)
-	recordSupervisedConversation(t, dir)
+	transcript := recordSupervisedConversation(t, dir)
+	if err := os.Remove(transcript); err != nil {
+		t.Fatal(err)
+	}
+	const notice = "qrouton: session repositories changed — added org/svc for editing at src/svc."
+	if err := session.QueueAgentNotice(dir, notice); err != nil {
+		t.Fatal(err)
+	}
 	var argvs [][]string
 	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
 		argvs = append(argvs, argv)
-		if len(argvs) == 1 {
-			return false, errors.New("exit status 1")
-		}
 		if _, ok := session.ReadConversation(dir); ok {
-			t.Fatal("the fallback launched with the failed conversation still recorded")
+			t.Fatal("the fresh start launched with the lost conversation still recorded")
 		}
 		return false, nil
 	})
 	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, true); err != nil {
 		t.Fatal(err)
 	}
-	if len(argvs) != 2 || !resumesRecorded(argvs[0]) || resumesRecorded(argvs[1]) {
-		t.Fatalf("launches = %v, want a resume by ID then a fresh start", argvs)
+	if len(argvs) != 1 || resumesRecorded(argvs[0]) || !strings.Contains(strings.Join(argvs[0], " "), notice) {
+		t.Fatalf("launches = %v, want one fresh start carrying the notice", argvs)
 	}
 }
 
@@ -658,41 +673,52 @@ func TestSuperviseClearsTheRecordOnlyAfterAnnouncingTheGeneration(t *testing.T) 
 	}
 }
 
-// Catches a failed resume of a conversation whose transcript is still on disk
-// dropping it for a fresh start, which loses qrouton's only reference to it.
-func TestSuperviseKeepsTheConversationWhenAnExplicitResumeFails(t *testing.T) {
+// Catches a failed resume of a conversation the runner can still find dropping
+// it for a fresh start, which loses qrouton's only reference to it. The record
+// names the profile the session left, so the check has to look where this
+// launch's runner reads.
+func TestSuperviseKeepsTheConversationWhenItsRunnerFails(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeRPI)
-	transcript := filepath.Join(t.TempDir(), "-s", supervisedConversation+".jsonl")
-	if err := os.MkdirAll(filepath.Dir(transcript), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(transcript, []byte("root\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	kept := session.Conversation{ID: supervisedConversation, Transcript: transcript}
-	if err := session.RecordConversation(dir, kept); err != nil {
+	transcript := recordSupervisedConversation(t, dir)
+	left := session.Conversation{ID: supervisedConversation, Transcript: "/gone/.claude/projects/-s/" + supervisedConversation + ".jsonl"}
+	if err := session.RecordConversation(dir, left); err != nil {
 		t.Fatal(err)
 	}
 	const notice = "qrouton: session repositories changed — added org/svc for editing at src/svc."
-	if err := session.QueueAgentNotice(dir, notice); err != nil {
-		t.Fatal(err)
-	}
-	var argvs [][]string
-	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
-		argvs = append(argvs, argv)
-		return false, errors.New("exit status 1")
-	})
-
-	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, true); !errors.Is(err, ErrResumeFailed) {
-		t.Fatalf("Supervise = %v, want %v", err, ErrResumeFailed)
-	}
-	if len(argvs) != 1 || !resumesRecorded(argvs[0]) {
-		t.Fatalf("launches = %v, want the one resume by ID and no fresh start", argvs)
-	}
-	if got, ok := session.ReadConversation(dir); !ok || got != kept {
-		t.Fatalf("record = %+v, %v after the failed resume, want %+v", got, ok, kept)
-	}
-	if notices, err := session.TakeAgentNotices(dir); err != nil || session.JoinAgentNotices(notices) != notice {
-		t.Fatalf("notices after the failed resume = %v, %v, want the one Reload delivers", notices, err)
+	for name, tc := range map[string]struct {
+		took    bool
+		requeue string
+	}{
+		"before the conversation took the notice": {false, notice},
+		"after the conversation took the notice":  {true, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := session.QueueAgentNotice(dir, notice); err != nil {
+				t.Fatal(err)
+			}
+			var argvs [][]string
+			swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+				argvs = append(argvs, argv)
+				if tc.took {
+					if err := os.WriteFile(transcript, []byte("root\nnotice\n"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return false, errors.New("exit status 1")
+			})
+			if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, true); !errors.Is(err, ErrKeptForReload) {
+				t.Fatalf("Supervise = %v, want %v", err, ErrKeptForReload)
+			}
+			if len(argvs) != 1 || !resumesRecorded(argvs[0]) {
+				t.Fatalf("launches = %v, want the one resume by ID and no fresh start", argvs)
+			}
+			if got, ok := session.ReadConversation(dir); !ok || got != left {
+				t.Fatalf("record = %+v, %v, want %+v kept", got, ok, left)
+			}
+			notices, err := session.TakeAgentNotices(dir)
+			if err != nil || session.JoinAgentNotices(notices) != tc.requeue {
+				t.Fatalf("notices left = %v, %v, want %q", notices, err, tc.requeue)
+			}
+		})
 	}
 }

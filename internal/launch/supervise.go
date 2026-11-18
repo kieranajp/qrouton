@@ -63,6 +63,10 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if tookHandoff(dir) {
 			resume = false
 		}
+		var named session.Conversation
+		if resume {
+			named, resume = resumable(r, dir)
+		}
 		notice, err := takeAgentNotice(dir)
 		if err != nil {
 			return err
@@ -82,21 +86,18 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 				return err
 			}
 		}
-		var named session.Conversation
-		if resume {
-			named, _ = namedConversation(r, dir)
-		}
 		argv, env, err := runnerLaunch(r, qroutonBin, dir, editor, handle, generation, resume, prompt)
 		if err != nil {
 			return err
 		}
 		initialPrompt = ""
 		env = workbench.WithEnv(env, EditorEnvVar, editor.Marshal())
+		launched := time.Now()
 		signalled, err := runAgent(argv, env, dir, relaunch)
-		if err != nil && !signalled && resume && transcriptKept(named) {
-			return keepForReload(dir, named.ID, notice, err)
+		if err != nil && !signalled && named.ID != "" {
+			return keepForReload(dir, named, notice, launched, err)
 		}
-		// A missing transcript gets one fresh start with the notice as its opening prompt.
+		// A resume of the last conversation that finds none gets one fresh start, with the notice as its opening prompt.
 		if err != nil && !signalled && resume && freshStart {
 			freshStart = false
 			resume = false
@@ -113,24 +114,34 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 	}
 }
 
-// transcriptKept is true for a named conversation whose transcript is not known
-// to be gone, so a failed resume of it is not a reason to start afresh.
-func transcriptKept(c session.Conversation) bool {
-	if c.ID == "" {
-		return false
+// resumable is the recorded conversation a resume names, with the transcript
+// where this launch's runner will look for it. A transcript known to be missing
+// there means no resume: the runner could not find it.
+func resumable(r Runner, dir string) (session.Conversation, bool) {
+	c, ok := namedConversation(r, dir)
+	if !ok {
+		return session.Conversation{}, true
 	}
-	_, err := os.Stat(c.Transcript)
-	return !errors.Is(err, fs.ErrNotExist)
+	if state, err := StateDir(r.ID, r.Profile, os.Environ()); err == nil {
+		if located, err := TranscriptIn(r.ID, c.Transcript, state); err == nil {
+			c.Transcript = located
+		}
+	}
+	if _, err := os.Stat(c.Transcript); errors.Is(err, fs.ErrNotExist) {
+		return session.Conversation{}, false
+	}
+	return c, true
 }
 
-// keepForReload ends the supervisor on a failed resume, leaving the record and
-// the notice the launch consumed for the next one.
-func keepForReload(dir, conversation, notice string, failed error) error {
+// keepForReload ends the supervisor with the record kept. The notice goes back
+// on the queue unless a write to the transcript since the launch shows the
+// conversation took it.
+func keepForReload(dir string, c session.Conversation, notice string, launched time.Time, failed error) error {
 	var requeued error
-	if notice != "" {
+	if info, err := os.Stat(c.Transcript); notice != "" && (err != nil || info.ModTime().Before(launched)) {
 		requeued = session.QueueAgentNotice(dir, notice)
 	}
-	return errors.Join(fmt.Errorf("%w: %s: %w", ErrResumeFailed, conversation, failed), requeued)
+	return errors.Join(fmt.Errorf("%w: %s: %w", ErrKeptForReload, c.ID, failed), requeued)
 }
 
 var firstRunnerGeneration = func() uint64 { return uint64(time.Now().UnixNano()) }

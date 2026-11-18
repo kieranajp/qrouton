@@ -23,7 +23,7 @@ var (
 
 	ErrUnplacedTranscript = errors.New("transcript is not inside a project folder")
 
-	ErrResumeFailed = errors.New("the runner could not resume its conversation, which is kept for Reload to try again")
+	ErrKeptForReload = errors.New("the runner exited with an error; Reload resumes its conversation")
 
 	ErrLoginShell = errors.New("login shell could not start")
 
