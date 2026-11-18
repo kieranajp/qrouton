@@ -19,6 +19,8 @@ const (
 	fileMode        = 0o644
 	privateFileMode = 0o600
 
+	agentNoticeSeparator = "\n\n"
+
 	gitBin = "git"
 
 	// dirFlag runs a git command against a directory without cd-ing to it.

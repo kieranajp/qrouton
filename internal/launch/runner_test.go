@@ -283,8 +283,8 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	}
 }
 
-// Every Claude hook runs async, so no tool call waits on the workbench, and the
-// hooks wired are exactly the ones the tracker reads capabilities from.
+// Every Claude event hook runs async, so no tool call waits on the workbench, and
+// the hooks wired are exactly the ones the tracker reads capabilities from.
 func TestClaudeHooksAreAsyncAndMatchRunnerHooks(t *testing.T) {
 	r := Runner{ID: "claude", Command: []string{"claude"}}
 	argv, _, err := runnerLaunch(r, "/bin/qrouton", "/work/s", EditorCommand{}, workbench.Handle{Socket: "/tmp/s.sock"}, 1, false, "")
@@ -295,7 +295,8 @@ func TestClaudeHooksAreAsyncAndMatchRunnerHooks(t *testing.T) {
 	var settings struct {
 		Hooks map[string][]struct {
 			Hooks []struct {
-				Async bool `json:"async"`
+				Command string `json:"command"`
+				Async   bool   `json:"async"`
 			} `json:"hooks"`
 		} `json:"hooks"`
 	}
@@ -307,7 +308,7 @@ func TestClaudeHooksAreAsyncAndMatchRunnerHooks(t *testing.T) {
 		wired = append(wired, hook)
 		for _, group := range groups {
 			for _, entry := range group.Hooks {
-				if !entry.Async {
+				if strings.Contains(entry.Command, AgentEventSubcommand) && !entry.Async {
 					t.Errorf("%s hook is not async", hook)
 				}
 			}
@@ -923,5 +924,88 @@ func TestEachRunnerWiresExactlyTheHooksItDeclares(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The notice hook has to finish before the turn carries on, or its context
+// misses the turn; the event hooks beside it must stay async.
+func TestClaudeNoticeHookIsSynchronousBesideAsyncEventHooks(t *testing.T) {
+	r := Runner{ID: runnerIDClaude, Command: []string{runnerIDClaude}}
+	dir := "/work/kieran's session"
+	argv, _, err := runnerLaunch(r, "/opt/qr uton/qrouton", dir, EditorCommand{}, testHandle(), 7, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+				Async   bool   `json:"async"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(argv[slices.Index(argv, "--settings")+1]), &settings); err != nil {
+		t.Fatal(err)
+	}
+	notice := noticeHookCommand("/opt/qr uton/qrouton", dir)
+	for hook, groups := range settings.Hooks {
+		var events, notices int
+		for _, entry := range groups[0].Hooks {
+			switch {
+			case entry.Command == notice && !entry.Async:
+				notices++
+			case strings.Contains(entry.Command, AgentEventSubcommand) && entry.Async:
+				events++
+			default:
+				t.Errorf("%s hook entry = %+v", hook, entry)
+			}
+		}
+		wantNotices := 0
+		if hook == agentevent.HookPostToolUse || hook == agentevent.HookUserPromptSubmit {
+			wantNotices = 1
+		}
+		if events != 1 || notices != wantNotices {
+			t.Errorf("%s: %d event and %d notice entries, want 1 and %d", hook, events, notices, wantNotices)
+		}
+	}
+}
+
+// The guard keeps qrouton unstarted while the queue is empty, and hands a queued
+// notice to it with paths that survive shell metacharacters.
+func TestTheNoticeHookStartsQroutonOnlyForAQueuedNotice(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "kieran's $session")
+	bin := filepath.Join(t.TempDir(), "qr uton")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := noticeHookCommand(bin, dir)
+	if out, err := exec.Command("/bin/sh", "-c", command).CombinedOutput(); err != nil || len(out) != 0 {
+		t.Fatalf("empty queue: output %q, %v; want a silent exit 0", out, err)
+	}
+	if err := session.QueueAgentNotice(dir, "added org/svc"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("/bin/sh", "-c", command).Output()
+	want := AgentNoticeSubcommand + "\n" + sessionRootFlag + "\n" + dir + "\n"
+	if err != nil || string(out) != want {
+		t.Fatalf("queued notice: qrouton got %q, %v; want %q", out, err, want)
+	}
+}
+
+// Codex takes notices on the same two events, through the same guarded command.
+func TestCodexInjectsTheNoticeHooks(t *testing.T) {
+	r := Runner{ID: runnerIDCodex, Command: []string{runnerIDCodex, codexBypassSandboxFlag}}
+	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, testHandle(), 7, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := fmt.Sprintf(codexCommandHookFormat, quotedConfigString(noticeHookCommand("/tmp/qrouton", "/tmp/session")), codexHookTimeoutSeconds)
+	for _, want := range []string{codexPostToolUseHook + hook, codexUserPromptSubmitHook + hook} {
+		if !slices.Contains(argv, want) {
+			t.Fatalf("Codex launch missing %q: %v", want, argv)
+		}
+	}
+	if slices.Contains(RunnerHooks(runnerIDCodex), agentevent.HookPostToolUse) {
+		t.Fatal("the notice hook made Codex declare PostToolUse events it never reports")
 	}
 }

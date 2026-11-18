@@ -41,7 +41,7 @@ func main() {
 			&cli.StringFlag{Name: ticketFlag, Usage: ticketFlagUsage},
 			&cli.StringFlag{Name: workbenchSpecFlag, Hidden: true},
 		},
-		Commands: []*cli.Command{mcpcmd.Command, agenteventcmd.EventCommand, agentcmd.Command, modecmd.Command, shellcmd.Command},
+		Commands: []*cli.Command{mcpcmd.Command, agenteventcmd.EventCommand, agenteventcmd.NoticeCommand, agentcmd.Command, modecmd.Command, shellcmd.Command},
 		Action:   open,
 	}
 	if err := app.Run(os.Args); err != nil {

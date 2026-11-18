@@ -251,21 +251,14 @@ func TestRepositoryAdditionsQueueNoticesWithoutSignalling(t *testing.T) {
 				if err := a.Confirm(dir, draft, false, nil); err != nil {
 					t.Fatal(err)
 				}
-				notice, err := os.ReadFile(sessionpaths.AgentNotice(dir))
-				if err != nil {
-					t.Fatal(err)
-				}
 				want := "qrouton: session repositories changed — added org/" + name + " for editing at src/" + name + ". " +
 					"Re-read qrouton.json before continuing with the updated workspace."
-				if string(notice) != want {
-					t.Fatalf("queued notice = %q, want %q", notice, want)
-				}
 				if err := a.Confirm(dir, draft, false, nil); err != nil {
 					t.Fatal(err)
 				}
-				retained, err := os.ReadFile(sessionpaths.AgentNotice(dir))
-				if err != nil || string(retained) != want {
-					t.Fatalf("unchanged confirmation discarded notice: %q, %v", retained, err)
+				notices, err := session.TakeAgentNotices(dir)
+				if err != nil || len(notices) != 1 || notices[0] != want {
+					t.Fatalf("queued notices = %q, %v; want only %q", notices, err, want)
 				}
 			}
 			got, err := session.Load(dir)
@@ -327,11 +320,8 @@ func TestAddingAnUnroutedRepoToASharedRootSessionQueuesAWarning(t *testing.T) {
 			if err := a.Confirm(dir, Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}, false, nil); err != nil {
 				t.Fatal(err)
 			}
-			notice, err := os.ReadFile(sessionpaths.AgentNotice(dir))
-			if err != nil {
-				t.Fatal(err)
-			}
-			warned := strings.Contains(string(notice), `shared "work" thoughts root, and org/svc is not routed there`)
+			notice := takeNotice(t, dir)
+			warned := strings.Contains(notice, `shared "work" thoughts root, and org/svc is not routed there`)
 			if warned != tc.warned {
 				t.Fatalf("notice = %q, warned %v, want %v", notice, warned, tc.warned)
 			}
@@ -462,9 +452,8 @@ func TestConfirmUpgradesAHeldReferenceRepoOntoTheSessionBranch(t *testing.T) {
 	if r := got.Repos[0]; r.Role != session.RepoRoleEditing || r.Branch != "chore/read-only" || r.Revision != "" {
 		t.Fatalf("upgraded repo = %+v", r)
 	}
-	notice, err := os.ReadFile(sessionpaths.AgentNotice(dir))
-	if err != nil || !strings.Contains(string(notice), "promoted org/docs to editing at src/docs") {
-		t.Fatalf("promotion notice = %q, %v", notice, err)
+	if notice := takeNotice(t, dir); !strings.Contains(notice, "promoted org/docs to editing at src/docs") {
+		t.Fatalf("promotion notice = %q", notice)
 	}
 
 	if got.Branch() != "chore/read-only" {
@@ -663,5 +652,41 @@ func TestFailedAdditionCanRetryWithoutReplacingCompletedWorktrees(t *testing.T) 
 	}
 	if body, err := os.ReadFile(work); err != nil || string(body) != "keep my work" {
 		t.Fatalf("completed checkout lost work: %q, %v", body, err)
+	}
+}
+
+func takeNotice(t *testing.T, dir string) string {
+	t.Helper()
+	notices, err := session.TakeAgentNotices(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return session.JoinAgentNotices(notices)
+}
+
+// An escalation queues its own notice; it must not wipe the add notice the
+// agent has not taken yet.
+func TestEscalationKeepsAnEarlierAdditionNotice(t *testing.T) {
+	a, dir := scratch(t)
+	a.Signal = func(string) {}
+	a.Cfg.Thoughts.Roots = []config.ThoughtsRoot{{ID: "work", Path: t.TempDir(), Orgs: []string{"acme"}}}
+	if err := session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
+		m.ThoughtsRoot = "work"
+		return m, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Confirm(dir, Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Confirm(dir, Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "contracts"))}, true, nil); err != nil {
+		t.Fatal(err)
+	}
+	notices, err := session.TakeAgentNotices(dir)
+	if err != nil || len(notices) != 2 {
+		t.Fatalf("notices = %q, %v; want the addition's and the escalation's", notices, err)
+	}
+	if !strings.Contains(notices[0], "added org/svc") || !strings.Contains(notices[1], "org/contracts is not routed there") {
+		t.Fatalf("notices = %q", notices)
 	}
 }
