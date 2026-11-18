@@ -43,6 +43,7 @@ const (
 	agentNoticeLockName = "agent-notice.lock"
 	agentPIDName        = "agent.pid"
 	openedName          = "opened"
+	conversationName    = "conversation.json"
 
 	// sharePagesDirName holds rendered pages staged for the agent to publish.
 	// Distinct from thoughts/shared, which holds the documents themselves.
@@ -119,6 +120,12 @@ func AgentPID(root string) string {
 // comes back to the one you were in rather than the newest on disk.
 func Opened(root string) string {
 	return filepath.Join(Dir(root), openedName)
+}
+
+// Conversation records the root conversation the runner last reported, so a
+// resume names it rather than guessing the newest.
+func Conversation(root string) string {
+	return filepath.Join(Dir(root), conversationName)
 }
 
 // HandoffPending marks an escalation that still owes the next runner a fresh

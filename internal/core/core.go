@@ -152,6 +152,7 @@ func (c *Core) wire() {
 					if req.PullRequestCreated {
 						reg.pullRequestsChanged(state.Root())
 					}
+					state.keepConversation(req)
 					notify(state.agents.apply(req))
 				},
 				picker: reg.QueuePicker,

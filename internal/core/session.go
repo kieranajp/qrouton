@@ -50,6 +50,34 @@ type SessionState struct {
 	// shells counts the shells the session has had rather than the ones still
 	// open: a number freed by a close would name two terminals at once.
 	shells int
+
+	conversationMu sync.Mutex
+	recorded       recordedConversation
+}
+
+type recordedConversation struct {
+	generation   uint64
+	conversation session.Conversation
+}
+
+// keepConversation records the root conversation a hook names, once per
+// generation and change. A late hook from a runner already replaced is dropped,
+// so it cannot rewrite a record the new runner's launch cleared.
+func (s *SessionState) keepConversation(event workbench.AgentEventRequest) {
+	if event.ConversationID == "" || s.Root() == "" {
+		return
+	}
+	next := recordedConversation{event.Generation, session.Conversation{ID: event.ConversationID, Transcript: event.TranscriptPath}}
+	s.agents.whileCurrent(event.Provider, event.Generation, func() {
+		s.conversationMu.Lock()
+		defer s.conversationMu.Unlock()
+		if s.recorded == next {
+			return
+		}
+		if session.RecordConversation(s.Root(), next.conversation) == nil {
+			s.recorded = next
+		}
+	})
 }
 
 // RequestPicker queues an escalation on this session under a fresh id. A later

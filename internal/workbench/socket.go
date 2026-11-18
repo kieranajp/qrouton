@@ -104,6 +104,9 @@ type AgentEventRequest struct {
 	// AgentID is the agent the hook fired in, and empty for the root.
 	AgentID   string `json:"agent_id,omitempty"`
 	AgentType string `json:"agent_type,omitempty"`
+	// ConversationID and TranscriptPath name the root's conversation, and are empty on a subagent's hook.
+	ConversationID string `json:"conversation_id,omitempty"`
+	TranscriptPath string `json:"transcript_path,omitempty"`
 
 	ToolUseID string `json:"tool_use_id,omitempty"`
 	Tool      string `json:"tool,omitempty"`
