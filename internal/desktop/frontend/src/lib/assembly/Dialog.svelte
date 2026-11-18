@@ -5,7 +5,7 @@
   import Stepper from "../forms/Stepper.svelte";
   import { intent } from "./steps.js";
 
-  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, secondaryIcon?: import("../core/icons.js").IconName, primary: string, primaryIcon?: import("../core/icons.js").IconName, status?: string, busy?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, height?: boolean, compact?: boolean, flush?: boolean, footer?: import("svelte").Snippet, children: import("svelte").Snippet}} */
+  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, secondaryIcon?: import("../core/icons.js").IconName, primary: string, primaryIcon?: import("../core/icons.js").IconName, status?: string, busy?: boolean, cancellable?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, height?: boolean, compact?: boolean, flush?: boolean, footer?: import("svelte").Snippet, children: import("svelte").Snippet}} */
   let {
     steps = [],
     pips = 0,
@@ -16,6 +16,7 @@
     primaryIcon,
     status = "",
     busy = false,
+    cancellable = false,
     canAdvance = true,
     onSecondary,
     onPrimary,
@@ -32,6 +33,11 @@
   // Focus starts on the layer, so Escape and Enter work before a field is touched.
   onMount(() => layer?.focus());
 
+  // A busy body can replace the field that had focus, which leaves Escape on the page.
+  $effect(() => {
+    if (busy && cancellable) layer?.focus();
+  });
+
   // Escape is the layer's own key rather than a dismissible action, which closes
   // on a press outside the node too — and the backdrop of a full-window layer is
   // outside, so one stray click would throw a half-filled form away.
@@ -39,9 +45,9 @@
     const meant = intent(event);
     if (!meant) return;
     event.preventDefault();
-    if (busy) return;
-    if (meant === "cancel") onEscape?.();
-    else if (canAdvance) onPrimary();
+    if (meant === "cancel") {
+      if (!busy || cancellable) onEscape?.();
+    } else if (!busy && canAdvance) onPrimary();
   }
 </script>
 
@@ -61,11 +67,11 @@
       {#if pips}
         <Pips total={pips} {active} />
       {:else if secondary}
-        <Button variant="secondary" icon={secondaryIcon} disabled={busy} onclick={onSecondary}>{secondary}</Button>
+        <Button variant="secondary" icon={secondaryIcon} disabled={busy && !cancellable} onclick={onSecondary}>{secondary}</Button>
       {/if}
       <div class="advance">
         {#if pips && secondary}
-          <Button variant="secondary" icon={secondaryIcon} disabled={busy} onclick={onSecondary}>{secondary}</Button>
+          <Button variant="secondary" icon={secondaryIcon} disabled={busy && !cancellable} onclick={onSecondary}>{secondary}</Button>
         {/if}
         <span class="status">{status}</span>
         {@render footer?.()}

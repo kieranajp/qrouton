@@ -110,7 +110,8 @@ func takeInitialPrompt(dir string) (string, error) {
 }
 
 func takeAgentNotice(dir string) (string, error) {
-	return takePrompt(sessionpaths.AgentNotice(dir))
+	notices, err := session.TakeAgentNotices(dir)
+	return session.JoinAgentNotices(notices), err
 }
 
 func takePrompt(path string) (string, error) {

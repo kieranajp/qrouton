@@ -95,7 +95,7 @@ func TestCreateSessionWithEditingAndPinnedReference(t *testing.T) {
 	if got := m.Repos[1]; got.Role != RepoRoleReference || got.Branch != "" || got.Revision != pinned {
 		t.Fatalf("reference manifest repo = %+v", got)
 	}
-	if gitOK("-C", filepath.Join(dir, "src", "reference"), "symbolic-ref", "-q", "HEAD") {
+	if gitOK(t.Context(), "-C", filepath.Join(dir, "src", "reference"), "symbolic-ref", "-q", "HEAD") {
 		t.Fatal("reference checkout is not detached")
 	}
 	if got := gittest.Head(t, filepath.Join(dir, "src", "reference")); got != pinned {
@@ -155,7 +155,7 @@ func TestCreateReferenceRepoPinnedToANonDefaultBase(t *testing.T) {
 		t.Fatalf("pinned revision = %s, want the release tip %s (main tip was %s)", got, branchTip, mainTip)
 	}
 	wt := filepath.Join(dir, "src", "docs")
-	if gitOK("-C", wt, "symbolic-ref", "-q", "HEAD") {
+	if gitOK(t.Context(), "-C", wt, "symbolic-ref", "-q", "HEAD") {
 		t.Fatal("reference checkout is not detached")
 	}
 	if got := gittest.Head(t, wt); got != branchTip {
@@ -364,7 +364,7 @@ func TestComposeReposAssemblesIntoZeroRepoSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := ComposeRepos(cfg, m, []RepoSelection{
+	out, err := ComposeRepos(t.Context(), cfg, m, []RepoSelection{
 		{Repo: github.Repo{Name: "editing", Org: "org", SSHURL: editingOrigin, DefaultBranch: "main"}, Role: RepoRoleEditing},
 		{Repo: github.Repo{Name: "reference", Org: "org", SSHURL: referenceOrigin, DefaultBranch: "main"}, Role: RepoRoleReference},
 	}, "fix/webhook-retry", nil)
@@ -375,10 +375,10 @@ func TestComposeReposAssemblesIntoZeroRepoSession(t *testing.T) {
 	if err := WriteManifest(dir, out); err != nil {
 		t.Fatal(err)
 	}
-	if !gitOK("-C", mirrorPath(root, "org", "editing"), "show-ref", "--verify", "--quiet", "refs/heads/fix/webhook-retry") {
+	if !gitOK(t.Context(), "-C", mirrorPath(root, "org", "editing"), "show-ref", "--verify", "--quiet", "refs/heads/fix/webhook-retry") {
 		t.Fatal("session branch missing from the mirror after assembly")
 	}
-	if gitOK("-C", filepath.Join(dir, "src", "reference"), "symbolic-ref", "-q", "HEAD") {
+	if gitOK(t.Context(), "-C", filepath.Join(dir, "src", "reference"), "symbolic-ref", "-q", "HEAD") {
 		t.Fatal("reference checkout is not detached")
 	}
 	got, err := Load(dir)
@@ -523,7 +523,7 @@ func TestComposeReposSkipsRepositoriesAlreadyInTheSession(t *testing.T) {
 
 	// Owner and name identify a repository, whatever case they arrive in.
 	shouty := github.Repo{Name: "REPO123", Org: "KieranAJP", SSHURL: origin, DefaultBranch: "main"}
-	out, err := ComposeRepos(cfg, m, []RepoSelection{{Repo: shouty, Role: RepoRoleEditing}}, "fix/other", nil)
+	out, err := ComposeRepos(t.Context(), cfg, m, []RepoSelection{{Repo: shouty, Role: RepoRoleEditing}}, "fix/other", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -538,7 +538,7 @@ func TestComposeReposSkipsRepositoriesAlreadyInTheSession(t *testing.T) {
 	// still gets an org-qualified path.
 	otherOrigin, _ := makeOrigin(t, "other-repo123")
 	other := github.Repo{Name: "repo123", Org: "lifesum", SSHURL: otherOrigin, DefaultBranch: "main"}
-	out, err = ComposeRepos(cfg, out, []RepoSelection{{Repo: other, Role: RepoRoleEditing}}, "fix/other", nil)
+	out, err = ComposeRepos(t.Context(), cfg, out, []RepoSelection{{Repo: other, Role: RepoRoleEditing}}, "fix/other", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

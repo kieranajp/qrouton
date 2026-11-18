@@ -34,10 +34,11 @@ const (
 // The command line qrouton launches itself with. The commands that parse it
 // take their names from here.
 const (
-	MCPSubcommand        = "mcp"
-	AgentEventSubcommand = "agent-event"
-	AgentSubcommand      = "agent"
-	ShellSubcommand      = "shell"
+	MCPSubcommand         = "mcp"
+	AgentEventSubcommand  = "agent-event"
+	AgentNoticeSubcommand = "agent-notice"
+	AgentSubcommand       = "agent"
+	ShellSubcommand       = "shell"
 
 	SessionRootFlag   = "session-root"
 	RunnerFlag        = "runner"
@@ -194,6 +195,12 @@ const (
 	codexCommandHookFormat       = `[{hooks=[{type="command",command=%s,timeout=%d}]}]`
 	codexHookTimeoutSeconds      = int(agentevent.SignalTimeout/time.Second) + 1
 	codexAgentEventCommandFormat = `"$%s" %s`
+	codexPostToolUseHook         = "hooks." + agentevent.HookPostToolUse + "="
+	codexUserPromptSubmitHook    = "hooks." + agentevent.HookUserPromptSubmit + "="
+
+	// noticeHookFormat leaves the qrouton binary unstarted while the queue is
+	// empty, which it is on almost every tool call.
+	noticeHookFormat = "[ -s %s ] || exit 0; exec %s " + AgentNoticeSubcommand + " " + sessionRootFlag + " %s"
 
 	openCodeMCPKey        = "mcp"
 	openCodeLocalType     = "local"

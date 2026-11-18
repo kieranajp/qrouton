@@ -121,7 +121,7 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: req.Name, Slug: slug, Description: req.Description,
 		TicketURL: req.Ticket, Mode: req.Mode.effective(), Runner: req.Runner, Profile: req.Profile, CreatedAt: time.Now(), ThoughtsRoot: thoughts.ID}
 	var err error
-	if m, err = ComposeRepos(cfg, m, req.Repos, req.Prefix+branchSeparator+slug, progress); err != nil {
+	if m, err = ComposeRepos(context.Background(), cfg, m, req.Repos, req.Prefix+branchSeparator+slug, progress); err != nil {
 		return "", err
 	}
 
@@ -203,7 +203,7 @@ func within(parent, path string) bool {
 	return err == nil && filepath.IsLocal(rel)
 }
 
-func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, worktreePath string, progress ProgressFunc) (ManifestRepo, error) {
+func materialise(ctx context.Context, cfg *config.Config, dir string, sel RepoSelection, branch, worktreePath string, progress ProgressFunc) (ManifestRepo, error) {
 	r := sel.Repo
 	role := sel.Role.Effective()
 	if role != RepoRoleEditing && role != RepoRoleReference {
@@ -215,7 +215,7 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 	url := sshURL(r.Org, r)
 	rep := reporter{fn: progress, repo: &r, role: role}
 	if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
-		return ensureMirror(cfg.Root, r.Org, r.Name, url, r.DefaultBranch, advance)
+		return ensureMirror(ctx, cfg.Root, r.Org, r.Name, url, r.DefaultBranch, advance)
 	}); err != nil {
 		return ManifestRepo{}, err
 	}
@@ -223,19 +223,26 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 		BaseBranch: sel.Base, WorktreePath: worktreePath, SSHURL: url}
 	from := mr.BaseRef()
 	mirror := mirrorPath(cfg.Root, r.Org, r.Name)
+	path := filepath.Join(dir, worktreePath)
+	_, statErr := os.Lstat(path)
+	// A directory that was there before the step is not this add's to remove.
+	fresh := os.IsNotExist(statErr)
 	err := rep.step(ProgressWorktree, func(func(string, int)) error {
 		if role != RepoRoleReference {
 			mr.Branch = branch
-			return addWorktree(mirror, filepath.Join(dir, worktreePath), branch, from)
+			return addWorktree(ctx, mirror, path, branch, from)
 		}
-		revision, err := resolveRevision(mirror, from)
+		revision, err := resolveRevision(ctx, mirror, from)
 		if err != nil {
 			return err
 		}
 		mr.Revision = revision
-		return addDetachedWorktree(mirror, filepath.Join(dir, worktreePath), revision)
+		return addDetachedWorktree(ctx, mirror, path, revision)
 	})
 	if err != nil {
+		if fresh {
+			removeHalfMadeWorktree(mirror, path)
+		}
 		return ManifestRepo{}, err
 	}
 	return mr, nil
@@ -245,7 +252,7 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 // worktrees, manifest entries — without writing the manifest, so a caller can
 // fold repos, mode, and an escalation outcome into one atomic write. branch is
 // the session branch editing repositories are cut on.
-func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch string, progress ProgressFunc) (Manifest, error) {
+func ComposeRepos(ctx context.Context, cfg *config.Config, m Manifest, sels []RepoSelection, branch string, progress ProgressFunc) (Manifest, error) {
 	dir := filepath.Join(cfg.Root, m.Slug)
 	if err := os.MkdirAll(sessionpaths.Src(dir), dirMode); err != nil {
 		return m, err
@@ -267,7 +274,7 @@ func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch s
 		if nameCounts[sel.Repo.Name] > 1 {
 			worktreePath = filepath.Join(sessionpaths.SrcDirName, Slugify(sel.Repo.Org+slugSeparator+sel.Repo.Name))
 		}
-		mr, err := materialise(cfg, dir, sel, branch, worktreePath, progress)
+		mr, err := materialise(ctx, cfg, dir, sel, branch, worktreePath, progress)
 		if err != nil {
 			return m, err
 		}
@@ -290,21 +297,23 @@ func hasRepo(repos []ManifestRepo, org, name string) bool {
 }
 
 // HeadRevision is the full SHA a worktree's HEAD points at.
-func HeadRevision(worktree string) (string, error) { return resolveRevision(worktree, headRef) }
+func HeadRevision(worktree string) (string, error) {
+	return resolveRevision(context.Background(), worktree, headRef)
+}
 
-func resolveRevision(mirror, ref string) (string, error) {
-	out, err := gitOutput(context.Background(), dirFlag, mirror, revParseCmd, verifyFlag, ref+commitRefSuffix)
+func resolveRevision(ctx context.Context, mirror, ref string) (string, error) {
+	out, err := gitOutput(ctx, dirFlag, mirror, revParseCmd, verifyFlag, ref+commitRefSuffix)
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(out), nil
 }
 
-func addDetachedWorktree(mirror, path, revision string) error {
-	if err := git(dirFlag, mirror, worktreeCmd, worktreePrune); err != nil {
+func addDetachedWorktree(ctx context.Context, mirror, path, revision string) error {
+	if err := git(ctx, dirFlag, mirror, worktreeCmd, worktreePrune); err != nil {
 		return err
 	}
-	return gitWorktreeAdd(mirror, detachFlag, path, revision)
+	return gitWorktreeAdd(ctx, mirror, detachFlag, path, revision)
 }
 
 func sshURL(org string, r github.Repo) string {

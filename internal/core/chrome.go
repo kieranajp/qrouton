@@ -205,7 +205,9 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 		}
 		shown.mu.Unlock()
 		fields.Activity = shown.agents.state()
-		fields.Picker = shown.PendingPicker() != nil
+		if pending := shown.PendingPicker(); pending != nil {
+			fields.Picker, fields.PickerID = true, pending.ID
+		}
 		if shown.alive() {
 			fields.Terminal = shown.terminal
 		}

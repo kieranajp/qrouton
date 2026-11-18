@@ -21,3 +21,11 @@ const (
 
 	signalTimeout = eventlog.SignalTimeout
 )
+
+const (
+	noticeCommandName  = launch.AgentNoticeSubcommand
+	noticeCommandUsage = "Hand queued workbench notices to the main agent from a runner hook"
+
+	sessionRootFlag  = launch.SessionRootFlag
+	sessionRootUsage = "qrouton session root"
+)

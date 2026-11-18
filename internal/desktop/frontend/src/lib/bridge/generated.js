@@ -23,6 +23,7 @@ export const OLLAMA_CANCEL_PULL = "github.com/kieranajp/qrouton/internal/desktop
 export const OLLAMA_CHECK = "github.com/kieranajp/qrouton/internal/desktop.Ollama.Check";
 export const OLLAMA_PULL = "github.com/kieranajp/qrouton/internal/desktop.Ollama.Pull";
 export const ORGS_LIST = "github.com/kieranajp/qrouton/internal/desktop.Orgs.List";
+export const PICKER_ABORT = "github.com/kieranajp/qrouton/internal/desktop.Picker.Abort";
 export const PICKER_CANCEL = "github.com/kieranajp/qrouton/internal/desktop.Picker.Cancel";
 export const PICKER_CONFIRM = "github.com/kieranajp/qrouton/internal/desktop.Picker.Confirm";
 export const PICKER_ESCALATE = "github.com/kieranajp/qrouton/internal/desktop.Picker.Escalate";
@@ -380,7 +381,7 @@ export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green
 /** @type {readonly StickerSymbol[]} */
 export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, placing: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, pickerID: string, welcoming: boolean, placing: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -407,6 +408,7 @@ export const CHROME_DEFAULTS = {
   },
   root: "",
   picker: false,
+  pickerID: "",
   welcoming: false,
   placing: false,
   stickers: [],

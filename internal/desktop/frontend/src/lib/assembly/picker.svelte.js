@@ -1,20 +1,26 @@
 import { call } from "../wails.js";
 import { browsing } from "./browse.svelte.js";
 import * as go from "./calls.js";
+import { following } from "./following.svelte.js";
 import { refusal } from "./steps.js";
 
 /** Picker state is provisional until confirmation reaches Go.
  * @param {() => string} slug
+ * @param {() => string} requestID the escalation answered, empty for a plain add
  * @param {() => void} done */
-export function picking(slug, done) {
+export function picking(slug, requestID, done) {
   let branch = $state("");
   let status = $state("");
   let answering = $state(false);
+  let adding = $state(false);
+  let running = false;
+  let aborting = false;
 
   /** @param {string} text */
   const report = (text) => (status = text);
 
   const repos = browsing(() => branch, report);
+  const progress = following(slug);
 
   call(go.held(slug())).then((answer) => {
     if (!answer.ok) return report(refusal(answer.error));
@@ -27,20 +33,37 @@ export function picking(slug, done) {
   async function confirm() {
     if (answering) return;
     answering = true;
+    adding = true;
+    running = true;
+    progress.clear();
     const picked = { repos: repos.ordered, upgrades: repos.upgrading };
-    const added = await call(go.addRepos(slug(), picked));
+    const added = await call(go.addRepos(slug(), requestID(), picked));
+    running = false;
+    aborting = false;
     if (!added.ok) {
       answering = false;
+      adding = false;
       status = refusal(added.error);
       return;
     }
     done();
   }
 
+  // An aborted add answers through its own pending call, which restores the list.
+  // An abort that finds no add yet leaves Cancel live to press again.
+  async function abort() {
+    if (aborting) return;
+    aborting = true;
+    const aborted = await call(go.abortAdd(slug()));
+    if (!aborted.ok) status = refusal(aborted.error);
+    if (!aborted.ok || !aborted.value) aborting = false;
+  }
+
   async function cancel() {
+    if (running) return abort();
     if (answering) return;
     answering = true;
-    const cancelled = await call(go.cancelPicker(slug()));
+    const cancelled = await call(go.cancelPicker(slug(), requestID()));
     if (!cancelled.ok) {
       answering = false;
       status = refusal(cancelled.error);
@@ -59,6 +82,12 @@ export function picking(slug, done) {
     },
     get answering() {
       return answering;
+    },
+    get adding() {
+      return adding;
+    },
+    get progress() {
+      return progress.rows;
     },
     confirm,
     cancel,

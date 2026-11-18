@@ -32,16 +32,17 @@ const (
 	// agyHomeDirName holds the configuration root an agy session is pointed at.
 	agyHomeDirName = "agy"
 
-	manifestLockName   = "manifest.lock"
-	notifyScriptName   = "notify.sh"
-	workbenchLogName   = "workbench.log"
-	agentLogName       = "agent.log"
-	handoffName        = "handoff.md"
-	handoffPendingName = "handoff.pending"
-	initialPromptName  = "initial-prompt"
-	agentNoticeName    = "agent-notice"
-	agentPIDName       = "agent.pid"
-	openedName         = "opened"
+	manifestLockName    = "manifest.lock"
+	notifyScriptName    = "notify.sh"
+	workbenchLogName    = "workbench.log"
+	agentLogName        = "agent.log"
+	handoffName         = "handoff.md"
+	handoffPendingName  = "handoff.pending"
+	initialPromptName   = "initial-prompt"
+	agentNoticeName     = "agent-notice"
+	agentNoticeLockName = "agent-notice.lock"
+	agentPIDName        = "agent.pid"
+	openedName          = "opened"
 
 	// sharePagesDirName holds rendered pages staged for the agent to publish.
 	// Distinct from thoughts/shared, which holds the documents themselves.
@@ -134,9 +135,14 @@ func InitialPrompt(root string) string {
 	return filepath.Join(Dir(root), initialPromptName)
 }
 
-// AgentNotice carries a workbench event until the next resumed runner launch.
+// AgentNotice queues workbench events until a runner hook or launch takes them.
 func AgentNotice(root string) string {
 	return filepath.Join(Dir(root), agentNoticeName)
+}
+
+// AgentNoticeLock is the advisory lock every queue and take of AgentNotice holds.
+func AgentNoticeLock(root string) string {
+	return filepath.Join(Dir(root), agentNoticeLockName)
 }
 
 // SharePages stages the self-contained pages rendered from session documents,

@@ -1,6 +1,8 @@
 package desktop
 
 import (
+	"context"
+
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
@@ -158,9 +160,13 @@ func (p *Picker) Escalate(slug string) error { return p.picker.Escalate(slug) }
 
 func (p *Picker) Load(slug string) (core.PickerFields, error) { return p.picker.Load(slug) }
 
-func (p *Picker) Confirm(slug string, in core.PickerInput) error { return p.picker.Confirm(slug, in) }
+func (p *Picker) Confirm(ctx context.Context, slug, requestID string, in core.PickerInput) error {
+	return p.picker.Confirm(ctx, slug, requestID, in)
+}
 
-func (p *Picker) Cancel(slug string) error { return p.picker.Cancel(slug) }
+func (p *Picker) Cancel(slug, requestID string) error { return p.picker.Cancel(slug, requestID) }
+
+func (p *Picker) Abort(slug string) (bool, error) { return p.picker.Abort(slug) }
 
 type Settings struct{ settings *core.Settings }
 

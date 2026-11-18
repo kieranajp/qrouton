@@ -8,8 +8,9 @@ import { decode } from "../src/lib/terminal-painter.js";
 import { encode, terminalAt } from "../src/lib/xterm.js";
 import { emitWailsEvent } from "./wails-runtime.js";
 
-import { CHROME_DEFAULTS, CHROME_EVENT, SESSIONS_SHOW, SESSIONS_UNCOMMITTED, TERM_WRITE, WINDOWS_WRITE } from "../src/lib/bridge/generated.js";
+import { CHROME_DEFAULTS, CHROME_EVENT, PICKER_CONFIRM, SESSIONS_SHOW, SESSIONS_UNCOMMITTED, TERM_WRITE, WINDOWS_WRITE } from "../src/lib/bridge/generated.js";
 const calls = [];
+let adding;
 let snapshot = { ...CHROME_DEFAULTS, slug: "octopus" };
 let showPending = [];
 let cleanupPending;
@@ -40,6 +41,7 @@ window.wailsCall = (name, ...args) => {
   if (name.endsWith("Windows.Content")) return DOCUMENT;
   if (name.endsWith("Windows.RenderDiagrams")) return [];
   if (name.endsWith("Windows.OpenShell")) return "window-9";
+  if (name === PICKER_CONFIRM) return new Promise((resolve) => (adding = resolve));
   if (name.endsWith("Picker.Load")) return { branch: "fix/octopus-4b2a", repos: [] };
   if (name.endsWith("Orgs.List") || name.endsWith("Repositories.Cached")) return [];
   if (name.endsWith("Updates.Status")) return updateStatus;
@@ -98,6 +100,8 @@ window.shell = {
   refuseSelect: (refuse) => (refuseSelect = refuse),
   selects: () =>
     calls.filter(({ name }) => name.endsWith("Windows.Select")).map(({ args }) => args),
+  finishAdd: () => adding?.(),
+  confirms: () => calls.filter(({ name }) => name === PICKER_CONFIRM).map(({ args }) => args.slice(0, 2)),
   escalations: () =>
     calls.filter(({ name }) => name.endsWith("Picker.Escalate")).map(({ args }) => args),
   started: () =>

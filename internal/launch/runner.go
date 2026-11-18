@@ -303,11 +303,18 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
 		" " + generationFlag + " " + fmt.Sprint(c.generation) +
 		" " + providerFlag + " " + runnerIDClaude
-	// Async, so a tool call never waits on the workbench; the tracker accepts
-	// events in any order.
+	// Event hooks are async, so a tool call never waits on the workbench; the
+	// tracker accepts events in any order. The notice hook is synchronous so its
+	// context lands in the turn it fired in.
+	event := hookEntry{command: hookCommand, async: true}
+	notice := hookEntry{command: noticeHookCommand(c.qroutonBin, c.dir)}
 	hooks := map[string]any{}
 	for _, hook := range claudeHooks {
-		hooks[hook] = commandHook(true, hookCommand)
+		entries := []hookEntry{event}
+		if slices.Contains(noticeHooks, hook) {
+			entries = append(entries, notice)
+		}
+		hooks[hook] = commandHook(entries...)
 	}
 	// Strings and maps of them: marshalling cannot fail.
 	settings, _ := json.Marshal(map[string]any{claudeHooksKey: hooks})
@@ -333,9 +340,12 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 	if !c.override {
 		argv = append(argv, codexBypassHookTrustFlag)
 	}
+	notice := fmt.Sprintf(codexCommandHookFormat, quotedConfigString(noticeHookCommand(c.qroutonBin, c.dir)), codexHookTimeoutSeconds)
 	argv = append(argv,
 		codex.ConfigFlag, codexSubagentStartHook+hook,
 		codex.ConfigFlag, codexSubagentStopHook+hook,
+		codex.ConfigFlag, codexPostToolUseHook+notice,
+		codex.ConfigFlag, codexUserPromptSubmitHook+notice,
 	)
 	return argv, agentEventEnv(c, runnerIDCodex), nil
 }
@@ -562,11 +572,24 @@ func agyMCPConfig(existing, bin string, args []string) (string, error) {
 	return string(b), nil
 }
 
-func commandHook(async bool, commands ...string) []map[string]any {
-	entries := make([]map[string]any, len(commands))
-	for i, command := range commands {
-		entries[i] = map[string]any{claudeTypeKey: claudeCommandType, claudeCommandKey: command}
-		if async {
+type hookEntry struct {
+	command string
+	async   bool
+}
+
+// noticeHooks are the events a running agent takes queued notices on: a busy
+// one at its next tool call, an idle one at the user's next prompt.
+var noticeHooks = []string{agentevent.HookPostToolUse, agentevent.HookUserPromptSubmit}
+
+func noticeHookCommand(qroutonBin, dir string) string {
+	return fmt.Sprintf(noticeHookFormat, ShellQuote(sessionpaths.AgentNotice(dir)), ShellQuote(qroutonBin), ShellQuote(dir))
+}
+
+func commandHook(hooks ...hookEntry) []map[string]any {
+	entries := make([]map[string]any, len(hooks))
+	for i, hook := range hooks {
+		entries[i] = map[string]any{claudeTypeKey: claudeCommandType, claudeCommandKey: hook.command}
+		if hook.async {
 			entries[i][claudeAsyncKey] = true
 		}
 	}

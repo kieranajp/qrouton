@@ -52,3 +52,6 @@ func mismatchedManifest(dir, slug string) error {
 
 // ErrUnreadableNumstat means git diff --numstat printed a line that is not two counts and a path.
 var ErrUnreadableNumstat = errors.New("unreadable git numstat output")
+
+// ErrGitStalled means git was stopped after a stretch with nothing on stderr.
+var ErrGitStalled = errors.New("git stalled and was stopped")

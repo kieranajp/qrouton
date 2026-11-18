@@ -21,6 +21,7 @@
   import UpdateButton from "./lib/UpdateButton.svelte";
   import Overlay from "./lib/assembly/Overlay.svelte";
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
+  import { ADD_KEY } from "./lib/assembly/steps.js";
   import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
   import PlacementOverlay from "./lib/placement/PlacementOverlay.svelte";
   import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
@@ -200,12 +201,13 @@
       onSettings={view.openSettings}
       onClose={() => (view.requested = false)} />
   {:else if view.picker}
-    <!-- Keyed on the session, so arriving at another one draws that session's
-         picker rather than keeping this one over it. -->
-    {#key fields.slug}
+    <!-- Keyed on the request it answers, so an escalation that waited out an add
+         gets an overlay of its own rather than the add's spent one. -->
+    {#key view.pickerKey}
       <PickerOverlay
         slug={fields.slug}
-        escalating={fields.picker}
+        requestID={view.pickerKey === ADD_KEY ? "" : view.pickerKey}
+        escalating={view.pickerKey !== ADD_KEY}
         onClose={() => (view.added = "")} />
     {/key}
   {/if}

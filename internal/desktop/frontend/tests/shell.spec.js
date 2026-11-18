@@ -59,10 +59,38 @@ test("assistant mode replaces RPI marks with a cube escalation action", async ({
       mode: "ASSISTANT",
       terminal: "term-1",
       picker: true,
+      pickerID: "e1",
       repos: [],
     }),
   );
   await expect(page.locator(".dialog").getByRole("button", { name: "Escalate", exact: true })).toBeVisible();
+});
+
+// An overlay keyed on the session relabels a running add when an escalation
+// arrives, then keeps its spent state, leaving both buttons dead.
+test("an escalation arriving during an add waits for it, then opens with live buttons", async ({ page }) => {
+  await open(page, "window-1", "ASSISTANT");
+  await page.getByRole("button", { name: "Add repos", exact: true }).click();
+  const dialog = page.locator(".dialog");
+  const add = dialog.getByRole("button", { name: "Add repositories" });
+  await add.click();
+  await expect(add).toBeDisabled();
+
+  await page.evaluate(() =>
+    window.shell.chrome({ identity: "Octopus", mode: "ASSISTANT", terminal: "term-1", picker: true, pickerID: "e1", repos: [] }),
+  );
+  await expect(add).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Escalate", exact: true })).toHaveCount(0);
+
+  await page.evaluate(() => window.shell.finishAdd());
+  const escalate = dialog.getByRole("button", { name: "Escalate", exact: true });
+  await expect(escalate).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  await escalate.click();
+  await expect.poll(() => page.evaluate(() => window.shell.confirms())).toEqual([
+    ["octopus", ""],
+    ["octopus", "e1"],
+  ]);
 });
 
 test("RPI mode keeps its workflow marks and has no escalation action", async ({ page }) => {

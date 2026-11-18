@@ -1,6 +1,7 @@
 package assembly
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -9,7 +10,7 @@ import (
 )
 
 // Confirm records repositories, work details, mode, and escalation atomically.
-func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.ProgressFunc) error {
+func (a Assembler) Confirm(ctx context.Context, dir string, d Draft, escalate bool, progress session.ProgressFunc) error {
 	// Loaded here, not carried in: a picker can sit open for half an hour while
 	// the workbench keeps rewriting the manifest underneath it.
 	m, err := session.Load(dir)
@@ -17,20 +18,27 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 		return err
 	}
 	branch := branchFor(m, d)
-	if err := a.takeUp(dir, d, branch, progress); err != nil {
+	if err := a.takeUp(ctx, dir, d, branch, progress); err != nil {
 		return err
 	}
 	// Composed outside the update: cloning takes minutes, and no other process
 	// may be kept off the manifest for them.
-	composed, err := session.ComposeRepos(a.Cfg, m, d.Repos, branch, progress)
+	composed, err := session.ComposeRepos(ctx, a.Cfg, m, d.Repos, branch, progress)
 	if err != nil {
 		if len(composed.Repos) == len(m.Repos) {
 			return err
 		}
-		// Completed checkouts must be discoverable so a retry keeps their work.
-		return errors.Join(err, session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {
-			return session.MergeRepos(out, composed.Repos), nil
-		}))
+		// Completed checkouts must be discoverable so a retry keeps their work, and
+		// the agent hears of them now: a retry's notice names only what it adds.
+		var kept session.Manifest
+		merged := session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {
+			kept = session.MergeRepos(out, composed.Repos)
+			return kept, nil
+		})
+		if merged == nil {
+			_ = session.QueueAgentNotice(dir, repositoryNotice(m, kept))
+		}
+		return errors.Join(err, merged)
 	}
 	var updated session.Manifest
 	if err := session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {
@@ -61,7 +69,7 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 }
 
 // takeUp records upgraded checkouts before cloning additions can fail.
-func (a Assembler) takeUp(dir string, d Draft, branch string, progress session.ProgressFunc) error {
+func (a Assembler) takeUp(ctx context.Context, dir string, d Draft, branch string, progress session.ProgressFunc) error {
 	if len(d.Upgrades) == 0 {
 		return nil
 	}
@@ -69,7 +77,7 @@ func (a Assembler) takeUp(dir string, d Draft, branch string, progress session.P
 	if err != nil {
 		return err
 	}
-	if err := session.UpgradeRepos(a.Cfg, m, d.Upgrades, branch, progress); err != nil {
+	if err := session.UpgradeRepos(ctx, a.Cfg, m, d.Upgrades, branch, progress); err != nil {
 		return err
 	}
 	return session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {

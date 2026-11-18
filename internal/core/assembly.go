@@ -180,12 +180,11 @@ func (a *Assembly) Create(in DraftInput) error {
 		return err
 	}
 	slug := draft.Slug()
-	progress := func(p session.Progress) { a.emit(assemblyProgressEvent, newProgressEvent(slug, p)) }
 	root, err := session.Create(cfg, session.CreateRequest{
 		Name: draft.Name, Slug: slug, Description: draft.Description, Ticket: draft.Ticket,
 		InitialPrompt: a.offers.Prompt(), Prefix: draft.Prefix, Mode: mode, Runner: in.Runner, Profile: in.Profile,
 		Repos: draft.Repos, Entropy: draft.Entropy,
-	}, progress)
+	}, progressTo(a.emit, slug))
 	if err != nil {
 		return err
 	}

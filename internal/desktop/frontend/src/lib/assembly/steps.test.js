@@ -9,6 +9,7 @@ import {
   joining,
   labels,
   last,
+  pickerKey,
   pickerOpen,
   primary,
   refusal,
@@ -72,15 +73,25 @@ test("assembly waits for the first payload before deciding there is no session",
 });
 
 test("the picker is open for an escalation waiting on the session on screen", () => {
-  assert.equal(pickerOpen("billing", true, ""), true);
-  assert.equal(pickerOpen("billing", false, ""), false);
-  assert.equal(pickerOpen("", true, ""), false);
+  assert.equal(pickerOpen("", "billing", "e1"), true);
+  assert.equal(pickerOpen("", "billing", ""), false);
+  assert.equal(pickerOpen("", "", "e1"), false);
 });
 
 // Add-repos belongs to the session it was pressed on, so switching away closes it.
 test("add-repos is open only over the session it was pressed on", () => {
-  assert.equal(pickerOpen("billing", false, "billing"), true);
-  assert.equal(pickerOpen("webhooks", false, "billing"), false);
+  assert.equal(pickerOpen("billing", "billing", ""), true);
+  assert.equal(pickerOpen("billing", "webhooks", ""), false);
+});
+
+// Keyed on the escalation, a mid-add arrival would remount the running add as an Escalate.
+test("the overlay stays with a running add until it ends, then answers the escalation", () => {
+  assert.equal(pickerKey("billing", "billing", ""), "add");
+  assert.equal(pickerKey("billing", "billing", "e1"), "add");
+  assert.equal(pickerKey("", "billing", "e1"), "e1");
+  assert.equal(pickerKey("", "billing", "e2"), "e2");
+  assert.equal(pickerKey("", "billing", ""), "");
+  assert.equal(pickerKey("billing", "webhooks", "e1"), "e1");
 });
 
 test("a refusal reads as the sentence, without the field Go named it by", () => {

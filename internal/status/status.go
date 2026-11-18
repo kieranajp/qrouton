@@ -49,6 +49,8 @@ type Fields struct {
 	// Picker means the shown session has an escalation waiting on it. It is
 	// workbench-side knowledge, so a file read never sets it.
 	Picker bool `json:"picker"`
+	// PickerID names the waiting escalation, so an answer reaches only that one.
+	PickerID string `json:"pickerID"`
 	// Welcoming means this window is asking the first-run questions, which only a
 	// window holding no session does. Workbench-side knowledge too, so a file read
 	// never sets it.

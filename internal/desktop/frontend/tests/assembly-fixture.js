@@ -28,7 +28,7 @@ window.wailsCall = (name, ...args) => {
   if (name.endsWith(".Runners")) return structuredClone(window.runnerRows ?? DEFAULT_RUNNERS);
   if (name === PROFILES_STATUS) return structuredClone(window.profileStatuses ?? []);
   if (name.endsWith(".Prefixes") || name.endsWith(".List") || name.endsWith(".Check")) return [];
-  if (name.endsWith(".Preview")) return "";
+  if (name.endsWith(".Preview")) return window.previewBranch ?? "";
   return undefined;
 };
 
