@@ -76,7 +76,7 @@ var claudeHooks = []string{
 	agentevent.HookSubagentStart, agentevent.HookSubagentStop,
 	agentevent.HookNotification, agentevent.HookStop, agentevent.HookStopFailure,
 	agentevent.HookPreToolUse, agentevent.HookPostToolUse, agentevent.HookPostToolUseFailure,
-	agentevent.HookUserPromptSubmit,
+	agentevent.HookUserPromptSubmit, agentevent.HookSessionStart,
 }
 
 var runnerSpecs = []runnerSpec{

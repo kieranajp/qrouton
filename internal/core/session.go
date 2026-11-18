@@ -501,7 +501,7 @@ func (s *Sessions) SwitchProfile(slug, profileID string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := session.ReadConversation(root); !ok {
+	if _, ok := s.conversationToMove(root, manifest); !ok {
 		return ErrNoConversation
 	}
 	state := s.BySlug(slug)
@@ -520,7 +520,7 @@ func (s *Sessions) SwitchProfile(slug, profileID string) error {
 		}
 	}
 	// Read again once nothing can write it, so the copy and the boot name one conversation.
-	conversation, ok := session.ReadConversation(root)
+	conversation, ok := s.conversationToMove(root, manifest)
 	if !ok {
 		return errors.Join(ErrNoConversation, s.replace(root, fallback, emptied))
 	}
@@ -531,7 +531,7 @@ func (s *Sessions) SwitchProfile(slug, profileID string) error {
 // first the manifest names the profile, then the record names the copy. A record
 // that cannot follow puts the manifest back, so the two never disagree.
 func (s *Sessions) move(root string, from session.Manifest, profileID, stateDir string, c session.Conversation) error {
-	copied, err := launch.CopyConversation(from.Runner, s.committedTranscript(from, c), stateDir)
+	copied, err := launch.CopyConversation(from.Runner, c.Transcript, stateDir)
 	if err != nil {
 		return err
 	}
@@ -542,6 +542,18 @@ func (s *Sessions) move(root string, from session.Manifest, profileID, stateDir 
 		return errors.Join(err, setProfile(root, from.Slug, from.Profile))
 	}
 	return nil
+}
+
+// conversationToMove is the recorded conversation with the transcript a switch
+// copies, and false until that transcript exists.
+func (s *Sessions) conversationToMove(root string, m session.Manifest) (session.Conversation, bool) {
+	c, ok := session.ReadConversation(root)
+	if !ok {
+		return c, false
+	}
+	c.Transcript = s.committedTranscript(m, c)
+	_, err := os.Stat(c.Transcript)
+	return c, err == nil
 }
 
 // committedTranscript is the committed profile's own copy of the conversation

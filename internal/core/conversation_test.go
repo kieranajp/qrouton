@@ -2,6 +2,7 @@ package core
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -72,5 +73,24 @@ func TestARepeatedPairIsWrittenOnce(t *testing.T) {
 	state.keepConversation(conversationEvent(1, recordedID))
 	if _, err := os.Stat(sessionpaths.Conversation(state.Root())); !os.IsNotExist(err) {
 		t.Fatalf("the same pair was written twice: %v", err)
+	}
+}
+
+// Catches a conversation picked with /resume staying unrecorded until its first
+// prompt: SessionStart alone has to move the record.
+func TestASessionStartMovesTheRecordWithoutAPrompt(t *testing.T) {
+	const picked = "c0ffee00-0000-4000-8000-000000000000"
+	state := conversationState(t)
+	state.keepConversation(conversationEvent(1, recordedID))
+	payload := `{"session_id":"` + picked + `","transcript_path":"/home/user/.claude/projects/-tmp-s/` + picked +
+		`.jsonl","cwd":"/tmp/s","hook_event_name":"SessionStart","source":"resume"}`
+	event, err := agentevent.ReduceIn(agentProviderClaude, state.Root(), strings.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	event.Generation = 1
+	state.keepConversation(event)
+	if got, _ := session.ReadConversation(state.Root()); got.ID != picked {
+		t.Fatalf("the record names %q after SessionStart, want %q", got.ID, picked)
 	}
 }

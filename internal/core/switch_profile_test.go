@@ -165,18 +165,25 @@ func TestSwitchProfileThatCannotCopyBootsBackOnTheOldProfile(t *testing.T) {
 // Catches a refusal that stops the session first and leaves it down.
 func TestSwitchProfileRefusesBeforeStoppingAnything(t *testing.T) {
 	for name, tc := range map[string]struct {
-		runner, target string
-		record         bool
-		want           error
+		runner, target    string
+		record, unwritten bool
+		want              error
 	}{
-		"codex session":   {"codex", "b", true, ErrProfileUnswitchable},
-		"unknown profile": {"claude", "zzz", true, launch.ErrProfileUnavailable},
-		"no conversation": {"claude", "b", false, ErrNoConversation},
+		"codex session":   {"codex", "b", true, false, ErrProfileUnswitchable},
+		"unknown profile": {"claude", "zzz", true, false, launch.ErrProfileUnavailable},
+		"no conversation": {"claude", "b", false, false, ErrNoConversation},
+		// SessionStart names a fresh conversation before Claude writes its transcript.
+		"no transcript yet": {"claude", "b", true, true, ErrNoConversation},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newSwitchFixture(t, tc.runner)
 			if tc.record {
 				f.record(t)
+			}
+			if tc.unwritten {
+				if err := os.RemoveAll(f.profiles["a"]); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err := f.reg.SwitchProfile("octopus", tc.target); !errors.Is(err, tc.want) {
 				t.Fatalf("SwitchProfile = %v, want %v", err, tc.want)

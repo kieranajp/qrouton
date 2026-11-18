@@ -1039,3 +1039,27 @@ func TestCodexInjectsTheNoticeHooks(t *testing.T) {
 		t.Fatal("the notice hook made Codex declare PostToolUse events it never reports")
 	}
 }
+
+// Catches /resume inside Claude going unrecorded until the next prompt, so a
+// Reload or a profile switch in between would still resume the old conversation.
+func TestClaudeReportsAConversationChangeAsItStarts(t *testing.T) {
+	argv, _, err := runnerLaunch(Runner{ID: runnerIDClaude, Command: []string{runnerIDClaude}}, "/bin/qrouton", t.TempDir(),
+		EditorCommand{}, testHandle(), 1, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(argv[slices.Index(argv, "--settings")+1]), &settings); err != nil {
+		t.Fatal(err)
+	}
+	groups := settings.Hooks["SessionStart"]
+	if len(groups) == 0 || len(groups[0].Hooks) == 0 || !strings.Contains(groups[0].Hooks[0].Command, AgentEventSubcommand) {
+		t.Fatalf("SessionStart hooks = %+v, want the agent-event callback", groups)
+	}
+}

@@ -11,6 +11,7 @@ import (
 const SignalTimeout = 2 * time.Second
 
 const (
+	HookSessionStart  = "SessionStart"
 	HookSubagentStart = "SubagentStart"
 	HookSubagentStop  = "SubagentStop"
 	HookNotification  = "Notification"
