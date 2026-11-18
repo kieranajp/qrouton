@@ -55,6 +55,7 @@ type SessionState struct {
 
 	conversationMu sync.Mutex
 	recorded       recordedConversation
+	held           bool
 }
 
 type recordedConversation struct {
@@ -73,13 +74,21 @@ func (s *SessionState) keepConversation(event workbench.AgentEventRequest) {
 	s.agents.whileCurrent(event.Provider, event.Generation, func() {
 		s.conversationMu.Lock()
 		defer s.conversationMu.Unlock()
-		if s.recorded == next {
+		if s.held || s.recorded == next {
 			return
 		}
 		if session.RecordConversation(s.Root(), next.conversation) == nil {
 			s.recorded = next
 		}
 	})
+}
+
+// holdConversation stops hooks rewriting the record, once any write already
+// under way has finished.
+func (s *SessionState) holdConversation() {
+	s.conversationMu.Lock()
+	defer s.conversationMu.Unlock()
+	s.held = true
 }
 
 // RequestPicker queues an escalation on this session under a fresh id. A later
@@ -491,8 +500,7 @@ func (s *Sessions) SwitchProfile(slug, profileID string) error {
 	if err != nil {
 		return err
 	}
-	conversation, ok := session.ReadConversation(root)
-	if !ok {
+	if _, ok := session.ReadConversation(root); !ok {
 		return ErrNoConversation
 	}
 	state := s.BySlug(slug)
@@ -504,10 +512,16 @@ func (s *Sessions) SwitchProfile(slug, profileID string) error {
 	var fallback *SessionState
 	var emptied bool
 	if state != nil {
+		state.holdConversation()
 		var drained error
 		if fallback, emptied, drained = s.recycleDrained(state); drained != nil {
 			return errors.Join(drained, s.replace(root, fallback, emptied))
 		}
+	}
+	// Read again once nothing can write it, so the copy and the boot name one conversation.
+	conversation, ok := session.ReadConversation(root)
+	if !ok {
+		return errors.Join(ErrNoConversation, s.replace(root, fallback, emptied))
 	}
 	moved := launch.CopyConversation(manifest.Runner, conversation.Transcript, stateDir)
 	if moved == nil {

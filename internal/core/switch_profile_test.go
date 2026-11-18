@@ -9,10 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 const switchID = "b8aaffa4-120a-4a6d-bf40-cc703dc147b8"
@@ -276,4 +278,52 @@ func TestSwitchProfileToTheDefaultLandsInTheInheritedFolder(t *testing.T) {
 	if got := f.manifestProfile(t); got != "" {
 		t.Fatalf("manifest names %q, want the default", got)
 	}
+}
+
+// Catches the switch copying one conversation while the replacement resumes
+// another, because a writer named a new one after the switch first read it.
+func TestSwitchProfileBootsTheConversationItCopied(t *testing.T) {
+	const later = "c0ffee00-0000-4000-8000-000000000000"
+	for name, tc := range map[string]struct {
+		teardown, boot func(t *testing.T, f *switchFixture)
+	}{
+		"write during teardown": {teardown: func(t *testing.T, f *switchFixture) { f.recordID(t, later) }},
+		"root hook landing after the drain": {boot: func(t *testing.T, f *switchFixture) {
+			f.before.keepConversation(claudeEventWith(1, f.write(t, later)))
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newSwitchFixture(t, "claude")
+			f.record(t)
+			f.before.agents.begin("claude", 1)
+			teardown := f.reg.boot.teardown
+			f.reg.boot.teardown = func(state *SessionState) {
+				if tc.teardown != nil {
+					tc.teardown(t, f)
+				}
+				teardown(state)
+			}
+			var resumes string
+			var held bool
+			f.boot.booting = func(AgentRequest) {
+				if tc.boot != nil {
+					tc.boot(t, f)
+				}
+				recorded, _ := session.ReadConversation(f.root)
+				resumes, held = recorded.ID, f.copied(recorded.ID)
+			}
+			if err := f.reg.SwitchProfile("octopus", "b"); err != nil {
+				t.Fatal(err)
+			}
+			if !held {
+				t.Fatalf("the replacement resumes %q, which the switch did not copy", resumes)
+			}
+		})
+	}
+}
+
+func claudeEventWith(generation uint64, c session.Conversation) workbench.AgentEventRequest {
+	return claudeEvent(agentevent.HookUserPromptSubmit, func(e *workbench.AgentEventRequest) {
+		e.Generation, e.ConversationID, e.TranscriptPath = generation, c.ID, c.Transcript
+	})
 }
