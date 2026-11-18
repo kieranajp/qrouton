@@ -55,9 +55,7 @@ type runnerSpec struct {
 	LoginArgs     []string
 	StatusArgs    []string
 	ReadStatus    func(out []byte, exit int) SignIn
-	// Conversation moves a conversation between profiles, and is nil for a
-	// runner whose sessions cannot switch profile.
-	Conversation *conversationSpec
+	Conversation  *conversationSpec
 }
 
 type injectContext struct {

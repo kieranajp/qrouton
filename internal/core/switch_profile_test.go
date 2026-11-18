@@ -4,11 +4,16 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 const switchID = "b8aaffa4-120a-4a6d-bf40-cc703dc147b8"
@@ -23,10 +28,13 @@ type switchFixture struct {
 	before   *SessionState
 }
 
-func newSwitchFixture(t *testing.T, runner string) *switchFixture {
+func newSwitchFixture(t *testing.T, runner string, argv ...string) *switchFixture {
 	t.Helper()
 	sessions := t.TempDir()
-	boot := newStubBoot("/bin/cat")
+	if len(argv) == 0 {
+		argv = []string{"/bin/cat"}
+	}
+	boot := newStubBoot(argv...)
 	reg, _, r := testSessions(t, sessions, boot)
 	f := &switchFixture{reg: reg, boot: boot, root: sessionDir(t, sessions, "octopus"),
 		profiles: map[string]string{"a": t.TempDir(), "b": t.TempDir()}}
@@ -170,4 +178,73 @@ func TestSwitchProfileToTheCurrentProfileDoesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.untouched(t)
+}
+
+// Catches a switch copying while the runner the supervisor started may still be
+// writing the conversation, because only the supervisor was waited for.
+func TestSwitchProfileCopiesOnlyOnceTheRunnerHasExited(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "runner.pid")
+	f := newSwitchFixture(t, "claude", "/bin/sh", "-c", "(trap '' TERM HUP; exec sleep 300) & echo $! > "+marker+"; wait")
+	f.record(t)
+	f.before.mu.Lock()
+	f.before.process.grace = 50 * time.Millisecond
+	f.before.mu.Unlock()
+	var runner int
+	waitFor(t, "the runner's pid", func() bool {
+		b, err := os.ReadFile(marker)
+		if err != nil {
+			return false
+		}
+		runner, err = strconv.Atoi(strings.TrimSpace(string(b)))
+		return err == nil && runner > 0
+	})
+	t.Cleanup(func() { _ = syscall.Kill(runner, syscall.SIGKILL) })
+	var runnerAlive bool
+	f.boot.booting = func(AgentRequest) { runnerAlive = syscall.Kill(runner, 0) == nil }
+	if err := f.reg.SwitchProfile("octopus", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if runnerAlive {
+		t.Fatal("the switch copied and rebooted while the previous runner was still running")
+	}
+}
+
+// Catches a switch stopping nothing yet still copying and rewriting the manifest
+// under a supervisor another workbench owns.
+func TestSwitchProfileRefusesASupervisorFromAnotherWorkbench(t *testing.T) {
+	f := newSwitchFixture(t, "claude")
+	f.record(t)
+	if err := f.reg.Unload("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sessionpaths.AgentPID(f.root), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.reg.SwitchProfile("octopus", "b"); err == nil {
+		t.Fatal("a switch went ahead under another workbench's supervisor")
+	}
+	if agents, _ := f.boot.counts(); agents != 1 || f.manifestProfile(t) != "a" {
+		t.Fatalf("asked for %d supervisors and left the manifest on %q", agents, f.manifestProfile(t))
+	}
+	if _, err := os.Stat(filepath.Join(f.profiles["b"], "projects")); !os.IsNotExist(err) {
+		t.Fatalf("the conversation was copied: %v", err)
+	}
+}
+
+// Catches a switch to the default profile writing anywhere but the folder the
+// runner will read once no profile moves it.
+func TestSwitchProfileToTheDefaultLandsInTheInheritedFolder(t *testing.T) {
+	f := newSwitchFixture(t, "claude")
+	f.record(t)
+	home := t.TempDir()
+	f.reg.boot.environ = func() []string { return []string{"HOME=" + home} }
+	if err := f.reg.SwitchProfile("octopus", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".claude", "projects", "-octopus", switchID+".jsonl")); err != nil {
+		t.Fatalf("the default profile's folder holds no copy: %v", err)
+	}
+	if got := f.manifestProfile(t); got != "" {
+		t.Fatalf("manifest names %q, want the default", got)
+	}
 }

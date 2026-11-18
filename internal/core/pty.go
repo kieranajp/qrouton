@@ -152,7 +152,8 @@ func (p *PTY) StopGroup() {
 func groupGone(group int, within time.Duration) bool {
 	deadline := time.Now().Add(within)
 	for {
-		if errors.Is(syscall.Kill(-group, 0), syscall.ESRCH) {
+		// macOS answers EPERM for a group left holding only zombies.
+		if err := syscall.Kill(-group, 0); errors.Is(err, syscall.ESRCH) || errors.Is(err, syscall.EPERM) {
 			return true
 		}
 		if !time.Now().Before(deadline) {

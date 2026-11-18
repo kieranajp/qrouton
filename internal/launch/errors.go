@@ -21,7 +21,6 @@ var (
 
 	ErrNoHome = errors.New("HOME is not set, so the default profile's folder is unknown")
 
-	// ErrUnplacedTranscript means a transcript sits in no project folder to copy it under.
 	ErrUnplacedTranscript = errors.New("transcript is not inside a project folder")
 
 	ErrLoginShell = errors.New("login shell could not start")

@@ -294,9 +294,15 @@ func testSessions(t *testing.T, root string, boot *stubBoot) (*Sessions, *Window
 		teardown: windows.stop,
 		reveal:   r.Reveal,
 		profile:  func(string, string) (config.RunnerProfile, bool) { return config.RunnerProfile{}, false },
-		environ:  os.Environ,
+		environ:  scratchEnviron(t),
 	}
 	return reg, windows, r
+}
+
+// scratchEnviron keeps a switch to the default profile out of the real ~/.claude.
+func scratchEnviron(t *testing.T) func() []string {
+	home := t.TempDir()
+	return func() []string { return []string{"HOME=" + home} }
 }
 
 // testRegistry is a workbench showing one session.

@@ -121,6 +121,7 @@ func TestStopGroupReturnsOnlyOnceAGrandchildIgnoringSIGTERMIsGone(t *testing.T) 
 		grandchild, err = strconv.Atoi(strings.TrimSpace(string(b)))
 		return err == nil && grandchild > 0
 	})
+	t.Cleanup(func() { _ = syscall.Kill(grandchild, syscall.SIGKILL) })
 
 	stopped := make(chan struct{})
 	go func() {

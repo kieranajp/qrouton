@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -133,7 +134,7 @@ func TestOnlyClaudeSwitchesProfiles(t *testing.T) {
 			t.Errorf("SwitchesProfiles(%q) = %v", spec.ID, got)
 		}
 	}
-	if err := CopyConversation(runnerIDCodex, "/p/-s/x.jsonl", t.TempDir()); err == nil {
-		t.Fatal("codex copied a conversation")
+	if err := CopyConversation(runnerIDCodex, "/p/-s/x.jsonl", t.TempDir()); !errors.Is(err, ErrProfileSwitchUnsupported) {
+		t.Fatalf("CopyConversation for codex = %v, want ErrProfileSwitchUnsupported", err)
 	}
 }
