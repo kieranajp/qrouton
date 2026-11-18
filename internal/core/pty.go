@@ -131,6 +131,37 @@ func (p *PTY) Stop() {
 	_ = file.Close()
 }
 
+// StopGroup is Stop that returns only once every process the child spawned has
+// exited too, killing the group if any outlives the grace.
+func (p *PTY) StopGroup() {
+	p.mu.Lock()
+	cmd := p.cmd
+	p.mu.Unlock()
+	p.Stop()
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	group := cmd.Process.Pid
+	if groupGone(group, p.grace) {
+		return
+	}
+	_ = syscall.Kill(-group, syscall.SIGKILL)
+	groupGone(group, p.grace)
+}
+
+func groupGone(group int, within time.Duration) bool {
+	deadline := time.Now().Add(within)
+	for {
+		if errors.Is(syscall.Kill(-group, 0), syscall.ESRCH) {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		time.Sleep(groupPollInterval)
+	}
+}
+
 func exitCode(err error) int {
 	if err == nil {
 		return 0

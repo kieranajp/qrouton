@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"os"
 	"strconv"
 	"strings"
@@ -104,4 +105,34 @@ func ptySize(p *PTY) (cols, rows int, err error) {
 		return 0, 0, err
 	}
 	return int(size.Cols), int(size.Rows), nil
+}
+
+// Catches a switch copying the conversation while the runner the supervisor
+// started is still writing it: Stop returns once the supervisor alone has exited.
+func TestStopGroupReturnsOnlyOnceAGrandchildIgnoringSIGTERMIsGone(t *testing.T) {
+	marker := t.TempDir() + "/grandchild.pid"
+	p := startTestPTY(t, "/bin/sh", "-c", "(trap '' TERM HUP; exec sleep 300) & echo $! > "+marker+"; wait")
+	var grandchild int
+	waitFor(t, "the grandchild's pid", func() bool {
+		b, err := os.ReadFile(marker)
+		if err != nil {
+			return false
+		}
+		grandchild, err = strconv.Atoi(strings.TrimSpace(string(b)))
+		return err == nil && grandchild > 0
+	})
+
+	stopped := make(chan struct{})
+	go func() {
+		p.StopGroup()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(waitCeiling):
+		t.Fatal("StopGroup never returned")
+	}
+	if err := syscall.Kill(grandchild, 0); !errors.Is(err, syscall.ESRCH) {
+		t.Fatalf("StopGroup returned with the grandchild still there: %v", err)
+	}
 }

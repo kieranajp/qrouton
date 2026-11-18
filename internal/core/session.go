@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/randomid"
 	"github.com/kieranajp/qrouton/internal/session"
@@ -245,7 +247,12 @@ func (s *SessionState) serve(control io.Closer) bool {
 
 // stop ends the session's process tree and closes the listener it was served on.
 // Both are cleared under the lock, so neither can be torn down twice.
-func (s *SessionState) stop() {
+func (s *SessionState) stop() { s.halt((*PTY).Stop) }
+
+// drain is stop that also waits for the runner the supervisor ran to exit.
+func (s *SessionState) drain() { s.halt((*PTY).StopGroup) }
+
+func (s *SessionState) halt(end func(*PTY)) {
 	s.mu.Lock()
 	s.stopped = true
 	s.pruneBugReports(time.Now())
@@ -253,7 +260,7 @@ func (s *SessionState) stop() {
 	s.process, s.control = nil, nil
 	s.mu.Unlock()
 	if process != nil {
-		process.Stop()
+		end(process)
 	}
 	if control != nil {
 		_ = control.Close()
@@ -272,6 +279,8 @@ type booting struct {
 	copyImage   func(path string) error
 	copyFile    func(path string) error
 	stickers    func() []session.Sticker
+	profile     func(runnerID, profileID string) (config.RunnerProfile, bool)
+	environ     func() []string
 }
 
 type Sessions struct {
@@ -450,6 +459,69 @@ func (s *Sessions) replace(root string, fallback *SessionState, emptied bool) er
 	}
 	s.reveal(booted)
 	return nil
+}
+
+// SwitchProfile moves a session's conversation onto another profile of its
+// runner and boots it there. A move that fails boots it back on the profile it had.
+func (s *Sessions) SwitchProfile(slug, profileID string) error {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	root, err := s.validatedRoot(slug)
+	if err != nil {
+		return err
+	}
+	manifest, err := session.Load(root)
+	if err != nil || manifest.Slug != slug {
+		return UnknownSession(slug)
+	}
+	if !launch.SwitchesProfiles(manifest.Runner) {
+		return fmt.Errorf("%w: %q", ErrProfileUnswitchable, manifest.Runner)
+	}
+	if profileID == manifest.Profile {
+		return nil
+	}
+	stateDir, err := s.stateDir(manifest.Runner, profileID)
+	if err != nil {
+		return err
+	}
+	conversation, ok := session.ReadConversation(root)
+	if !ok {
+		return ErrNoConversation
+	}
+	state := s.BySlug(slug)
+	if state == nil {
+		if pid, alive := session.AgentAlive(root); alive {
+			return agentAlreadyRunning(slug, pid)
+		}
+	}
+	var fallback *SessionState
+	var emptied bool
+	if state != nil {
+		fallback, emptied = s.recycleDrained(state)
+	}
+	moved := launch.CopyConversation(manifest.Runner, conversation.Transcript, stateDir)
+	if moved == nil {
+		moved = session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
+			if m.Slug != slug {
+				return m, UnknownSession(slug)
+			}
+			m.Profile = profileID
+			return m, nil
+		})
+	}
+	return errors.Join(moved, s.replace(root, fallback, emptied))
+}
+
+// stateDir is the folder the target profile keeps the runner's state in.
+func (s *Sessions) stateDir(runnerID, profileID string) (string, error) {
+	var profile config.RunnerProfile
+	if profileID != "" {
+		var ok bool
+		if profile, ok = s.boot.profile(runnerID, profileID); !ok {
+			return "", fmt.Errorf("%w: %q", launch.ErrProfileUnavailable, profileID)
+		}
+	}
+	return launch.StateDir(runnerID, profile, s.boot.environ())
 }
 
 func (s *Sessions) CycleSticker(slug string) (session.Sticker, error) {
@@ -643,6 +715,14 @@ func (s *Sessions) Adopt(root, runnerID, profileID string) error {
 func (s *Sessions) recycle(state *SessionState) (fallback *SessionState, wasShown bool) {
 	s.boot.teardown(state)
 	state.stop()
+	return s.forget(state)
+}
+
+// recycleDrained is recycle that returns only once the runner has exited, so
+// nothing is still writing the conversation.
+func (s *Sessions) recycleDrained(state *SessionState) (fallback *SessionState, wasShown bool) {
+	s.boot.teardown(state)
+	state.drain()
 	return s.forget(state)
 }
 

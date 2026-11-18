@@ -293,6 +293,8 @@ func testSessions(t *testing.T, root string, boot *stubBoot) (*Sessions, *Window
 		},
 		teardown: windows.stop,
 		reveal:   r.Reveal,
+		profile:  func(string, string) (config.RunnerProfile, bool) { return config.RunnerProfile{}, false },
+		environ:  os.Environ,
 	}
 	return reg, windows, r
 }

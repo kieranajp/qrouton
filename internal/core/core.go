@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -176,6 +177,13 @@ func (c *Core) wire() {
 		reveal:      client.Reveal,
 		copyImage:   client.CopyImage,
 		copyFile:    client.CopyFile,
+		profile: func(runnerID, profileID string) (config.RunnerProfile, bool) {
+			if opts.Config == nil {
+				return config.RunnerProfile{}, false
+			}
+			return opts.Config.Profile(runnerID, profileID)
+		},
+		environ: os.Environ,
 	}
 	tree := func(state *SessionState) status.AgentTree { return sessionTree(opts.Config, state) }
 	reg.trees = newAgentTrees(client.Emit, agentTreeInterval, reg.Current, tree)
