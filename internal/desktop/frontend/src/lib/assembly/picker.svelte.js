@@ -6,8 +6,9 @@ import { refusal } from "./steps.js";
 
 /** Picker state is provisional until confirmation reaches Go.
  * @param {() => string} slug
+ * @param {() => string} requestID the escalation answered, empty for a plain add
  * @param {() => void} done */
-export function picking(slug, done) {
+export function picking(slug, requestID, done) {
   let branch = $state("");
   let status = $state("");
   let answering = $state(false);
@@ -36,7 +37,7 @@ export function picking(slug, done) {
     running = true;
     progress.clear();
     const picked = { repos: repos.ordered, upgrades: repos.upgrading };
-    const added = await call(go.addRepos(slug(), picked));
+    const added = await call(go.addRepos(slug(), requestID(), picked));
     running = false;
     aborting = false;
     if (!added.ok) {
@@ -63,7 +64,7 @@ export function picking(slug, done) {
     if (running) return abort();
     if (answering) return;
     answering = true;
-    const cancelled = await call(go.cancelPicker(slug()));
+    const cancelled = await call(go.cancelPicker(slug(), requestID()));
     if (!cancelled.ok) {
       answering = false;
       status = refusal(cancelled.error);

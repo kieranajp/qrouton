@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/randomid"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -51,9 +52,11 @@ type SessionState struct {
 	shells int
 }
 
-// RequestPicker queues an escalation on this session. A later request replaces
-// an earlier one: both pollers then read the one stanza the confirm writes.
+// RequestPicker queues an escalation on this session under a fresh id. A later
+// request replaces an earlier one: both pollers then read the one stanza the
+// confirm writes.
 func (s *SessionState) RequestPicker(req workbench.PickerRequest) {
+	req.ID = randomid.Hex(8)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.picker = &req
@@ -71,12 +74,14 @@ func (s *SessionState) PendingPicker() *workbench.PickerRequest {
 	return s.picker
 }
 
-// ClearPicker is confirm and cancel both: arriving at the session again must not
-// redraw a picker that has been answered.
-func (s *SessionState) ClearPicker() {
+// ClearPickerIf clears the pending request only if it is the one id names, so
+// an answer never takes a request that arrived after its overlay opened.
+func (s *SessionState) ClearPickerIf(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.picker = nil
+	if s.picker != nil && s.picker.ID == id {
+		s.picker = nil
+	}
 }
 
 // Slug and Root tolerate a nil session, which is the window showing none. Both

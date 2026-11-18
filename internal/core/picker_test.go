@@ -109,7 +109,7 @@ func TestHeaderEscalationQueuesAPersistentPickerOnlyForAssistant(t *testing.T) {
 		t.Fatal("header escalation did not reach the shown session's chrome")
 	}
 
-	reg.Current().ClearPicker()
+	reg.Current().ClearPickerIf(request.ID)
 	if err := session.SetMode(shown, session.ModeRPI); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 	if err := reg.QueuePicker(workbench.PickerRequest{SessionRoot: shown, Deadline: time.Now().Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.Cancel("shown"); err != nil {
+	if err := p.Cancel("shown", reg.Current().PendingPicker().ID); err != nil {
 		t.Fatal(err)
 	}
 	if reg.Current().PendingPicker() != nil {
@@ -154,7 +154,7 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := PickerInput{Repos: []RepoPick{{ID: "org/svc", Role: "editing"}}}
-	if err := p.Confirm(t.Context(), "shown", in); err != nil {
+	if err := p.Confirm(t.Context(), "shown", reg.Current().PendingPicker().ID, in); err != nil {
 		t.Fatal(err)
 	}
 	if reg.Current().PendingPicker() != nil {
@@ -180,10 +180,10 @@ func TestConfirmAndCancelRefuseASessionThisWorkbenchIsNotRunning(t *testing.T) {
 	cfg := &config.Config{Root: filepath.Dir(shown)}
 	p := newPicker(context.Background(), cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil, nil)
 
-	if err := p.Confirm(t.Context(), "kraken", PickerInput{}); err == nil {
+	if err := p.Confirm(t.Context(), "kraken", "", PickerInput{}); err == nil {
 		t.Fatal("a picker confirmed for a session this workbench is not running")
 	}
-	if err := p.Cancel("kraken"); err == nil {
+	if err := p.Cancel("kraken", ""); err == nil {
 		t.Fatal("a picker cancelled for a session this workbench is not running")
 	}
 }
@@ -211,7 +211,7 @@ func TestConfirmTakesUpAHeldReferenceRepoAndIgnoresTheRest(t *testing.T) {
 	p := newPicker(context.Background(), cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, func(string, any) {}, nil)
 
 	in := PickerInput{Upgrades: []string{"org/docs", "org/docs", "org/kraken"}}
-	if err := p.Confirm(t.Context(), "reading", in); err != nil {
+	if err := p.Confirm(t.Context(), "reading", "", in); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -287,13 +287,13 @@ func TestASecondAddForTheSameSessionIsRefused(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	first := make(chan error, 1)
-	go func() { first <- p.Confirm(ctx, "shown", pickSvc) }()
+	go func() { first <- p.Confirm(ctx, "shown", "", pickSvc) }()
 	waitFor(t, "the first add to start cloning", cloning)
 
 	// A deadline, so a broken refusal fails here rather than after the held clone.
 	second, stop := context.WithTimeout(t.Context(), 2*time.Second)
 	defer stop()
-	if err := p.Confirm(second, "shown", pickSvc); !errors.Is(err, ErrAddRunning) {
+	if err := p.Confirm(second, "shown", "", pickSvc); !errors.Is(err, ErrAddRunning) {
 		t.Fatalf("a second add while the first runs = %v, want %v", err, ErrAddRunning)
 	}
 	cancel()
@@ -302,7 +302,7 @@ func TestASecondAddForTheSameSessionIsRefused(t *testing.T) {
 	}
 	ended, end := context.WithCancel(t.Context())
 	end()
-	if err := p.Confirm(ended, "shown", pickSvc); errors.Is(err, ErrAddRunning) {
+	if err := p.Confirm(ended, "shown", "", pickSvc); errors.Is(err, ErrAddRunning) {
 		t.Fatal("an add that has returned still refuses the next one")
 	}
 }
@@ -312,7 +312,7 @@ func TestShutdownStopsARunningAdd(t *testing.T) {
 	kernel, shown, _ := pickerCore(t)
 	kernel.Picker = addingPicker(kernel.ctx, kernel, shown)
 	added := make(chan error, 1)
-	go func() { added <- kernel.Picker.Confirm(context.Background(), "shown", pickSvc) }()
+	go func() { added <- kernel.Picker.Confirm(context.Background(), "shown", "", pickSvc) }()
 	waitFor(t, "the add to start cloning", cloning)
 
 	kernel.Shutdown()
@@ -348,7 +348,7 @@ func TestPickerConfirmEmitsProgressForItsSession(t *testing.T) {
 			mu.Unlock()
 		}, nil)
 
-	if err := p.Confirm(t.Context(), "shown", pickSvc); err != nil {
+	if err := p.Confirm(t.Context(), "shown", "", pickSvc); err != nil {
 		t.Fatal(err)
 	}
 	mu.Lock()
@@ -379,7 +379,7 @@ func TestAbortEndsTheRunningAddOnly(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	added := make(chan error, 1)
-	go func() { added <- p.Confirm(ctx, "shown", pickSvc) }()
+	go func() { added <- p.Confirm(ctx, "shown", "", pickSvc) }()
 	waitFor(t, "the add to start cloning", cloning)
 
 	if err := p.Abort("background"); err != nil {
@@ -400,5 +400,90 @@ func TestAbortEndsTheRunningAddOnly(t *testing.T) {
 		}
 	case <-time.After(waitCeiling):
 		t.Fatal("the aborted add never returned")
+	}
+}
+
+func queueEscalation(t *testing.T, reg *Sessions, root string) *workbench.PickerRequest {
+	t.Helper()
+	if err := reg.QueuePicker(workbench.PickerRequest{SessionRoot: root, Name: "Escalated", Deadline: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	return reg.BySlug(slugFor(root)).PendingPicker()
+}
+
+// A plain add's confirm once cleared whatever was pending, so an escalation that
+// arrived mid-add was dropped and the agent's escalate call polled until it timed out.
+func TestAnEscalationArrivingDuringAnAddStaysPending(t *testing.T) {
+	kernel, shown, _ := pickerCore(t)
+	reg := kernel.Sessions
+	cfg := &config.Config{Root: filepath.Dir(shown)}
+	repo := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
+	var arrived *workbench.PickerRequest
+	var once sync.Once
+	arriveMidAdd := func(string, any) { once.Do(func() { arrived = queueEscalation(t, reg, shown) }) }
+	p := newPicker(context.Background(), cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}, arriveMidAdd, nil)
+
+	if err := p.Confirm(t.Context(), "shown", "", pickSvc); err != nil {
+		t.Fatal(err)
+	}
+	if arrived == nil {
+		t.Fatal("the add emitted no progress, so no escalation arrived during it")
+	}
+	if pending := reg.Current().PendingPicker(); pending == nil || pending.ID != arrived.ID {
+		t.Fatalf("after the add the pending escalation is %+v, want %+v", pending, arrived)
+	}
+	got, err := session.Load(shown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Escalation != nil || got.Name == arrived.Name {
+		t.Fatalf("a plain add answered the escalation that arrived during it: %+v, name %q", got.Escalation, got.Name)
+	}
+}
+
+// Cancel once read whatever was pending at cancel time, so dismissing a plain add
+// recorded a newer escalation as cancelled and cleared it unseen.
+func TestCancellingAnAddLeavesAPendingEscalationAlone(t *testing.T) {
+	kernel, shown, _ := pickerCore(t)
+	p := addingPicker(context.Background(), kernel, shown)
+	waiting := queueEscalation(t, kernel.Sessions, shown)
+
+	if err := p.Cancel("shown", ""); err != nil {
+		t.Fatal(err)
+	}
+	if pending := kernel.Sessions.Current().PendingPicker(); pending == nil || pending.ID != waiting.ID {
+		t.Fatalf("cancelling a plain add left %+v pending, want %+v", pending, waiting)
+	}
+	got, err := session.Load(shown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Escalation != nil {
+		t.Fatalf("cancelling a plain add recorded the escalation as %+v", got.Escalation)
+	}
+}
+
+// An overlay left open on a replaced request must not answer the one that replaced it.
+func TestAPickerConfirmForAGoneRequestIsRefused(t *testing.T) {
+	kernel, shown, _ := pickerCore(t)
+	p := addingPicker(context.Background(), kernel, shown)
+	gone := queueEscalation(t, kernel.Sessions, shown)
+	current := queueEscalation(t, kernel.Sessions, shown)
+
+	if err := p.Confirm(t.Context(), "shown", gone.ID, pickSvc); !errors.Is(err, ErrPickerStale) {
+		t.Fatalf("confirming a replaced escalation = %v, want %v", err, ErrPickerStale)
+	}
+	if err := p.Cancel("shown", gone.ID); err != nil {
+		t.Fatal(err)
+	}
+	if pending := kernel.Sessions.Current().PendingPicker(); pending == nil || pending.ID != current.ID {
+		t.Fatalf("answering a replaced escalation left %+v pending, want %+v", pending, current)
+	}
+	got, err := session.Load(shown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Escalation != nil || len(got.Repos) != 0 {
+		t.Fatalf("a stale answer reached the session: escalation %+v, repos %+v", got.Escalation, got.Repos)
 	}
 }

@@ -816,7 +816,7 @@ func pickerRows() []adapterRow {
 		}},
 		{"Picker.Confirm", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
-			if err := (&Picker{picker: a.kernel.Picker}).Confirm(t.Context(), a.slug(), core.PickerInput{}); !refusedFor(err, assembly.FieldRepos) {
+			if err := (&Picker{picker: a.kernel.Picker}).Confirm(t.Context(), a.slug(), "", core.PickerInput{}); !refusedFor(err, assembly.FieldRepos) {
 				t.Fatalf("confirming no editing repository = %v", err)
 			}
 		}},
@@ -825,7 +825,8 @@ func pickerRows() []adapterRow {
 			if err := a.kernel.Picker.Escalate(a.slug()); err != nil {
 				t.Fatal(err)
 			}
-			if err := (&Picker{picker: a.kernel.Picker}).Cancel(a.slug()); err != nil {
+			id := a.kernel.Sessions.Current().PendingPicker().ID
+			if err := (&Picker{picker: a.kernel.Picker}).Cancel(a.slug(), id); err != nil {
 				t.Fatal(err)
 			}
 			if a.kernel.Sessions.Current().PendingPicker() != nil {

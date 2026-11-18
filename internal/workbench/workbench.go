@@ -169,7 +169,9 @@ type WindowHost interface {
 }
 
 // PickerRequest expires agent requests at Deadline; direct user requests have no deadline.
+// ID is stamped by the workbench when the request is queued; a sender's is ignored.
 type PickerRequest struct {
+	ID          string    `json:"id,omitempty"`
 	SessionRoot string    `json:"session_root"`
 	Name        string    `json:"name,omitempty"`
 	Prefix      string    `json:"prefix,omitempty"`

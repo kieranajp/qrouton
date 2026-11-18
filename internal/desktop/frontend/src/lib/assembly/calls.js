@@ -95,13 +95,16 @@ export const escalate = (slug) => Call.ByName(PICKER_ESCALATE, slug);
 
 /**
  * @param {string} slug
+ * @param {string} requestID the escalation answered, empty for a plain add
  * @param {{repos: {id: string, role: string, base: string}[], upgrades: string[]}} answer
  */
-export const addRepos = (slug, answer) => Call.ByName(PICKER_CONFIRM, slug, answer);
+export const addRepos = (slug, requestID, answer) => Call.ByName(PICKER_CONFIRM, slug, requestID, answer);
 
 /** abortAdd cancels the running add, whose own call then answers with the reason.
  * @param {string} slug */
 export const abortAdd = (slug) => Call.ByName(PICKER_ABORT, slug);
 
-/** @param {string} slug */
-export const cancelPicker = (slug) => Call.ByName(PICKER_CANCEL, slug);
+/**
+ * @param {string} slug
+ * @param {string} requestID */
+export const cancelPicker = (slug, requestID) => Call.ByName(PICKER_CANCEL, slug, requestID);

@@ -50,11 +50,25 @@ export const joining = (branch) => (branch ? `Added repositories join ${branch}`
  * @param {string} slug */
 export const assemblyOpen = (requested, settled, slug) => !!settled && (!!requested || !slug);
 
-/** An add-repositories picker closes when its originating session is no longer shown.
+export const ADD_KEY = "add";
+
+/** pickerKey names the request the overlay answers: "add" while an add runs over
+ * the shown session, so a mid-add escalation waits its turn, then that escalation's
+ * id. Empty is no overlay.
+ * @param {string} added the session add-repos was pressed on
  * @param {string} shown
- * @param {boolean} pending
- * @param {string} added the session add-repos was pressed on */
-export const pickerOpen = (shown, pending, added) => !!shown && (!!pending || added === shown);
+ * @param {string} pendingID the shown session's waiting escalation */
+export const pickerKey = (added, shown, pendingID) => {
+  if (!shown) return "";
+  if (added === shown) return ADD_KEY;
+  return pendingID ?? "";
+};
+
+/** An add-repositories picker closes when its originating session is no longer shown.
+ * @param {string} added
+ * @param {string} shown
+ * @param {string} pendingID */
+export const pickerOpen = (added, shown, pendingID) => !!pickerKey(added, shown, pendingID);
 
 /**
  * refusal is how the footer says what Go refused, which names the field before

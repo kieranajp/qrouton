@@ -2,7 +2,7 @@ import { sessionSwitcher } from "./switcher.svelte.js";
 import { macOS } from "../platform.js";
 import { untrack } from "svelte";
 import { escalate as escalateSession, pending as pendingAssembly } from "../assembly/calls.js";
-import { assemblyOpen, pickerOpen } from "../assembly/steps.js";
+import { assemblyOpen, pickerKey, pickerOpen } from "../assembly/steps.js";
 import { ASSEMBLY_REQUESTED_EVENT, MODE_LABELS, WINDOW_KINDS } from "../bridge/generated.js";
 import { chrome } from "../chrome.svelte.js";
 import { findShortcut } from "../find.js";
@@ -192,7 +192,8 @@ export function shell() {
   // the session it was pressed on for the same reason.
   let added = $state("");
   let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug));
-  let picker = $derived(pickerOpen(fields.slug, fields.picker, added));
+  let pickerFor = $derived(pickerKey(added, fields.slug, fields.pickerID));
+  let picker = $derived(pickerOpen(added, fields.slug, fields.pickerID));
   let covered = $derived(
     fields.welcoming || fields.placing || assembling || picker || settingsOpen || present.active || reviewing,
   );
@@ -372,6 +373,9 @@ export function shell() {
     },
     get picker() {
       return picker;
+    },
+    get pickerKey() {
+      return pickerFor;
     },
     get settingsOpen() {
       return settingsOpen;

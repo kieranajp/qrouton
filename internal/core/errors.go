@@ -64,6 +64,7 @@ var (
 	ErrNoAgentCommand         = errors.New("workbench has no agent command to run")
 	ErrNoConfig               = errors.New("workbench has no configuration to assemble sessions against")
 	ErrAddRunning             = errors.New("this session is already adding repositories")
+	ErrPickerStale            = errors.New("that escalation has already been answered or has expired")
 )
 
 var (

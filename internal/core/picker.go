@@ -101,8 +101,14 @@ func (p *Picker) Load(slug string) (PickerFields, error) {
 	return PickerFields{Branch: m.Branch(), Repos: held}, nil
 }
 
-func (p *Picker) Confirm(ctx context.Context, slug string, in PickerInput) error {
+// Confirm answers the escalation requestID names, or makes a plain add when it
+// is empty, even while an escalation waits on the session.
+func (p *Picker) Confirm(ctx context.Context, slug, requestID string, in PickerInput) error {
 	state, root, err := p.root(slug)
+	if err != nil {
+		return err
+	}
+	escalation, err := pendingFor(state, requestID)
 	if err != nil {
 		return err
 	}
@@ -111,7 +117,6 @@ func (p *Picker) Confirm(ctx context.Context, slug string, in PickerInput) error
 		return err
 	}
 	defer done()
-	escalation := state.PendingPicker()
 	m, err := session.Load(root)
 	if err != nil {
 		return err
@@ -125,9 +130,21 @@ func (p *Picker) Confirm(ctx context.Context, slug string, in PickerInput) error
 	if err := assembler.Confirm(ctx, root, draft, escalation != nil, progressTo(p.emit, slug)); err != nil {
 		return err
 	}
-	state.ClearPicker()
+	state.ClearPickerIf(requestID)
 	p.sessions.RepositoriesChanged(root)
 	return nil
+}
+
+// pendingFor is the escalation requestID names, nil for a plain add.
+func pendingFor(state *SessionState, requestID string) (*workbench.PickerRequest, error) {
+	if requestID == "" {
+		return nil, nil
+	}
+	pending := state.PendingPicker()
+	if pending == nil || pending.ID != requestID {
+		return nil, ErrPickerStale
+	}
+	return pending, nil
 }
 
 // begin registers an add for root, refusing a second while the first runs. Its
@@ -179,15 +196,20 @@ func (p *Picker) stop() {
 	p.running.Wait()
 }
 
-func (p *Picker) Cancel(slug string) error {
+// Cancel records a cancellation for the escalation requestID names. A plain add,
+// or an escalation already gone, leaves nothing to record.
+func (p *Picker) Cancel(slug, requestID string) error {
 	state, root, err := p.root(slug)
 	if err != nil {
 		return err
 	}
-	if err := assembly.Cancel(root, state.PendingPicker() != nil); err != nil {
+	if escalation, _ := pendingFor(state, requestID); escalation == nil {
+		return nil
+	}
+	if err := assembly.Cancel(root, true); err != nil {
 		return err
 	}
-	state.ClearPicker()
+	state.ClearPickerIf(requestID)
 	p.sessions.Touch()
 	return nil
 }
