@@ -18,6 +18,8 @@
     unseen: 3,
     opened: new Date(Date.now() - 120000).toISOString(),
     sticker: "",
+    runner: "claude",
+    profile: "work",
   };
   let sessions = $state([
     first,
@@ -30,7 +32,12 @@
       unseen: 0,
       opened: new Date(Date.now() - (index + 1) * 86400000).toISOString(),
       sticker: "",
+      runner: index === 0 ? "codex" : "claude",
+      profile: "",
     })),
+  ]);
+  let profiles = $state([
+    { runner: "claude", profiles: [{ id: "work", label: "Work" }, { id: "home", label: "Home" }] },
   ]);
   let selected = $state("checkout");
   let history = ["checkout"];
@@ -67,6 +74,7 @@
   }
 
   window.sessionRail = {
+    setProfiles: (groups) => (profiles = groups),
     stateless,
     headline,
     shown: (slug) => {
@@ -119,6 +127,7 @@
     {sessions}
     slug={selected}
     {stickers}
+    {profiles}
     onNewSession={() => {}}
     onDismissed={() => focusProbe?.focus()} />
   <div class="editor-probes">

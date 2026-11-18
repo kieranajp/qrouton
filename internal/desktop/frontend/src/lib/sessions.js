@@ -7,6 +7,7 @@ import {
   SESSIONS_REVEAL,
   SESSIONS_REVEAL_PATH,
   SESSIONS_SHOW,
+  SESSIONS_SWITCH_PROFILE,
   SESSIONS_UNCOMMITTED,
   SESSIONS_UNLOAD,
 } from "./bridge/generated.js";
@@ -17,6 +18,7 @@ export const cycleSticker = (slug) => Call.ByName(SESSIONS_CYCLE_STICKER, slug);
 export const unload = (slug) => Call.ByName(SESSIONS_UNLOAD, slug);
 export const reorder = (slug, targetSlug) => Call.ByName(SESSIONS_REORDER, slug, targetSlug);
 export const reload = (slug) => Call.ByName(SESSIONS_RELOAD, slug);
+export const switchProfile = (slug, profile) => Call.ByName(SESSIONS_SWITCH_PROFILE, slug, profile);
 export const reveal = (slug) => Call.ByName(SESSIONS_REVEAL, slug);
 export const revealPath = (slug, path) => Call.ByName(SESSIONS_REVEAL_PATH, slug, path);
 export const uncommitted = (slug) => Call.ByName(SESSIONS_UNCOMMITTED, slug);

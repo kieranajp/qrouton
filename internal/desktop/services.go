@@ -28,6 +28,10 @@ func (s *Sessions) Reload(slug string) error { return s.sessions.Reload(slug) }
 
 func (s *Sessions) Unload(slug string) error { return s.sessions.Unload(slug) }
 
+func (s *Sessions) SwitchProfile(slug, profile string) error {
+	return s.sessions.SwitchProfile(slug, profile)
+}
+
 func (s *Sessions) Reorder(slug, targetSlug string) error {
 	return s.sessions.Reorder(slug, targetSlug)
 }

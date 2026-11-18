@@ -63,7 +63,11 @@
         {#if item.items?.length}
           <div class="submenu" style:width="calc({item.width ?? width}px * var(--ui-scale))">
             {#each item.items as child, childIndex (childIndex)}
-              <button class="item" onclick={() => onSelect?.(child, childIndex)}>
+              <button
+                class="item"
+                class:active={child.active}
+                disabled={child.disabled}
+                onclick={() => onSelect?.(child, childIndex)}>
                 {#if child.tag}
                   <ArtifactTag kind={child.tag} id={child.id ?? ""} fixed />
                 {/if}

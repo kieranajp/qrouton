@@ -8,17 +8,28 @@
   import Menu from "../shell/Menu.svelte";
   import RailItem from "./RailItem.svelte";
   import { fitMenu } from "../menu.js";
-  import { cleanup, cycleSticker, reload, reorder, reveal, show, uncommitted, unload } from "../sessions.js";
-  import { SESSION_UNLOAD_LABEL, SESSION_UNLOAD_FAILED, SESSION_REORDER_FAILED } from "../bridge/generated.js";
+  import { cleanup, cycleSticker, reload, reorder, reveal, show, switchProfile, uncommitted, unload } from "../sessions.js";
+  import {
+    NO_CONVERSATION_REFUSAL,
+    PROFILE_CURRENT_META,
+    PROFILE_DEFAULT_LABEL,
+    SESSION_REORDER_FAILED,
+    SESSION_SWITCH_PROFILE_FAILED,
+    SESSION_SWITCH_PROFILE_LABEL,
+    SESSION_SWITCH_PROFILE_NEEDS_MESSAGE,
+    SESSION_UNLOAD_FAILED,
+    SESSION_UNLOAD_LABEL,
+  } from "../bridge/generated.js";
   import { age } from "../relative.js";
   import { rowAt, shortcut } from "../shortcuts.js";
   import { stickerFeedback } from "./stickers.js";
 
-  /** @type {{sessions: any[], slug: string, stickers: import("./stickers.js").Sticker[], onNewSession: () => void, onOwnership?: (value: boolean) => void, onDismissed: () => void, size: number, width: number}} */
+  /** @type {{sessions: any[], slug: string, stickers: import("./stickers.js").Sticker[], profiles?: {runner: string, profiles: {id: string, label: string}[]}[], onNewSession: () => void, onOwnership?: (value: boolean) => void, onDismissed: () => void, size: number, width: number}} */
   let {
     sessions,
     slug,
     stickers = [],
+    profiles = [],
     onNewSession,
     onOwnership,
     onDismissed,
@@ -193,6 +204,7 @@
   /** @type {import("../shell/menu.js").MenuItem[]} */
   const rowMenu = $derived([
     { label: "Reload", icon: "refresh", act: reloadRow },
+    ...profileMenu(sessions.find((row) => row.slug === menu?.row.slug)),
     {
       label: SESSION_UNLOAD_LABEL,
       icon: "close",
@@ -203,6 +215,26 @@
     "-",
     { label: "Clean up…", icon: "bin", tone: "destructive", act: askCleanup },
   ]);
+  /** @returns {import("../shell/menu.js").MenuItem[]} */
+  function profileMenu(row) {
+    const named = profiles.find((group) => group.runner === row?.runner)?.profiles ?? [];
+    if (!named.length) return [];
+    const choices = [{ id: "", label: PROFILE_DEFAULT_LABEL }, ...named];
+    return [{
+      label: SESSION_SWITCH_PROFILE_LABEL,
+      icon: "agent",
+      items: choices.map((profile) => {
+        const current = profile.id === (row.profile ?? "");
+        return {
+          label: profile.label,
+          meta: current ? PROFILE_CURRENT_META : undefined,
+          active: current,
+          disabled: current,
+          act: (picked) => switchRow(picked, profile.id),
+        };
+      }),
+    }];
+  }
   let confirming = $state(/** @type {{row: any, dirty: string[], checked: boolean, error: string} | null} */ (null));
   let cleaning = $state(false);
   let inspecting = $state(false);
@@ -230,6 +262,16 @@
       await reload(row.slug);
     } catch {
       showRowNotice(row.slug, "Session could not be reloaded", true);
+    }
+  }
+
+  async function switchRow(row, profile) {
+    onDismissed();
+    try {
+      await switchProfile(row.slug, profile);
+    } catch (err) {
+      const unrecorded = String(err?.message ?? err).includes(NO_CONVERSATION_REFUSAL);
+      showRowNotice(row.slug, unrecorded ? SESSION_SWITCH_PROFILE_NEEDS_MESSAGE : SESSION_SWITCH_PROFILE_FAILED, true);
     }
   }
 

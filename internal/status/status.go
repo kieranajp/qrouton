@@ -57,9 +57,11 @@ type Fields struct {
 	Welcoming bool `json:"welcoming"`
 	// Placing means the placement check has misplaced or skipped sessions to
 	// show, or the user ran it. Never set while Welcoming.
-	Placing        bool           `json:"placing"`
-	Stickers       []Sticker      `json:"stickers"`
-	SessionSummary SessionSummary `json:"sessionSummary"`
+	Placing  bool      `json:"placing"`
+	Stickers []Sticker `json:"stickers"`
+	// Profiles are the named profiles of each runner whose sessions can switch profile.
+	Profiles       []RunnerProfiles `json:"profiles"`
+	SessionSummary SessionSummary   `json:"sessionSummary"`
 	// PullRequests is workbench-side knowledge fetched from GitHub, so a file
 	// read never sets it.
 	PullRequests  PullRequestList `json:"pullRequests"`
@@ -108,6 +110,7 @@ func EmptyFields() Fields {
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
 		Stickers:            []Sticker{},
+		Profiles:            []RunnerProfiles{},
 		PullRequests:        PullRequestList{Items: []PullRequest{}},
 	}
 }
@@ -127,6 +130,18 @@ type SessionRow struct {
 	Unseen   int           `json:"unseen"`
 	Opened   time.Time     `json:"opened"`
 	Sticker  string        `json:"sticker"`
+	Runner   string        `json:"runner"`
+	Profile  string        `json:"profile"`
+}
+
+type RunnerProfiles struct {
+	Runner   string    `json:"runner"`
+	Profiles []Profile `json:"profiles"`
+}
+
+type Profile struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
 }
 
 // Sticker is one of the user's configured stickers, in rail cycle order.
@@ -340,7 +355,7 @@ func Sessions(root string) []SessionRow {
 		rows = append(rows, SessionRow{
 			Name: name, Slug: m.Slug, Initials: initials(name), Mode: modeLabel(m),
 			Repos: sessionRepos(m), Opened: opened,
-			Sticker: string(m.Sticker),
+			Sticker: string(m.Sticker), Runner: m.Runner, Profile: m.Profile,
 			Summary: AgentSummary{Attention: AgentAttentionNone, Coverage: AgentCoverageNone},
 		})
 	}

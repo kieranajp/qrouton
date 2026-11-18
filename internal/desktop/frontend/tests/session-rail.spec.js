@@ -602,8 +602,8 @@ test("Unload follows Reload and the expanded menu fits near the viewport edge", 
       bubbles: true, clientX: 1275, clientY: 415,
     }));
   });
-  await expect(page.locator(".menu button.item")).toHaveText([
-    "Reload", "Unload", "Reveal in Finder", "Clean up…",
+  await expect(page.locator(".menu > div > button.item")).toHaveText([
+    "Reload", "Switch profile", "Unload", "Reveal in Finder", "Clean up…",
   ]);
   await expect(page.getByRole("button", { name: "Unload", exact: true })).toBeEnabled();
   const box = await page.locator(".menu").boundingBox();
@@ -878,4 +878,65 @@ test("pointer movement below the drag threshold stays a click", async ({ page })
   expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
     { method: "show", slug: "session-2" },
   ]);
+});
+
+const openRowMenu = (page, name) => page.getByRole("button", { name: new RegExp(`^${name} ·`) }).click({ button: "right" });
+const topLevel = (page) => page.locator(".menu > div > button.item");
+const profileChoices = (page) => page.locator(".menu .submenu button.item");
+
+// Catches the switch going missing from a claude row, or listing profiles of another runner.
+test("a claude row's menu offers Switch profile under Reload, listing Default and each named profile", async ({ page }) => {
+  await openRowMenu(page, "Checkout migration");
+  await expect(topLevel(page).nth(1)).toHaveText("Switch profile");
+  await topLevel(page).nth(1).hover();
+  await expect(profileChoices(page).locator(".label")).toHaveText(["Default", "Work", "Home"]);
+});
+
+// Catches the current profile being offered as a switch, which would restart the session for nothing.
+test("the current profile is marked, reads current and cannot be picked", async ({ page }) => {
+  await openRowMenu(page, "Checkout migration");
+  await topLevel(page).nth(1).hover();
+  const current = profileChoices(page).filter({ hasText: "Work" });
+  await expect(current).toBeDisabled();
+  await expect(current).toHaveClass(/active/);
+  await expect(current.locator(".meta")).toHaveText("current");
+  await current.evaluate((button) => button.click());
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([]);
+});
+
+// Catches a pick reaching the wrong session or the wrong profile.
+test("picking another profile switches that row to it", async ({ page }) => {
+  await openRowMenu(page, "Checkout migration");
+  await topLevel(page).nth(1).hover();
+  await profileChoices(page).filter({ hasText: "Default" }).click();
+  await expect(page.locator(".menu")).toBeHidden();
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
+    { method: "switchProfile", slug: "checkout", profile: "" },
+  ]);
+});
+
+// Catches the switch being offered where there is no profile to go to, or no way to carry the conversation.
+test("a codex row and a claude row with no named profiles offer no switch", async ({ page }) => {
+  const withoutSwitch = ["Reload", "Unload", "Reveal in Finder", "Clean up…"];
+  await openRowMenu(page, "Session 2");
+  await expect(topLevel(page)).toHaveText(withoutSwitch);
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => window.sessionRail.setProfiles([{ runner: "claude", profiles: [] }]));
+  await openRowMenu(page, "Checkout migration");
+  await expect(topLevel(page)).toHaveText(withoutSwitch);
+});
+
+// Catches a failed switch going unreported, and the no-conversation refusal reading as a generic failure.
+test("a failed switch shows the row notice, and an unrecorded conversation asks for a message", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.failNextSwitch());
+  await openRowMenu(page, "Checkout migration");
+  await topLevel(page).nth(1).hover();
+  await profileChoices(page).filter({ hasText: "Home" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Profile could not be switched");
+
+  await page.evaluate((message) => window.sessionRailBridge.failNextSwitch(message), "send the session one message before switching its profile");
+  await openRowMenu(page, "Checkout migration");
+  await topLevel(page).nth(1).hover();
+  await profileChoices(page).filter({ hasText: "Home" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Send one message, then switch profile");
 });

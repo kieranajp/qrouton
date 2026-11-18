@@ -643,3 +643,20 @@ func TestWelcomingHidesThePlacementOverlay(t *testing.T) {
 		t.Fatalf("welcoming %v, placing %v", fields.Welcoming, fields.Placing)
 	}
 }
+
+// Catches the rail offering a switch for a runner whose conversation qrouton
+// cannot carry, or missing a named claude profile.
+func TestChromeListsOnlySwitchableRunnersProfiles(t *testing.T) {
+	root := t.TempDir()
+	reg := testRegistry(t, sessionDir(t, root, "octopus"))
+	renderer := newFakeClient()
+	cfg := &config.Config{Profiles: map[string][]config.RunnerProfile{
+		"claude": {{ID: "work", Label: "Work", Dir: "/w"}, {ID: "home", Label: "Home", Dir: "/h"}},
+		"codex":  {{ID: "alt", Label: "Alt", Dir: "/a"}},
+	}}
+	pushChrome(reg, root, cfg, nil, nil, nil, renderer.Emit)
+	want := []status.RunnerProfiles{{Runner: "claude", Profiles: []status.Profile{{ID: "work", Label: "Work"}, {ID: "home", Label: "Home"}}}}
+	if got := pushedChrome(t, renderer).Profiles; !reflect.DeepEqual(got, want) {
+		t.Fatalf("profiles = %#v, want %#v", got, want)
+	}
+}
