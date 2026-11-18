@@ -55,6 +55,9 @@ type runnerSpec struct {
 	LoginArgs     []string
 	StatusArgs    []string
 	ReadStatus    func(out []byte, exit int) SignIn
+	// Conversation moves a conversation between profiles, and is nil for a
+	// runner whose sessions cannot switch profile.
+	Conversation *conversationSpec
 }
 
 type injectContext struct {
@@ -88,9 +91,10 @@ var runnerSpecs = []runnerSpec{
 		ProfileEnv: claudeConfigDirEnvVar,
 		CredentialEnv: []string{claudeUseBedrockEnvVar, claudeUseVertexEnvVar, claudeUseFoundryEnvVar,
 			anthropicAuthTokenEnvVar, anthropicAPIKeyEnvVar, claudeOAuthTokenEnvVar},
-		LoginArgs:  []string{claudeAuthCmd, claudeLoginCmd},
-		StatusArgs: []string{claudeAuthCmd, claudeStatusCmd, claudeJSONFlag},
-		ReadStatus: readClaudeStatus,
+		LoginArgs:    []string{claudeAuthCmd, claudeLoginCmd},
+		StatusArgs:   []string{claudeAuthCmd, claudeStatusCmd, claudeJSONFlag},
+		ReadStatus:   readClaudeStatus,
+		Conversation: claudeConversation,
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,

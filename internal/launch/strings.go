@@ -142,6 +142,11 @@ const (
 
 	// claudeConfigDirEnvVar moves Claude's whole state, its stored login included.
 	claudeConfigDirEnvVar = "CLAUDE_CONFIG_DIR"
+	claudeHomeDirName     = ".claude"
+	claudeProjectsDirName = "projects"
+	homeEnvVar            = "HOME"
+	stagedDirPattern      = ".*.staged"
+	retiredDirPattern     = ".*.retired"
 )
 
 const (
