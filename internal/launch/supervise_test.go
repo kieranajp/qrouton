@@ -539,3 +539,99 @@ func TestSuperviseCarriesTheNoticeOntoTheFreshStart(t *testing.T) {
 		t.Fatalf("fallback launch dropped the notice: %v", argvs[1])
 	}
 }
+
+const supervisedConversation = "b8aaffa4-120a-4a6d-bf40-cc703dc147b8"
+
+func recordSupervisedConversation(t *testing.T, dir string) {
+	t.Helper()
+	err := session.RecordConversation(dir, session.Conversation{
+		ID: supervisedConversation, Transcript: "/home/user/.claude/projects/-s/" + supervisedConversation + ".jsonl",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func resumesRecorded(argv []string) bool {
+	return strings.Contains(strings.Join(argv, " "), claudeResumeFlag+" "+supervisedConversation)
+}
+
+// Catches a fresh conversation leaving the old ID behind, so a Reload before its
+// first hook would resume the conversation the fresh start replaced.
+func TestSuperviseClearsTheRecordOnEveryFreshLaunch(t *testing.T) {
+	for name, prepare := range map[string]func(t *testing.T, dir string){
+		"initial prompt": func(t *testing.T, dir string) {
+			if err := os.WriteFile(sessionpaths.InitialPrompt(dir), []byte("Fix it."), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"handoff": func(t *testing.T, dir string) {
+			if err := session.SetMode(dir, session.ModeRPI); err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := superviseTestDir(t, session.ModeAssistant)
+			recordSupervisedConversation(t, dir)
+			prepare(t, dir)
+			var launches int
+			swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+				launches++
+				if _, ok := session.ReadConversation(dir); ok || resumesRecorded(argv) {
+					t.Fatalf("fresh launch kept the old conversation: %v", argv)
+				}
+				return false, nil
+			})
+			if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, true); err != nil {
+				t.Fatal(err)
+			}
+			if launches != 1 {
+				t.Fatalf("launches = %d, want 1", launches)
+			}
+		})
+	}
+}
+
+// Catches the fresh-start fallback keeping the ID that just failed to resume.
+func TestSuperviseClearsTheRecordWhenItFallsBackToAFreshStart(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	recordSupervisedConversation(t, dir)
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		if len(argvs) == 1 {
+			return false, errors.New("exit status 1")
+		}
+		if _, ok := session.ReadConversation(dir); ok {
+			t.Fatal("the fallback launched with the failed conversation still recorded")
+		}
+		return false, nil
+	})
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(argvs) != 2 || !resumesRecorded(argvs[0]) || resumesRecorded(argvs[1]) {
+		t.Fatalf("launches = %v, want a resume by ID then a fresh start", argvs)
+	}
+}
+
+// Catches a resume, or a signal-driven relaunch, dropping the conversation it resumes.
+func TestSuperviseKeepsTheRecordAcrossResumedLaunches(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	recordSupervisedConversation(t, dir)
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		return len(argvs) == 1, nil
+	})
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(argvs) != 2 || !resumesRecorded(argvs[0]) || !resumesRecorded(argvs[1]) {
+		t.Fatalf("launches = %v, want both to resume %s", argvs, supervisedConversation)
+	}
+	if _, ok := session.ReadConversation(dir); !ok {
+		t.Fatal("a resumed launch cleared the record")
+	}
+}

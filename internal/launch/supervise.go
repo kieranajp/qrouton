@@ -73,6 +73,12 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if err := announceRunnerGeneration(handle, r.ID, generation); err != nil {
 			return err
 		}
+		// After the announcement, so the workbench drops any late hook from the runner this one replaces.
+		if !resume {
+			if err := session.ClearConversation(dir); err != nil {
+				return err
+			}
+		}
 		argv, env, err := runnerLaunch(r, qroutonBin, dir, editor, handle, generation, resume, prompt)
 		if err != nil {
 			return err

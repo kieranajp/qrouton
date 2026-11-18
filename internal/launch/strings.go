@@ -122,6 +122,7 @@ const (
 	agySkipPermissionsFlag    = "--dangerously-skip-permissions"
 
 	claudeContinueFlag = "--continue"
+	claudeResumeFlag   = "--resume"
 	claudeNameFlag     = "--name"
 	codexResumeCmd     = "resume"
 	codexResumeLast    = "--last"
