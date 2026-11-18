@@ -99,6 +99,38 @@ func TestAnUnreadableManifestLeavesTheSessionUnbooted(t *testing.T) {
 	}
 }
 
+// Breaks if Reload boots on the workbench's default account rather than the
+// manifest's profile.
+func TestReloadResumesOnTheManifestsProfile(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	dir := profiledSession(t, root, "octopus", "codex", "personal")
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	boot.mu.Lock()
+	delete(boot.runners, dir)
+	delete(boot.profiles, dir)
+	boot.mu.Unlock()
+
+	if err := reg.Reload("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	boot.mu.Lock()
+	runner, profile := boot.runners[dir], boot.profiles[dir]
+	boot.mu.Unlock()
+	if runner != "codex" || profile != "personal" {
+		t.Fatalf("Reload booted %q on profile %q, want codex on the manifest's personal", runner, profile)
+	}
+	if !boot.resumed(t, dir) {
+		t.Fatal("the reloaded session started a fresh conversation")
+	}
+	if state := reg.BySlug("octopus"); state == nil || state.profile != "personal" {
+		t.Fatalf("the reloaded session does not keep the profile: %+v", state)
+	}
+}
+
 var claudeAndCodex = []assembly.Runner{
 	{ID: "claude", Label: "Claude Code", Installed: true},
 	{ID: "codex", Label: "Codex CLI", Installed: true},
