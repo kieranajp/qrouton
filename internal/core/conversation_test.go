@@ -50,14 +50,15 @@ func TestAStaleGenerationHookLeavesTheRecordAlone(t *testing.T) {
 	}
 }
 
-// Catches a subagent's hook, which carries no conversation, writing or clearing the record.
-func TestASubagentHookWritesNoRecord(t *testing.T) {
+// Catches a subagent's hook naming a conversation of its own and replacing the root's.
+func TestASubagentHookLeavesTheRecordAlone(t *testing.T) {
 	state := conversationState(t)
-	state.keepConversation(claudeEvent(agentevent.HookSubagentStop, func(e *workbench.AgentEventRequest) {
-		e.AgentID, e.AgentType = "a0c0c0d7f2323c2a8", "spike"
-	}))
-	if _, err := os.Stat(sessionpaths.Conversation(state.Root())); !os.IsNotExist(err) {
-		t.Fatalf("a subagent hook wrote a record: %v", err)
+	state.keepConversation(conversationEvent(1, recordedID))
+	subagent := conversationEvent(1, "c0ffee00-0000-4000-8000-000000000000")
+	subagent.AgentID, subagent.AgentType = "a0c0c0d7f2323c2a8", "spike"
+	state.keepConversation(subagent)
+	if got, _ := session.ReadConversation(state.Root()); got.ID != recordedID {
+		t.Fatalf("a subagent hook rewrote the record to %q", got.ID)
 	}
 }
 

@@ -64,7 +64,7 @@ type recordedConversation struct {
 // generation and change. A late hook from a runner already replaced is dropped,
 // so it cannot rewrite a record the new runner's launch cleared.
 func (s *SessionState) keepConversation(event workbench.AgentEventRequest) {
-	if event.ConversationID == "" || s.Root() == "" {
+	if event.ConversationID == "" || event.AgentID != "" || s.Root() == "" {
 		return
 	}
 	next := recordedConversation{event.Generation, session.Conversation{ID: event.ConversationID, Transcript: event.TranscriptPath}}

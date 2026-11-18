@@ -635,3 +635,25 @@ func TestSuperviseKeepsTheRecordAcrossResumedLaunches(t *testing.T) {
 		t.Fatal("a resumed launch cleared the record")
 	}
 }
+
+// Catches the clear moving ahead of the announcement, which reopens the window
+// in which the replaced runner's late hook rewrites the record.
+func TestSuperviseClearsTheRecordOnlyAfterAnnouncingTheGeneration(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	recordSupervisedConversation(t, dir)
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) { return false, nil })
+	var recordedAtAnnounce bool
+	announceRunnerGeneration = func(workbench.Handle, string, uint64) error {
+		_, recordedAtAnnounce = session.ReadConversation(dir)
+		return nil
+	}
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, false); err != nil {
+		t.Fatal(err)
+	}
+	if !recordedAtAnnounce {
+		t.Fatal("the record was cleared before the new generation was announced")
+	}
+	if _, ok := session.ReadConversation(dir); ok {
+		t.Fatal("a fresh launch kept the record")
+	}
+}
