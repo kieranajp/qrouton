@@ -75,13 +75,15 @@ func TestTestGradingTimeoutDoesNotWaitForInheritedOutputPipes(t *testing.T) {
 	workspace := t.TempDir()
 	writeSessionManifest(t, workspace, map[string]string{"app": "editing"})
 	writeTestFile(t, filepath.Join(workspace, "src", "app", "package.json"), `{"scripts":{"test":"sh test.sh"}}`)
-	writeTestFile(t, filepath.Join(workspace, "src", "app", "test.sh"), "printf 'started\\n'\nsleep 10 &\nwait\n")
+	writeTestFile(t, filepath.Join(workspace, "src", "app", "test.sh"), "printf 'started\\n'\nsleep 30 &\nwait\n")
+	// Generous enough that npm's cold start on a loaded runner still prints "started".
+	const timeout = 5 * time.Second
 	started := time.Now()
-	got := testsPassWithin(workspace, "app", time.Second)
+	got := testsPassWithin(workspace, "app", timeout)
 	if got.Passed || !strings.Contains(got.Evidence, "started") || !strings.Contains(got.Evidence, "test run exceeded") {
 		t.Fatalf("cancelled grading = %+v", got)
 	}
-	if elapsed := time.Since(started); elapsed > 3*time.Second {
+	if elapsed := time.Since(started); elapsed > timeout+2*time.Second {
 		t.Fatalf("grading waited for inherited output pipe: %s", elapsed)
 	}
 }

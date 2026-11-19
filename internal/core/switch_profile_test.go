@@ -200,9 +200,13 @@ func TestSwitchProfileCopiesOnlyOnceTheRunnerHasExited(t *testing.T) {
 	})
 	t.Cleanup(func() { _ = syscall.Kill(runner, syscall.SIGKILL) })
 	var runnerAlive bool
-	f.boot.booting = func(AgentRequest) { runnerAlive = syscall.Kill(runner, 0) == nil }
+	var runnerErr error
+	f.boot.booting = func(AgentRequest) { runnerAlive, runnerErr = running(runner) }
 	if err := f.reg.SwitchProfile("octopus", "b"); err != nil {
 		t.Fatal(err)
+	}
+	if runnerErr != nil {
+		t.Fatal(runnerErr)
 	}
 	if runnerAlive {
 		t.Fatal("the switch copied and rebooted while the previous runner was still running")

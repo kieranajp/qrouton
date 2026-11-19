@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
@@ -133,7 +134,21 @@ func TestStopGroupReturnsOnlyOnceAGrandchildIgnoringSIGTERMIsGone(t *testing.T) 
 	case <-time.After(waitCeiling):
 		t.Fatal("StopGroup never returned")
 	}
-	if err := syscall.Kill(grandchild, 0); !errors.Is(err, syscall.ESRCH) {
-		t.Fatalf("StopGroup returned with the grandchild still there: %v", err)
+	if alive, err := running(grandchild); err != nil {
+		t.Fatal(err)
+	} else if alive {
+		t.Fatal("StopGroup returned with the grandchild still running")
 	}
+}
+
+// running is false for a zombie: a killed orphan stays one until its reaper gets
+// to it, and kill(pid, 0) answers for it.
+func running(pid int) (bool, error) {
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	state := strings.TrimSpace(string(out))
+	var exit *exec.ExitError
+	if err != nil && !(errors.As(err, &exit) && state == "") {
+		return false, err
+	}
+	return state != "" && !strings.HasPrefix(state, "Z"), nil
 }
