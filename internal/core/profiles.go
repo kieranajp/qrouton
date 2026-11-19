@@ -151,7 +151,7 @@ func (p *Profiles) Suggest(runner, label string) ProfileSuggestion {
 // ChooseFolder asks for a profile's folder. Cancelling answers the empty string,
 // so the form keeps the folder it had.
 func (p *Profiles) ChooseFolder() (string, error) {
-	return p.client.ChooseDirectory()
+	return p.client.ChooseDirectory(true)
 }
 
 // Add derives the id from the label, fixed for the profile's life, and creates

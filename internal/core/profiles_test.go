@@ -453,7 +453,7 @@ func TestViewOffersTheFolderPickerOnlyWhereTheClientHasOne(t *testing.T) {
 	if view, _ := profiles.View(); view.CanChooseFolder {
 		t.Fatal("the view offers a folder picker the client cannot show")
 	}
-	client.choose = func() (string, error) { return "/picked", nil }
+	client.choose = func(bool) (string, error) { return "/picked", nil }
 	if view, _ := profiles.View(); !view.CanChooseFolder {
 		t.Fatal("the view hides the folder picker the client has")
 	}
@@ -462,7 +462,7 @@ func TestViewOffersTheFolderPickerOnlyWhereTheClientHasOne(t *testing.T) {
 func TestChooseFolderPassesTheClientsAnswerAndACancelThrough(t *testing.T) {
 	profiles, _, client := testProfilesClient(t, &config.Config{})
 	answers := []string{"/Volumes/work/claude", ""}
-	client.choose = func() (string, error) {
+	client.choose = func(bool) (string, error) {
 		answer := answers[0]
 		answers = answers[1:]
 		return answer, nil

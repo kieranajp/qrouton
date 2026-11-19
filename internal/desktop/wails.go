@@ -136,11 +136,12 @@ func (r *wailsRenderer) Quit() { r.app.Quit() }
 // chooseDirectory prompts for a directory, answering "" on a cancel.
 // PromptForSingleSelection marshals to the main thread itself, so onMain must
 // not be layered on top of it.
-func (r *wailsRenderer) chooseDirectory() (string, error) {
+func (r *wailsRenderer) chooseDirectory(showHidden bool) (string, error) {
 	return r.app.Dialog.OpenFile().
 		CanChooseDirectories(true).
 		CanChooseFiles(false).
 		CanCreateDirectories(true).
+		ShowHiddenFiles(showHidden).
 		PromptForSingleSelection()
 }
 
