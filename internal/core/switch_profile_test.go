@@ -237,7 +237,7 @@ func TestSwitchProfileWhoseDrainFailsBootsBackWithoutCopying(t *testing.T) {
 	t.Cleanup(func() { _ = syscall.Kill(runner, syscall.SIGKILL) })
 	f.before.mu.Lock()
 	f.before.process.grace = 50 * time.Millisecond
-	f.before.process.signal = ignoreSIGKILL
+	f.before.process.signal, f.before.process.drain = ignoreSIGKILL, 50*time.Millisecond
 	f.before.mu.Unlock()
 	if err := f.reg.SwitchProfile("octopus", "b"); !errors.Is(err, ErrGroupNotDrained) {
 		t.Fatalf("SwitchProfile = %v, want %v", err, ErrGroupNotDrained)

@@ -20,6 +20,8 @@ type PTY struct {
 	exited chan struct{}
 	code   int
 	grace  time.Duration
+	// drain bounds the wait for a killed group to go.
+	drain  time.Duration
 	signal func(pid int, sig syscall.Signal) error
 }
 
@@ -30,7 +32,7 @@ func StartPTY(argv, env []string, dir string, cols, rows int) (*PTY, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &PTY{file: file, cmd: cmd, exited: make(chan struct{}), grace: terminateGrace, signal: syscall.Kill}
+	p := &PTY{file: file, cmd: cmd, exited: make(chan struct{}), grace: terminateGrace, drain: terminateGrace, signal: syscall.Kill}
 	go func() {
 		err := cmd.Wait()
 		p.mu.Lock()
@@ -148,7 +150,7 @@ func (p *PTY) StopGroup() error {
 		return nil
 	}
 	_ = p.signal(-group, syscall.SIGKILL)
-	if !groupGone(group, p.grace) {
+	if !groupGone(group, p.drain) {
 		return ErrGroupNotDrained
 	}
 	return nil

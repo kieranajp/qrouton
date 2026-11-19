@@ -138,7 +138,7 @@ func TestStopGroupReportsAGroupThatOutlivesSIGKILL(t *testing.T) {
 	p := startTestPTY(t, "/bin/sh", "-c", "(trap '' TERM HUP; exec sleep 300) & echo $! > "+marker+"; wait")
 	grandchild := readPID(t, marker)
 	t.Cleanup(func() { _ = syscall.Kill(grandchild, syscall.SIGKILL) })
-	p.signal = ignoreSIGKILL
+	p.signal, p.drain = ignoreSIGKILL, 50*time.Millisecond
 
 	if err := p.StopGroup(); !errors.Is(err, ErrGroupNotDrained) {
 		t.Fatalf("StopGroup = %v, want %v", err, ErrGroupNotDrained)
@@ -170,7 +170,10 @@ func readPID(t *testing.T, path string) int {
 // still answers for until its parent reaps it.
 func executing(t *testing.T, pid int) bool {
 	t.Helper()
-	out, _ := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	if _, exited := err.(*exec.ExitError); err != nil && !exited {
+		t.Fatalf("ps: %v", err)
+	}
 	state := strings.TrimSpace(string(out))
 	return state != "" && !strings.HasPrefix(state, "Z")
 }
