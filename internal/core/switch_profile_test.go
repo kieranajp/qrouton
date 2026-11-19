@@ -210,7 +210,7 @@ func TestSwitchProfileToTheCurrentProfileDoesNothing(t *testing.T) {
 // writing the conversation, because only the supervisor was waited for.
 func TestSwitchProfileCopiesOnlyOnceTheRunnerHasExited(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "runner.pid")
-	f := newSwitchFixture(t, "claude", "/bin/sh", "-c", "(trap '' TERM HUP; exec sleep 300) & echo $! > "+marker+"; wait")
+	f := newSwitchFixture(t, "claude", deafGrandchild(marker)...)
 	f.record(t)
 	f.before.mu.Lock()
 	f.before.process.grace = 50 * time.Millisecond
@@ -231,7 +231,7 @@ func TestSwitchProfileCopiesOnlyOnceTheRunnerHasExited(t *testing.T) {
 // may still be writing it.
 func TestSwitchProfileWhoseDrainFailsBootsBackWithoutCopying(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "runner.pid")
-	f := newSwitchFixture(t, "claude", "/bin/sh", "-c", "(trap '' TERM HUP; exec sleep 300) & echo $! > "+marker+"; wait")
+	f := newSwitchFixture(t, "claude", deafGrandchild(marker)...)
 	f.record(t)
 	runner := readPID(t, marker)
 	t.Cleanup(func() { _ = syscall.Kill(runner, syscall.SIGKILL) })

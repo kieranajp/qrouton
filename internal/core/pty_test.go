@@ -112,7 +112,7 @@ func ptySize(p *PTY) (cols, rows int, err error) {
 // started is still writing it: Stop returns once the supervisor alone has exited.
 func TestStopGroupReturnsOnlyOnceAGrandchildIgnoringSIGTERMIsGone(t *testing.T) {
 	marker := t.TempDir() + "/grandchild.pid"
-	p := startTestPTY(t, "/bin/sh", "-c", "(trap '' TERM HUP; exec sleep 300) & echo $! > "+marker+"; wait")
+	p := startTestPTY(t, deafGrandchild(marker)...)
 	grandchild := readPID(t, marker)
 	t.Cleanup(func() { _ = syscall.Kill(grandchild, syscall.SIGKILL) })
 
@@ -135,7 +135,7 @@ func TestStopGroupReturnsOnlyOnceAGrandchildIgnoringSIGTERMIsGone(t *testing.T) 
 // is still running, which lets a switch copy under a live writer.
 func TestStopGroupReportsAGroupThatOutlivesSIGKILL(t *testing.T) {
 	marker := t.TempDir() + "/grandchild.pid"
-	p := startTestPTY(t, "/bin/sh", "-c", "(trap '' TERM HUP; exec sleep 300) & echo $! > "+marker+"; wait")
+	p := startTestPTY(t, deafGrandchild(marker)...)
 	grandchild := readPID(t, marker)
 	t.Cleanup(func() { _ = syscall.Kill(grandchild, syscall.SIGKILL) })
 	p.signal, p.drain = ignoreSIGKILL, 50*time.Millisecond
@@ -176,4 +176,10 @@ func executing(t *testing.T, pid int) bool {
 	}
 	state := strings.TrimSpace(string(out))
 	return state != "" && !strings.HasPrefix(state, "Z")
+}
+
+// deafGrandchild starts a grandchild that ignores SIGTERM and SIGHUP, and writes
+// its pid to marker only once it does, so no stop can land before the trap.
+func deafGrandchild(marker string) []string {
+	return []string{"/bin/sh", "-c", "/bin/sh -c 'trap \"\" TERM HUP; echo $$ > " + marker + "; exec sleep 300' & wait"}
 }
