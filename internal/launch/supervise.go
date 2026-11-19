@@ -92,10 +92,10 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		}
 		initialPrompt = ""
 		env = workbench.WithEnv(env, EditorEnvVar, editor.Marshal())
-		launched := time.Now()
+		before, _ := os.Stat(named.Transcript)
 		signalled, err := runAgent(argv, env, dir, relaunch)
 		if err != nil && !signalled && named.ID != "" {
-			return keepForReload(dir, named, notice, launched, err)
+			return keepForReload(dir, named, notice, before, err)
 		}
 		// A resume of the last conversation that finds none gets one fresh start, with the notice as its opening prompt.
 		if err != nil && !signalled && resume && freshStart {
@@ -136,12 +136,22 @@ func resumable(r Runner, dir string) (session.Conversation, bool) {
 // keepForReload ends the supervisor with the record kept. The notice goes back
 // on the queue unless a write to the transcript since the launch shows the
 // conversation took it.
-func keepForReload(dir string, c session.Conversation, notice string, launched time.Time, failed error) error {
+func keepForReload(dir string, c session.Conversation, notice string, before fs.FileInfo, failed error) error {
 	var requeued error
-	if info, err := os.Stat(c.Transcript); notice != "" && (err != nil || info.ModTime().Before(launched)) {
+	if notice != "" && !transcriptChanged(c.Transcript, before) {
 		requeued = session.QueueAgentNotice(dir, notice)
 	}
 	return errors.Join(fmt.Errorf("%w: %s: %w", ErrKeptForReload, c.ID, failed), requeued)
+}
+
+// transcriptChanged compares stats, not the wall clock: Linux stamps mtimes from
+// a coarse clock that can trail time.Now by milliseconds.
+func transcriptChanged(path string, before fs.FileInfo) bool {
+	after, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return before == nil || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime())
 }
 
 var firstRunnerGeneration = func() uint64 { return uint64(time.Now().UnixNano()) }
