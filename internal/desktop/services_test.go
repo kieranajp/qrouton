@@ -260,6 +260,17 @@ func sessionsRows() []adapterRow {
 				t.Fatalf("Reload of a live session asked for %d supervisors, resumed %v", after-before, a.boot.resumed(a.opts.SessionRoot))
 			}
 		}},
+		{"Sessions.SwitchProfile", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			before, _ := a.boot.counts()
+			err := (&Sessions{sessions: a.kernel.Sessions}).SwitchProfile(a.slug(), "work")
+			if !errors.Is(err, core.ErrProfileUnswitchable) {
+				t.Fatalf("SwitchProfile of a session with no claude runner = %v, want the core's refusal", err)
+			}
+			if after, _ := a.boot.counts(); after != before {
+				t.Fatalf("a refused switch asked for %d supervisors", after-before)
+			}
+		}},
 		{"Sessions.Unload", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			if err := (&Sessions{sessions: a.kernel.Sessions}).Unload(a.slug()); err != nil {

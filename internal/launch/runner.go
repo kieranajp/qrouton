@@ -35,6 +35,9 @@ type runnerSpec struct {
 	Command []string
 	// Resume turns a fresh argv into one continuing the last conversation.
 	Resume func(argv []string) []string
+	// ResumeID continues the conversation it names. A runner without one cannot
+	// name a conversation, so it always resumes the last.
+	ResumeID func(argv []string, conversation string) []string
 	// Prompt appends the opening message the way this runner accepts it.
 	Prompt func(argv []string, message string) []string
 	// MCP points the runner at a qrouton MCP server, which is the part of the
@@ -54,6 +57,7 @@ type runnerSpec struct {
 	LoginArgs     []string
 	StatusArgs    []string
 	ReadStatus    func(out []byte, exit int) SignIn
+	Conversation  *conversationSpec
 }
 
 type injectContext struct {
@@ -72,7 +76,7 @@ var claudeHooks = []string{
 	agentevent.HookSubagentStart, agentevent.HookSubagentStop,
 	agentevent.HookNotification, agentevent.HookStop, agentevent.HookStopFailure,
 	agentevent.HookPreToolUse, agentevent.HookPostToolUse, agentevent.HookPostToolUseFailure,
-	agentevent.HookUserPromptSubmit,
+	agentevent.HookUserPromptSubmit, agentevent.HookSessionStart,
 }
 
 var runnerSpecs = []runnerSpec{
@@ -80,6 +84,7 @@ var runnerSpecs = []runnerSpec{
 		ID: runnerIDClaude, Label: runnerLabelClaude,
 		Command:    []string{runnerIDClaude, claudeSkipPermissionsFlag},
 		Resume:     resumeWith(claudeContinueFlag),
+		ResumeID:   resumeClaude,
 		Prompt:     promptAsArgument,
 		MCP:        claudeMCP,
 		Inject:     injectClaude,
@@ -87,9 +92,10 @@ var runnerSpecs = []runnerSpec{
 		ProfileEnv: claudeConfigDirEnvVar,
 		CredentialEnv: []string{claudeUseBedrockEnvVar, claudeUseVertexEnvVar, claudeUseFoundryEnvVar,
 			anthropicAuthTokenEnvVar, anthropicAPIKeyEnvVar, claudeOAuthTokenEnvVar},
-		LoginArgs:  []string{claudeAuthCmd, claudeLoginCmd},
-		StatusArgs: []string{claudeAuthCmd, claudeStatusCmd, claudeJSONFlag},
-		ReadStatus: readClaudeStatus,
+		LoginArgs:    []string{claudeAuthCmd, claudeLoginCmd},
+		StatusArgs:   []string{claudeAuthCmd, claudeStatusCmd, claudeJSONFlag},
+		ReadStatus:   readClaudeStatus,
+		Conversation: claudeConversation,
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,
@@ -158,6 +164,21 @@ func specFor(id string) (runnerSpec, bool) {
 
 func resumeWith(flags ...string) func([]string) []string {
 	return func(argv []string) []string { return append(argv, flags...) }
+}
+
+// resumeClaude names the conversation. A missing one then fails the launch,
+// where --continue would silently start afresh.
+func resumeClaude(argv []string, conversation string) []string {
+	return append(argv, claudeResumeFlag, conversation)
+}
+
+// namedConversation is the recorded conversation a resume names, for a runner
+// that can name one.
+func namedConversation(r Runner, dir string) (session.Conversation, bool) {
+	if spec, ok := specFor(r.ID); !ok || spec.ResumeID == nil {
+		return session.Conversation{}, false
+	}
+	return session.ReadConversation(dir)
 }
 
 func promptAsArgument(argv []string, message string) []string {
@@ -271,7 +292,12 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 	if r.Profile.ID != "" && spec.ProfileEnv == "" {
 		return nil, nil, fmt.Errorf("%w: %q", ErrProfilesUnsupported, r.ID)
 	}
-	argv, env, err := spec.Inject(runnerArgv(spec, r, resume, sessionMode(dir), sessionTicket(dir), prompt), injectContext{
+	var conversation string
+	if resume {
+		named, _ := namedConversation(r, dir)
+		conversation = named.ID
+	}
+	argv, env, err := spec.Inject(runnerArgv(spec, r, resume, conversation, sessionMode(dir), sessionTicket(dir), prompt), injectContext{
 		qroutonBin: qroutonBin,
 		dir:        dir,
 		handle:     handle,
@@ -603,10 +629,14 @@ func ShellQuote(s string) string {
 	return shellQuoteChar + strings.ReplaceAll(s, shellQuoteChar, shellQuoteEscape) + shellQuoteChar
 }
 
-func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, provider, prompt string) []string {
+func runnerArgv(spec runnerSpec, r Runner, resume bool, conversation, mode, provider, prompt string) []string {
 	argv := slices.Clone(r.Command)
 	if resume {
-		argv = spec.Resume(argv)
+		if conversation != "" && spec.ResumeID != nil {
+			argv = spec.ResumeID(argv, conversation)
+		} else {
+			argv = spec.Resume(argv)
+		}
 		if resumed := strings.TrimSpace(prompt); resumed != "" {
 			argv = spec.Prompt(argv, resumed)
 		}

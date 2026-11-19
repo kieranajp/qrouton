@@ -3,6 +3,7 @@
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import TextField from "../forms/TextField.svelte";
+  import { PROFILE_DEFAULT_LABEL } from "../bridge/generated.js";
   import { Events, call } from "../wails.js";
   import * as go from "./calls.js";
   import { badge, byProfile, followSignIn, pinnedNote, statusKey } from "./profiles.js";
@@ -13,7 +14,7 @@
   /** @typedef {import("./calls.js").RunnerProfiles} RunnerProfiles */
   /** @typedef {import("./calls.js").ProfileRow} ProfileRow */
 
-  const DEFAULT_PROFILE = Object.freeze({ id: "", label: "Default", dir: "", sessions: 0 });
+  const DEFAULT_PROFILE = Object.freeze({ id: "", label: PROFILE_DEFAULT_LABEL, dir: "", sessions: 0 });
 
   /** @type {{labelledby?: string}} */
   let { labelledby } = $props();

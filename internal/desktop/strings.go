@@ -25,6 +25,12 @@ const (
 	sessionUnloadFailed  = "Session could not be unloaded"
 	sessionReorderFailed = "Session could not be moved"
 
+	sessionSwitchProfileLabel        = "Switch profile"
+	sessionSwitchProfileFailed       = "Profile could not be switched"
+	sessionSwitchProfileNeedsMessage = "Send one message, then switch profile"
+	profileCurrentMeta               = "current"
+	profileDefaultLabel              = "Default"
+
 	// The page URL is a directory: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.
 	frontendRoot = "/"

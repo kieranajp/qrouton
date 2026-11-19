@@ -14,6 +14,8 @@ import (
 // tool's input and response stay raw until the tool is known.
 type claudePayload struct {
 	HookEventName        string           `json:"hook_event_name"`
+	SessionID            string           `json:"session_id"`
+	TranscriptPath       string           `json:"transcript_path"`
 	Cwd                  string           `json:"cwd"`
 	AgentID              string           `json:"agent_id"`
 	AgentType            string           `json:"agent_type"`
@@ -71,6 +73,10 @@ func ReduceIn(provider, root string, input io.Reader) (workbench.AgentEventReque
 		AgentID: truncate(p.AgentID, IDLimit), AgentType: truncate(p.AgentType, IDLimit),
 		ToolUseID: truncate(p.ToolUseID, IDLimit), Tool: truncate(p.ToolName, IDLimit),
 		NotificationType: truncate(p.NotificationType, IDLimit), Interrupt: p.IsInterrupt,
+	}
+	if p.AgentID == "" {
+		event.ConversationID = truncate(p.SessionID, IDLimit)
+		event.TranscriptPath = p.TranscriptPath
 	}
 	if p.ToolName != "" {
 		target := Target(p.ToolName, p.ToolInput)

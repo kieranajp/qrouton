@@ -2,11 +2,14 @@ package core
 
 import (
 	"context"
+	"maps"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
@@ -197,6 +200,7 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	for _, s := range configSnapshot.EffectiveStickers() {
 		fields.Stickers = append(fields.Stickers, status.Sticker{ID: s.ID, Colour: s.Colour, Symbol: s.Symbol, Label: s.Label})
 	}
+	fields.Profiles = switchableProfiles(configSnapshot)
 	if shown != nil {
 		shown.mu.Lock()
 		shown.pruneBugReports(reg.now())
@@ -247,6 +251,24 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 		fields.Sessions[i].Unseen = unseen[row.Slug]
 	}
 	emit(chromeEvent, fields)
+}
+
+func switchableProfiles(cfg *config.Config) []status.RunnerProfiles {
+	out := []status.RunnerProfiles{}
+	if cfg == nil {
+		return out
+	}
+	for _, runner := range slices.Sorted(maps.Keys(cfg.Profiles)) {
+		if !launch.SwitchesProfiles(runner) {
+			continue
+		}
+		group := status.RunnerProfiles{Runner: runner, Profiles: []status.Profile{}}
+		for _, p := range cfg.Profiles[runner] {
+			group.Profiles = append(group.Profiles, status.Profile{ID: p.ID, Label: p.Label})
+		}
+		out = append(out, group)
+	}
+	return out
 }
 
 func agentSummary(snapshot agentActivitySnapshot) status.AgentSummary {

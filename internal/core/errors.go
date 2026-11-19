@@ -66,6 +66,11 @@ var (
 	ErrAddRunning             = errors.New("this session is already adding repositories")
 	ErrAddCancelled           = errors.New("adding repositories was cancelled")
 	ErrPickerStale            = errors.New("that escalation has already been answered or has expired")
+	ErrProfileUnswitchable    = errors.New("this session's runner cannot switch profile")
+	ErrGroupNotDrained        = errors.New("a process the session started outlived being killed")
+	// ErrNoConversation means no hook has named the session's conversation yet,
+	// which any prompt fixes.
+	ErrNoConversation = errors.New(noConversationRefusal)
 )
 
 var (

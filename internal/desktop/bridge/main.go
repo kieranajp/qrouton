@@ -39,6 +39,7 @@ const (
 	placementPackage = "../../placement"
 	vaultPackage     = "../../vault"
 	launchPackage    = "../../launch"
+	corePackage      = "../../core"
 	moduleFile       = "../../../go.mod"
 	generatedPage    = "../frontend/src/lib/bridge/generated.js"
 	fixturePalette   = "../frontend/tests/theme.css"
@@ -110,6 +111,12 @@ var valueNames = []valueName{
 	{desktopPackage, "sessionUnloadLabel"},
 	{desktopPackage, "sessionUnloadFailed"},
 	{desktopPackage, "sessionReorderFailed"},
+	{desktopPackage, "sessionSwitchProfileLabel"},
+	{desktopPackage, "sessionSwitchProfileFailed"},
+	{desktopPackage, "sessionSwitchProfileNeedsMessage"},
+	{desktopPackage, "profileCurrentMeta"},
+	{desktopPackage, "profileDefaultLabel"},
+	{corePackage, "noConversationRefusal"},
 	{desktopPackage, "switcherLabel"},
 	{desktopPackage, "switcherSearch"},
 	{desktopPackage, "switcherClose"},
