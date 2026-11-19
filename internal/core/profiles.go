@@ -168,7 +168,7 @@ func (p *Profiles) Add(in ProfileInput) (ProfilesView, error) {
 	if _, taken := p.cfg.Profile(in.Runner, id); taken {
 		return ProfilesView{}, fmt.Errorf(profileTakenFormat, ErrProfileTaken, id)
 	}
-	dir := strings.TrimSpace(in.Dir)
+	dir := in.Dir
 	if dir == "" {
 		dir = launch.DefaultProfileDir(in.Runner, id)
 	}
