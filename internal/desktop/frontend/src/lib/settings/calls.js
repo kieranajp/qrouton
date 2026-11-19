@@ -1,6 +1,7 @@
 import {
   PLACEMENT_CHECK,
   PROFILES_ADD,
+  PROFILES_CHOOSE_FOLDER,
   PROFILES_DELETE,
   PROFILES_RENAME,
   PROFILES_SIGN_IN,
@@ -76,7 +77,7 @@ export const checkPlacement = () => Call.ByName(PLACEMENT_CHECK);
 
 /** @typedef {{id: string, label: string, dir: string, sessions: number, uncounted?: boolean}} ProfileRow */
 /** @typedef {{id: string, label: string, credentials: string[], warning?: string, profiles: ProfileRow[]}} RunnerProfiles */
-/** @typedef {{runners: RunnerProfiles[], sessionShown: boolean}} ProfilesView */
+/** @typedef {{runners: RunnerProfiles[], sessionShown: boolean, canChooseFolder: boolean}} ProfilesView */
 /** @typedef {{runner: string, profile: string, state: import("../bridge/generated.js").SignInState, email?: string}} ProfileStatus */
 
 /** @returns {Promise<ProfilesView>} */
@@ -100,3 +101,6 @@ export const profileStatus = () => Call.ByName(PROFILES_STATUS);
 /** The id of the tab the sign-in runs in.
  * @param {string} runner @param {string} id @returns {Promise<string>} */
 export const signIn = (runner, id) => Call.ByName(PROFILES_SIGN_IN, runner, id);
+
+/** Answers "" on a cancel. @returns {Promise<string>} */
+export const chooseFolder = () => Call.ByName(PROFILES_CHOOSE_FOLDER);

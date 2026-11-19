@@ -1003,6 +1003,14 @@ func profilesRows() []adapterRow {
 				t.Fatalf("Status = %+v, %v", got, err)
 			}
 		}},
+		{"Profiles.ChooseFolder", func(t *testing.T) {
+			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
+				newLocalClient(newFakeRenderer(), newStubBoot(), func() (string, error) { return "/picked", nil }))
+			t.Cleanup(kernel.Shutdown)
+			if got, err := (&Profiles{profiles: kernel.Profiles}).ChooseFolder(); err != nil || got != "/picked" {
+				t.Fatalf("ChooseFolder = %q, %v", got, err)
+			}
+		}},
 		{"Profiles.SignIn", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			a.boot.signIn = func(string, config.RunnerProfile) ([]string, error) {

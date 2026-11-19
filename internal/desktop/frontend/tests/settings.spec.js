@@ -521,13 +521,14 @@ test("a placement check that fails stays in settings and says why", async ({ pag
 const profileCalls = (page, method) =>
   page.evaluate((wanted) => window.settingsFixture.profileCalls().filter((call) => call.method === wanted), method);
 const claudeProfiles = (page) => page.getByRole("list", { name: "Claude Code profiles" });
+const folder = (page) => page.getByRole("status", { name: "Profile folder" });
 
 test("adding a profile offers a folder from its name and saves without the Save button", async ({ page }) => {
   await page.goto("/tests/settings.html");
   await open(page, "Agents");
   await page.getByRole("button", { name: "Add Claude Code profile" }).click();
   await page.getByRole("textbox", { name: "Profile name" }).fill("Day Job");
-  await expect(page.getByRole("textbox", { name: "Profile folder" })).toHaveValue("~/.claude-day-job");
+  await expect(folder(page)).toHaveText("~/.claude-day-job");
   await page.getByRole("button", { name: "Add", exact: true }).click();
 
   await expect(claudeProfiles(page).getByRole("listitem", { name: "Day Job" })).toContainText("~/.claude-day-job");
@@ -548,18 +549,80 @@ test("renaming a profile changes its label and keeps its id", async ({ page }) =
   expect(await profileCalls(page, "Rename")).toEqual([{ method: "Rename", args: ["claude", "work", "Lifesum Health"] }]);
 });
 
-test("Enter in the new profile's name or folder adds it and leaves Settings open and unsaved", async ({ page }) => {
+test("Enter in the new profile's name adds it and leaves Settings open and unsaved", async ({ page }) => {
   await page.goto("/tests/settings.html");
   await open(page, "Agents");
-  for (const [label, field] of [["Day Job", "Profile name"], ["Side Gig", "Profile folder"]]) {
-    await page.getByRole("button", { name: "Add Claude Code profile" }).click();
-    await page.getByRole("textbox", { name: "Profile name" }).fill(label);
-    await page.getByRole("textbox", { name: field }).press("Enter");
-    await expect(claudeProfiles(page).getByRole("listitem", { name: label })).toBeVisible();
-  }
-  expect((await profileCalls(page, "Add")).map((call) => call.args[0].label)).toEqual(["Day Job", "Side Gig"]);
+  await page.getByRole("button", { name: "Add Claude Code profile" }).click();
+  await page.getByRole("textbox", { name: "Profile name" }).fill("Day Job");
+  await page.getByRole("textbox", { name: "Profile name" }).press("Enter");
+  await expect(claudeProfiles(page).getByRole("listitem", { name: "Day Job" })).toBeVisible();
+  expect((await profileCalls(page, "Add")).map((call) => call.args[0].label)).toEqual(["Day Job"]);
   expect(await saves(page)).toEqual([]);
   expect(await page.evaluate(() => window.settingsFixture.closes())).toBe(0);
+});
+
+const startAdding = async (page, query = "") => {
+  await page.goto(`/tests/settings.html${query}`);
+  await open(page, "Agents");
+  await page.getByRole("button", { name: "Add Claude Code profile" }).click();
+  await page.getByRole("textbox", { name: "Profile name" }).fill("Day Job");
+  await expect(folder(page)).toHaveText("~/.claude-day-job");
+};
+const queueFolders = (page, ...answers) => page.evaluate((queued) => window.settingsFixture.queueFolders(...queued), answers);
+const choose = (page) => page.getByRole("button", { name: "Choose…" }).click();
+
+test("a chosen folder replaces the suggestion and is the folder the profile is added with", async ({ page }) => {
+  await startAdding(page);
+  await queueFolders(page, "/Volumes/work/claude");
+  await choose(page);
+  await expect(folder(page)).toHaveText("/Volumes/work/claude");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+
+  await expect(claudeProfiles(page).getByRole("listitem", { name: "Day Job" })).toContainText("/Volumes/work/claude");
+  expect(await profileCalls(page, "Add")).toEqual([
+    { method: "Add", args: [{ runner: "claude", label: "Day Job", dir: "/Volumes/work/claude" }] },
+  ]);
+});
+
+test("renaming after a pick leaves the chosen folder alone", async ({ page }) => {
+  await startAdding(page);
+  await queueFolders(page, "/Volumes/work/claude");
+  await choose(page);
+  await expect(folder(page)).toHaveText("/Volumes/work/claude");
+  await page.getByRole("textbox", { name: "Profile name" }).fill("Night Job");
+  await page.waitForTimeout(100);
+  await expect(folder(page)).toHaveText("/Volumes/work/claude");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  expect((await profileCalls(page, "Add"))[0].args[0]).toEqual({
+    runner: "claude",
+    label: "Night Job",
+    dir: "/Volumes/work/claude",
+  });
+});
+
+test("a cancelled pick keeps the folder shown, and the name still steers it", async ({ page }) => {
+  await startAdding(page);
+  await queueFolders(page, "");
+  await choose(page);
+  await expect.poll(() => profileCalls(page, "ChooseFolder")).toHaveLength(1);
+  await expect(folder(page)).toHaveText("~/.claude-day-job");
+  await page.getByRole("textbox", { name: "Profile name" }).fill("Night Job");
+  await expect(folder(page)).toHaveText("~/.claude-night-job");
+});
+
+test("a picker that fails says why and keeps the folder", async ({ page }) => {
+  await startAdding(page);
+  await queueFolders(page, { error: "the folder picker could not open" });
+  await choose(page);
+  await expect(page.getByText("the folder picker could not open")).toBeVisible();
+  await expect(folder(page)).toHaveText("~/.claude-day-job");
+});
+
+test("with no folder picker there is no Choose button and the suggested folder is added", async ({ page }) => {
+  await startAdding(page, "?chooser=off");
+  await expect(page.getByRole("button", { name: "Choose…" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  expect((await profileCalls(page, "Add"))[0].args[0].dir).toBe("~/.claude-day-job");
 });
 
 test("Enter in a profile's new name renames it and leaves Settings open and unsaved", async ({ page }) => {
