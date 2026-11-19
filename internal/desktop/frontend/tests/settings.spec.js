@@ -665,6 +665,17 @@ test("nothing adds while a folder pick is open, and the picked folder is added a
   expect((await profileCalls(page, "Add"))[0].args[0].dir).toBe("/Volumes/work/claude");
 });
 
+// Catches the preview clipping the end of a long picked folder.
+test("a long picked folder shows in full", async ({ page }) => {
+  await startAdding(page);
+  const long = "/Users/k/Library/CloudStorage/GoogleDrive-k@example.com/My Drive/Agent profiles/claude-lifesum-work";
+  await queueFolders(page, long);
+  await choose(page);
+  await expect(folder(page)).toHaveText(long);
+  const fits = await folder(page).evaluate((output) => output.scrollWidth <= output.clientWidth);
+  expect(fits).toBe(true);
+});
+
 // Catches an add that answers late closing, or failing, the draft opened after its own was cancelled.
 test("an add that answers after its draft is cancelled leaves the next draft open", async ({ page }) => {
   for (const [runner, label] of [

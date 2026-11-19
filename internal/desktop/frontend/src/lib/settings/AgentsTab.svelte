@@ -446,9 +446,7 @@
   .path {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     border: 1px solid var(--border-subtle);
     padding: calc(9px * var(--ui-scale)) calc(12px * var(--ui-scale));
     font: var(--literal);
