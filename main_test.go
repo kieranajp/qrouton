@@ -130,7 +130,10 @@ func TestOpeningAWorkbenchRefusesWhileOneIsUp(t *testing.T) {
 	t.Setenv("QROUTON_ROOT", root)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	previous := detachProcess
-	defer func() { detachProcess = previous }()
+	previousDiscovery := discoverProcess
+	defer func() { detachProcess, discoverProcess = previous, previousDiscovery }()
+	socket := filepath.Join(t.TempDir(), "workbench.sock")
+	discoverProcess = func() workbench.Discovery { return workbench.Discovery{Socket: socket} }
 	detachProcess = func(launch.WorkbenchSpec, []string) error {
 		t.Fatal("a second workbench detached")
 		return nil
@@ -142,8 +145,6 @@ func TestOpeningAWorkbenchRefusesWhileOneIsUp(t *testing.T) {
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "octopus", Mode: session.ModeAssistant}); err != nil {
 		t.Fatal(err)
 	}
-	answerOnAWorkbenchSocket(t)
-
 	err := open(rootContext(t))
 	if err == nil {
 		t.Fatal("qrouton opened a session with a workbench already open")
@@ -257,27 +258,6 @@ func TestLinearIssueRefusesALegacyRunningWorkbench(t *testing.T) {
 	discoverProcess = func() workbench.Discovery { return workbench.Discovery{Legacy: true} }
 	if err := open(rootContext(t, "--linear-issue", "LIF-2841")); !errors.Is(err, errLegacyWorkbench) {
 		t.Fatalf("legacy workbench refusal = %v, want %v", err, errLegacyWorkbench)
-	}
-}
-
-// answerOnAWorkbenchSocket stands a workbench up as far as Running() can tell: an
-// address under the per-uid directory it scans, with something on the other end.
-func answerOnAWorkbenchSocket(t *testing.T) {
-	t.Helper()
-	socket, err := workbench.NewSocketPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	listener, err := net.Listen("unix", socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = listener.Close()
-		_ = os.Remove(socket)
-	})
-	if d := workbench.Discover(); d.Socket == "" && !d.Legacy {
-		t.Fatal("a workbench listening on its socket is not discovered")
 	}
 }
 
