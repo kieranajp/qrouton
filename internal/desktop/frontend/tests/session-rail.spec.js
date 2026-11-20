@@ -383,35 +383,27 @@ test("the badge carries the row's state", async ({ page }) => {
   expect(await background(avatar(/^Session 2/))).toBe("rgba(0, 0, 0, 0)");
 });
 
-test("the rail headings all read at one rank, centred", async ({ page }) => {
-  const faint = await token(page, "--text-faint");
-  for (const heading of ["Sessions"]) {
-    const caps = page.locator(".caps", { hasText: heading }).first();
-    expect(await caps.evaluate((el) => getComputedStyle(el).color)).toBe(faint);
-    expect(await caps.evaluate((el) => getComputedStyle(el).textAlign)).toBe("center");
-  }
+// A centred label would sit off the left edge the badges below it share.
+test("the Sessions label reads faint and starts on the badges' left edge", async ({ page }) => {
+  const caps = page.locator(".caps", { hasText: "Sessions" }).first();
+  expect(await caps.evaluate((el) => getComputedStyle(el).color)).toBe(await token(page, "--text-faint"));
+  const label = (await caps.boundingBox()).x;
+  const badge = (await sessionButton(page, "Session 2").locator(".avatar").boundingBox()).x;
+  expect(Math.abs(label - badge)).toBeLessThan(1);
 });
 
-test("the Dashboard row starts on the pane header's line", async ({ page }) => {
-  const home = page.locator(".home");
-  const paneHeader = await page.evaluate(() => {
-    const probe = document.createElement("div");
-    probe.style.height = "var(--h-pane-header)";
-    document.body.append(probe);
-    const height = getComputedStyle(probe).height;
-    probe.remove();
-    return height;
-  });
-  expect(await home.evaluate((el) => getComputedStyle(el).height)).toBe(paneHeader);
-  expect(await home.evaluate((el) => getComputedStyle(el).borderBottomWidth)).toBe("0px");
-
-  // Centred on the line, as the tab labels are centred in the pane header beside it.
-  const centres = await home.evaluate((el) => {
-    const row = el.querySelector("button").getBoundingClientRect();
-    const outer = el.getBoundingClientRect();
-    return { row: row.top + row.height / 2 - outer.top, home: outer.height / 2 };
-  });
-  expect(centres.row).toBeCloseTo(centres.home, 0);
+// A band the row filled would put its border against the titlebar; a row without border-box runs two pixels past the Dashboard row.
+test("the Dashboard row stands clear of the rail's top and matches the session rows' width and left edge", async ({ page }) => {
+  const rail = await page.locator(".rail").boundingBox();
+  const home = await dashboardRow(page).boundingBox();
+  expect(home.y - rail.y).toBeGreaterThanOrEqual(12);
+  const row = await page.locator('[data-session-slug="session-2"]').boundingBox();
+  expect(row.x).toBeCloseTo(home.x, 0);
+  expect(row.width).toBeCloseTo(home.width, 0);
+  const tile = await dashboardRow(page).locator(".tile").boundingBox();
+  const badge = await sessionButton(page, "Session 2").locator(".avatar").boundingBox();
+  expect(tile.x).toBeCloseTo(badge.x, 0);
+  expect(tile.width).toBeCloseTo(badge.width, 0);
 });
 
 test("a summary without a root state falls back to the active count", async ({ page }) => {
@@ -632,7 +624,7 @@ test("unloading a background row sends its slug, dims it and preserves selection
   await page.getByRole("button", { name: "Unload", exact: true }).click();
   await expect(page.locator(".menu")).toBeHidden();
   await expect(page.getByRole("button", { name: "Conversation focus" })).toBeFocused();
-  await expect(row.locator(".name")).toHaveCSS("color", await token(page, "--text-muted"));
+  await expect(row.locator(".name")).toHaveCSS("color", await token(page, "--text-secondary"));
   await expect(row).toContainText("Idle · 1d");
   await expect(page.getByRole("button", { name: /^Checkout migration ·/ })).toHaveAttribute(
     "aria-current", "page",
@@ -651,7 +643,7 @@ test("unloading the selected row lands on the dashboard and leaves a dimmed resu
   await page.getByRole("button", { name: "Unload", exact: true }).click();
   await expect(page.getByRole("button", { name: "Dashboard", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.locator('.session-list [aria-current="page"]')).toHaveCount(0);
-  await expect(checkout.locator(".name")).toHaveCSS("color", await token(page, "--text-muted"));
+  await expect(checkout.locator(".name")).toHaveCSS("color", await token(page, "--text-secondary"));
   await expect(second).toBeVisible();
   await expect(page.getByRole("button", { name: "Conversation focus" })).toBeFocused();
   await checkout.click();

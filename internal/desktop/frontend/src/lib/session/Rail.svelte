@@ -355,7 +355,7 @@
   </div>
 
   <div class="band">
-    <CapsLabel tone="dim" centred>Sessions</CapsLabel>
+    <CapsLabel tone="dim">Sessions</CapsLabel>
   </div>
 
   <div class="session-list" aria-label="Sessions" bind:this={sessionList}>
@@ -451,22 +451,19 @@
     overflow: hidden;
   }
 
-  /* A pane header's height, so the Dashboard row shares a line with the pane headers beside it. */
   .home {
-    height: var(--h-pane-header);
-    box-sizing: border-box;
     flex: none;
     display: flex;
-    align-items: center;
-    padding: 0 calc(12px * var(--ui-scale));
+    padding: calc(14px * var(--ui-scale)) calc(12px * var(--ui-scale)) 0;
   }
 
   .dashboard {
     width: 100%;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     gap: calc(10px * var(--ui-scale));
-    padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
+    padding: calc(8px * var(--ui-scale));
     border: 1px solid transparent;
     background: transparent;
     color: var(--text-muted);
@@ -497,8 +494,9 @@
   }
 
   .tile {
-    width: calc(30px * var(--ui-scale));
-    height: calc(30px * var(--ui-scale));
+    width: calc(26px * var(--ui-scale));
+    height: calc(26px * var(--ui-scale));
+    box-sizing: border-box;
     flex: none;
     display: flex;
     align-items: center;
@@ -517,8 +515,7 @@
     flex: none;
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: calc(12px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(8px * var(--ui-scale));
+    padding: calc(16px * var(--ui-scale)) calc(21px * var(--ui-scale)) calc(6px * var(--ui-scale));
   }
 
   /* The session list scrolls; the footer below it stays put. */
@@ -528,7 +525,7 @@
     overflow: hidden auto;
     display: flex;
     flex-direction: column;
-    gap: calc(4px * var(--ui-scale));
+    gap: calc(2px * var(--ui-scale));
     padding: 0 calc(12px * var(--ui-scale));
   }
 
