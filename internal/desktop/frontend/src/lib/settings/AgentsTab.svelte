@@ -25,7 +25,7 @@
   let statuses = $state(/** @type {Record<string, import("./calls.js").ProfileStatus>} */ ({}));
   let signingIn = $state(/** @type {Record<string, boolean>} */ ({}));
   let adding = $state(
-    /** @type {{runner: string, label: string, dir: string, chosen: boolean, error: string, busy: boolean} | null} */ (null),
+    /** @type {{runner: string, label: string, dir: string, chosen: boolean, error: string, busy: boolean, picking: boolean} | null} */ (null),
   );
   let renaming = $state(/** @type {{runner: string, id: string, label: string, error: string} | null} */ (null));
   let deleting = $state(/** @type {{runner: string, id: string, error: string} | null} */ (null));
@@ -83,7 +83,7 @@
 
   /** @param {RunnerProfiles} runner */
   function startAdd(runner) {
-    adding = { runner: runner.id, label: "", dir: "", chosen: false, error: "", busy: false };
+    adding = { runner: runner.id, label: "", dir: "", chosen: false, error: "", busy: false, picking: false };
   }
 
   async function suggest() {
@@ -96,9 +96,13 @@
 
   // A cancelled picker answers "" with no error, which keeps the folder shown.
   async function chooseFolder() {
-    if (!adding) return;
+    const draft = adding;
+    if (!draft || draft.picking) return;
+    draft.picking = true;
     const answer = await call(go.chooseFolder());
-    if (!adding) return;
+    draft.picking = false;
+    // Compare the object: a cancelled draft reopened for the same runner is a new draft.
+    if (!adding || adding !== draft) return;
     if (!answer.ok) {
       adding.error = message(answer.error);
       return;
@@ -110,13 +114,14 @@
   }
 
   async function add() {
-    if (!adding || adding.busy) return;
-    adding.busy = true;
-    const answer = await call(go.addProfile({ runner: adding.runner, label: adding.label, dir: adding.dir }));
-    if (!adding) return;
-    adding.busy = false;
+    const draft = adding;
+    if (!draft || draft.busy || draft.picking) return;
+    draft.busy = true;
+    const answer = await call(go.addProfile({ runner: draft.runner, label: draft.label, dir: draft.dir }));
+    draft.busy = false;
+    if (adding !== draft) return;
     if (!answer.ok) {
-      adding.error = message(answer.error);
+      draft.error = message(answer.error);
       return;
     }
     view = answer.value;
@@ -295,7 +300,7 @@
               <output class="path" class:empty={!adding.dir} aria-label="Profile folder"
                 >{adding.dir || "Follows the name"}</output>
               {#if view?.canChooseFolder}
-                <Button variant="secondary" onclick={chooseFolder}>Choose…</Button>
+                <Button variant="secondary" disabled={adding.picking} onclick={chooseFolder}>Choose…</Button>
               {/if}
             </div>
             <span class="help" class:failed={adding.error}>
@@ -303,7 +308,7 @@
             </span>
           </div>
           <div class="add-actions">
-            <Button variant="cube" disabled={adding.busy} onclick={add}>Add</Button>
+            <Button variant="cube" disabled={adding.busy || adding.picking} onclick={add}>Add</Button>
             <button type="button" class="link" onclick={() => (adding = null)}>Cancel</button>
           </div>
         </div>
@@ -441,9 +446,7 @@
   .path {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     border: 1px solid var(--border-subtle);
     padding: calc(9px * var(--ui-scale)) calc(12px * var(--ui-scale));
     font: var(--literal);

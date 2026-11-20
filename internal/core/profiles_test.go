@@ -155,6 +155,28 @@ func TestAddDerivesTheIDAndCreatesThePrivateFolder(t *testing.T) {
 	}
 }
 
+// Catches the save path trimming a picked folder into its sibling.
+func TestAddKeepsThePickedFolderExactly(t *testing.T) {
+	profiles, _ := testProfiles(t, &config.Config{})
+	base := t.TempDir()
+	spaced := filepath.Join(base, "work ")
+	for _, dir := range []string{filepath.Join(base, "work"), spaced} {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	view, err := profiles.Add(ProfileInput{Runner: "claude", Label: "Spaced", Dir: spaced})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := view.Runners[0].Profiles; len(got) != 1 || got[0].Dir != spaced {
+		t.Fatalf("claude's profiles = %+v, want the folder %q byte for byte", got, spaced)
+	}
+	if _, err := profiles.Add(ProfileInput{Runner: "claude", Label: "Blank", Dir: "  "}); !errors.Is(err, ErrProfileFolder) {
+		t.Fatalf("adding a blank folder = %v, want %v", err, ErrProfileFolder)
+	}
+}
+
 func TestRenameKeepsTheID(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "work")
 	cfg := &config.Config{Profiles: map[string][]config.RunnerProfile{"codex": {{ID: "work", Label: "Work", Dir: dir}}}}
@@ -431,7 +453,7 @@ func TestViewOffersTheFolderPickerOnlyWhereTheClientHasOne(t *testing.T) {
 	if view, _ := profiles.View(); view.CanChooseFolder {
 		t.Fatal("the view offers a folder picker the client cannot show")
 	}
-	client.choose = func() (string, error) { return "/picked", nil }
+	client.choose = func(bool) (string, error) { return "/picked", nil }
 	if view, _ := profiles.View(); !view.CanChooseFolder {
 		t.Fatal("the view hides the folder picker the client has")
 	}
@@ -440,7 +462,7 @@ func TestViewOffersTheFolderPickerOnlyWhereTheClientHasOne(t *testing.T) {
 func TestChooseFolderPassesTheClientsAnswerAndACancelThrough(t *testing.T) {
 	profiles, _, client := testProfilesClient(t, &config.Config{})
 	answers := []string{"/Volumes/work/claude", ""}
-	client.choose = func() (string, error) {
+	client.choose = func(bool) (string, error) {
 		answer := answers[0]
 		answers = answers[1:]
 		return answer, nil

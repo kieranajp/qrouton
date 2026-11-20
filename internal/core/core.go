@@ -99,7 +99,7 @@ func New(opts Options, client Client) *Core {
 		opts.LinearEnvironment, withoutTicket(opts.Relaunch), opts.Quit, reg.Touch, ReconfigureVault(c.Vault), runners, client)
 	c.Profiles = newProfiles(opts.Config, ReconfigureVault(c.Vault), runners, opts.Launcher, reg, windows, client)
 	c.FirstRun = newFirstRun(opts.Config, reg.Touch, pendingRelaunch(opts.Relaunch, c.PendingTicket), opts.Quit,
-		client.ChooseDirectory, ReconfigureVault(c.Vault))
+		func() (string, error) { return client.ChooseDirectory(false) }, ReconfigureVault(c.Vault))
 	c.Placement = newPlacement(opts.Config, reg)
 	c.FirstRun.onWelcomed = c.Placement.CheckInBackground
 	c.wire()
