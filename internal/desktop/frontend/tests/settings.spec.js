@@ -618,6 +618,84 @@ test("a picker that fails says why and keeps the folder", async ({ page }) => {
   await expect(folder(page)).toHaveText("~/.claude-day-job");
 });
 
+const hold = (page, method) => page.evaluate((held) => window.settingsFixture.hold(held), method);
+const release = (page, method) => page.evaluate((held) => window.settingsFixture.release(held), method);
+const addButton = (page) => page.getByRole("button", { name: "Add", exact: true });
+const cancelDraft = (page) =>
+  page.getByRole("group", { name: /^New .* profile$/ }).getByRole("button", { name: "Cancel", exact: true }).click();
+
+// Catches a late pick filling whichever draft is open now, including a reopened draft for the same runner.
+test("a pick that answers after its draft is cancelled leaves the next draft's folder alone", async ({ page }) => {
+  for (const [runner, label, suggested] of [
+    ["Codex CLI", "Side Job", "~/.codex-side-job"],
+    ["Claude Code", "Night Job", "~/.claude-night-job"],
+  ]) {
+    await startAdding(page);
+    await hold(page, "ChooseFolder");
+    await choose(page);
+    await cancelDraft(page);
+    await page.getByRole("button", { name: `Add ${runner} profile` }).click();
+    await page.getByRole("textbox", { name: "Profile name" }).fill(label);
+    await expect(folder(page)).toHaveText(suggested);
+    await queueFolders(page, "/Users/k/.claude-old");
+    await release(page, "ChooseFolder");
+    await page.waitForTimeout(100);
+    await expect(folder(page)).toHaveText(suggested);
+    await addButton(page).click();
+    expect((await profileCalls(page, "Add"))[0].args[0].dir).toBe(suggested);
+  }
+});
+
+// Catches Enter or Add committing the old folder while the picker is still open.
+test("nothing adds while a folder pick is open, and the picked folder is added after", async ({ page }) => {
+  await startAdding(page);
+  await hold(page, "ChooseFolder");
+  await choose(page);
+  await expect(addButton(page)).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Choose…" })).toBeDisabled();
+  await page.getByRole("textbox", { name: "Profile name" }).press("Enter");
+  await page.waitForTimeout(100);
+  expect(await profileCalls(page, "Add")).toEqual([]);
+
+  await queueFolders(page, "/Volumes/work/claude");
+  await release(page, "ChooseFolder");
+  await expect(folder(page)).toHaveText("/Volumes/work/claude");
+  await expect(addButton(page)).toBeEnabled();
+  await addButton(page).click();
+  expect((await profileCalls(page, "Add"))[0].args[0].dir).toBe("/Volumes/work/claude");
+});
+
+// Catches the preview clipping the end of a long picked folder.
+test("a long picked folder shows in full", async ({ page }) => {
+  await startAdding(page);
+  const long = "/Users/k/Library/CloudStorage/GoogleDrive-k@example.com/My Drive/Agent profiles/claude-lifesum-work";
+  await queueFolders(page, long);
+  await choose(page);
+  await expect(folder(page)).toHaveText(long);
+  const fits = await folder(page).evaluate((output) => output.scrollWidth <= output.clientWidth);
+  expect(fits).toBe(true);
+});
+
+// Catches an add that answers late closing, or failing, the draft opened after its own was cancelled.
+test("an add that answers after its draft is cancelled leaves the next draft open", async ({ page }) => {
+  for (const [runner, label] of [
+    ["Codex CLI", "Side Job"],
+    ["Claude Code", "Night Job"],
+  ]) {
+    await startAdding(page);
+    await hold(page, "Add");
+    await addButton(page).click();
+    await cancelDraft(page);
+    await page.getByRole("button", { name: `Add ${runner} profile` }).click();
+    await page.getByRole("textbox", { name: "Profile name" }).fill(label);
+    await release(page, "Add");
+    await page.waitForTimeout(100);
+    await expect(page.getByRole("group", { name: `New ${runner} profile` })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Profile name" })).toHaveValue(label);
+    await expect(addButton(page)).toBeEnabled();
+  }
+});
+
 test("with no folder picker there is no Choose button and the suggested folder is added", async ({ page }) => {
   await startAdding(page, "?chooser=off");
   await expect(page.getByRole("button", { name: "Choose…" })).toHaveCount(0);

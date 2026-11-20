@@ -151,7 +151,7 @@ func (p *Profiles) Suggest(runner, label string) ProfileSuggestion {
 // ChooseFolder asks for a profile's folder. Cancelling answers the empty string,
 // so the form keeps the folder it had.
 func (p *Profiles) ChooseFolder() (string, error) {
-	return p.client.ChooseDirectory()
+	return p.client.ChooseDirectory(true)
 }
 
 // Add derives the id from the label, fixed for the profile's life, and creates
@@ -168,7 +168,7 @@ func (p *Profiles) Add(in ProfileInput) (ProfilesView, error) {
 	if _, taken := p.cfg.Profile(in.Runner, id); taken {
 		return ProfilesView{}, fmt.Errorf(profileTakenFormat, ErrProfileTaken, id)
 	}
-	dir := strings.TrimSpace(in.Dir)
+	dir := in.Dir
 	if dir == "" {
 		dir = launch.DefaultProfileDir(in.Runner, id)
 	}

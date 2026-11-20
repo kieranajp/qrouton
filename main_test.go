@@ -21,6 +21,18 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// runMainEnvVar makes the test binary act as qrouton itself, so the supervisor
+// argv the workbench builds runs the real agent subcommand.
+const runMainEnvVar = "QROUTON_TEST_RUN_MAIN"
+
+func TestMain(m *testing.M) {
+	if os.Getenv(runMainEnvVar) == "1" {
+		main()
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
 // The one line the user gets back has to name something they recognise and a log
 // they can open.
 func TestOpenedLineNamesTheSessionAndItsLog(t *testing.T) {

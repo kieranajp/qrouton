@@ -1065,7 +1065,7 @@ func profilesRows() []adapterRow {
 		{"Profiles.ChooseFolder", func(t *testing.T) {
 			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
-				newLocalClient(newFakeRenderer(), newStubBoot(), func() (string, error) { return "/picked", nil }))
+				newLocalClient(newFakeRenderer(), newStubBoot(), func(bool) (string, error) { return "/picked", nil }))
 			t.Cleanup(kernel.Shutdown)
 			if got, err := (&Profiles{profiles: kernel.Profiles}).ChooseFolder(); err != nil || got != "/picked" {
 				t.Fatalf("ChooseFolder = %q, %v", got, err)
@@ -1096,7 +1096,7 @@ func firstRunRows() []adapterRow {
 		{"FirstRun.ChooseRoot", func(t *testing.T) {
 			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
-				newLocalClient(newFakeRenderer(), newStubBoot(), func() (string, error) { return "/picked", nil }))
+				newLocalClient(newFakeRenderer(), newStubBoot(), func(bool) (string, error) { return "/picked", nil }))
 			t.Cleanup(kernel.Shutdown)
 			if got, err := (&FirstRun{firstRun: kernel.FirstRun}).ChooseRoot(); err != nil || got != "/picked" {
 				t.Fatalf("ChooseRoot = %q, %v", got, err)

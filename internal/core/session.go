@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -740,8 +741,12 @@ func (s *Sessions) start(root, runnerID, profileID string, resume bool) (*Sessio
 	// A session records the agent and profile it was assembled with, so every boot
 	// after the first starts those rather than the workbench's own.
 	if runnerID == "" {
-		if m, err := session.Load(root); err == nil {
+		m, err := session.Load(root)
+		switch {
+		case err == nil:
 			runnerID, profileID = m.Runner, m.Profile
+		case resume || !errors.Is(err, fs.ErrNotExist):
+			return nil, manifestUnreadable(sessionpaths.Manifest(root), err)
 		}
 	}
 	socket, err := workbench.NewSocketPath()

@@ -14,7 +14,7 @@ type Client interface {
 	OpenText(path string) error
 	CopyImage(path string) error
 	CopyFile(path string) error
-	ChooseDirectory() (string, error)
+	ChooseDirectory(showHidden bool) (string, error)
 	// Chime takes the session root because the local client rings that
 	// session's own notify script.
 	Chime(sessionRoot string)

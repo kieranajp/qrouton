@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,6 +17,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 func profiledSession(t *testing.T, root, slug, runner, profile string) string {
@@ -75,6 +77,82 @@ func TestARefusedProfileLeavesTheSessionUnbooted(t *testing.T) {
 	}
 	if reg.BySlug("octopus") != nil {
 		t.Fatal("a session whose profile is gone was booted")
+	}
+}
+
+// Breaks if a manifest that exists but will not load boots the workbench's runner
+// on the default account instead of refusing.
+func TestAnUnreadableManifestLeavesTheSessionUnbooted(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	manifest := sessionpaths.Manifest(profiledSession(t, root, "octopus", "claude", "work"))
+	if err := os.WriteFile(manifest, []byte("{\"runner\": "), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := reg.Show("octopus")
+	if !errors.Is(err, ErrManifestUnreadable) || !strings.Contains(err.Error(), manifest) {
+		t.Fatalf("Show = %v, want %v naming %s", err, ErrManifestUnreadable, manifest)
+	}
+	if agents, _ := boot.counts(); agents != 0 || reg.BySlug("octopus") != nil {
+		t.Fatalf("a session whose manifest will not load asked for %d supervisors", agents)
+	}
+}
+
+// Breaks if a resume whose manifest vanished after discovery boots the
+// workbench's runner on the default account.
+func TestAResumeWhoseManifestVanishedLeavesTheSessionUnbooted(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	profiledSession(t, root, "octopus", "claude", "work")
+	dir := reg.boot.root("octopus")
+	if dir == "" {
+		t.Fatal("the session was not discovered")
+	}
+	if err := os.Remove(sessionpaths.Manifest(dir)); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := reg.start(dir, "", "", true)
+	if !errors.Is(err, ErrManifestUnreadable) || !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("start = %v, want %v for a missing file", err, ErrManifestUnreadable)
+	}
+	if agents, _ := boot.counts(); agents != 0 || reg.BySlug("octopus") != nil {
+		t.Fatalf("a resume with no manifest asked for %d supervisors", agents)
+	}
+}
+
+// Breaks if Reload boots on the workbench's default account rather than the
+// manifest's profile.
+func TestReloadResumesOnTheManifestsProfile(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	dir := profiledSession(t, root, "octopus", "codex", "personal")
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	boot.mu.Lock()
+	delete(boot.runners, dir)
+	delete(boot.profiles, dir)
+	boot.mu.Unlock()
+
+	if err := reg.Reload("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	boot.mu.Lock()
+	runner, profile := boot.runners[dir], boot.profiles[dir]
+	boot.mu.Unlock()
+	if runner != "codex" || profile != "personal" {
+		t.Fatalf("Reload booted %q on profile %q, want codex on the manifest's personal", runner, profile)
+	}
+	if !boot.resumed(t, dir) {
+		t.Fatal("the reloaded session started a fresh conversation")
+	}
+	if state := reg.BySlug("octopus"); state == nil || state.profile != "personal" {
+		t.Fatalf("the reloaded session does not keep the profile: %+v", state)
 	}
 }
 
@@ -152,6 +230,28 @@ func TestAddDerivesTheIDAndCreatesThePrivateFolder(t *testing.T) {
 	}
 	if _, err := profiles.Add(ProfileInput{Runner: "opencode", Label: "Other"}); !errors.Is(err, launch.ErrProfilesUnsupported) {
 		t.Fatalf("adding an OpenCode profile = %v, want %v", err, launch.ErrProfilesUnsupported)
+	}
+}
+
+// Catches the save path trimming a picked folder into its sibling.
+func TestAddKeepsThePickedFolderExactly(t *testing.T) {
+	profiles, _ := testProfiles(t, &config.Config{})
+	base := t.TempDir()
+	spaced := filepath.Join(base, "work ")
+	for _, dir := range []string{filepath.Join(base, "work"), spaced} {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	view, err := profiles.Add(ProfileInput{Runner: "claude", Label: "Spaced", Dir: spaced})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := view.Runners[0].Profiles; len(got) != 1 || got[0].Dir != spaced {
+		t.Fatalf("claude's profiles = %+v, want the folder %q byte for byte", got, spaced)
+	}
+	if _, err := profiles.Add(ProfileInput{Runner: "claude", Label: "Blank", Dir: "  "}); !errors.Is(err, ErrProfileFolder) {
+		t.Fatalf("adding a blank folder = %v, want %v", err, ErrProfileFolder)
 	}
 }
 
@@ -431,7 +531,7 @@ func TestViewOffersTheFolderPickerOnlyWhereTheClientHasOne(t *testing.T) {
 	if view, _ := profiles.View(); view.CanChooseFolder {
 		t.Fatal("the view offers a folder picker the client cannot show")
 	}
-	client.choose = func() (string, error) { return "/picked", nil }
+	client.choose = func(bool) (string, error) { return "/picked", nil }
 	if view, _ := profiles.View(); !view.CanChooseFolder {
 		t.Fatal("the view hides the folder picker the client has")
 	}
@@ -440,7 +540,7 @@ func TestViewOffersTheFolderPickerOnlyWhereTheClientHasOne(t *testing.T) {
 func TestChooseFolderPassesTheClientsAnswerAndACancelThrough(t *testing.T) {
 	profiles, _, client := testProfilesClient(t, &config.Config{})
 	answers := []string{"/Volumes/work/claude", ""}
-	client.choose = func() (string, error) {
+	client.choose = func(bool) (string, error) {
 		answer := answers[0]
 		answers = answers[1:]
 		return answer, nil
