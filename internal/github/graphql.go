@@ -32,7 +32,9 @@ type graphQLResponse struct {
 	Message string          `json:"message"`
 }
 
-// GraphQL POSTs to githubAPIBase + "/graphql" and decodes "data" into out.
+// GraphQL POSTs to githubAPIBase + "/graphql" and decodes "data" into out. A
+// 200 that spends the last of the budget still decodes, and returns its
+// *RateLimitError beside the errors.
 func GraphQL(ctx context.Context, client *http.Client, token, query string, vars map[string]any, out any) ([]GraphQLError, error) {
 	payload, err := json.Marshal(graphQLRequest{Query: query, Variables: vars})
 	if err != nil {
@@ -55,10 +57,16 @@ func GraphQL(ctx context.Context, client *http.Client, token, query string, vars
 
 	var body graphQLResponse
 	decodeErr := json.NewDecoder(io.LimitReader(resp.Body, graphQLResponseLimit)).Decode(&body)
-	if limited := rateLimit(resp.StatusCode, resp.Header, body); limited != nil {
+	spent := lastPointSpent(resp.Header)
+	if limited := refusedForLimit(resp.StatusCode, resp.Header, body); limited != nil {
+		if spent != nil && spent.Until.After(limited.Until) {
+			return nil, spent
+		}
 		return nil, limited
 	}
 	switch {
+	case spent != nil && (decodeErr != nil || resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices):
+		return nil, spent
 	case resp.StatusCode == http.StatusUnauthorized:
 		return nil, fmt.Errorf("%w: %s", ErrTokenRejected, resp.Status)
 	case resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices:
@@ -71,35 +79,40 @@ func GraphQL(ctx context.Context, client *http.Client, token, query string, vars
 			return nil, err
 		}
 	}
+	if spent != nil {
+		return body.Errors, spent
+	}
 	return body.Errors, nil
 }
 
-func rateLimit(status int, header http.Header, body graphQLResponse) *RateLimitError {
-	now := clock()
-	if budgetSpent(header, body.Errors) {
-		if reset, err := strconv.ParseInt(strings.TrimSpace(header.Get(rateLimitResetHeader)), 10, 64); err == nil {
-			if until := time.Unix(reset, 0); until.After(now) {
-				return &RateLimitError{Until: until}
-			}
+// refusedForLimit is a response whose body says GitHub refused it for a rate limit.
+func refusedForLimit(status int, header http.Header, body graphQLResponse) *RateLimitError {
+	for _, e := range body.Errors {
+		if e.Type == rateLimitedType {
+			return &RateLimitError{Until: resetAt(clock(), header)}
 		}
-		return &RateLimitError{Until: retryAfter(now, header)}
 	}
 	if (status == http.StatusOK || status == http.StatusForbidden || status == http.StatusTooManyRequests) && secondaryLimit(body) {
-		return &RateLimitError{Until: retryAfter(now, header)}
+		return &RateLimitError{Until: retryAfter(clock(), header)}
 	}
 	return nil
 }
 
-func budgetSpent(header http.Header, errs []GraphQLError) bool {
+// lastPointSpent is a response that left no budget for the next request.
+func lastPointSpent(header http.Header) *RateLimitError {
 	if remaining, err := strconv.Atoi(strings.TrimSpace(header.Get(rateLimitRemainingHeader))); err == nil && remaining == 0 {
-		return true
+		return &RateLimitError{Until: resetAt(clock(), header)}
 	}
-	for _, e := range errs {
-		if e.Type == rateLimitedType {
-			return true
+	return nil
+}
+
+func resetAt(now time.Time, header http.Header) time.Time {
+	if reset, err := strconv.ParseInt(strings.TrimSpace(header.Get(rateLimitResetHeader)), 10, 64); err == nil {
+		if until := time.Unix(reset, 0); until.After(now) {
+			return until
 		}
 	}
-	return false
+	return retryAfter(now, header)
 }
 
 func secondaryLimit(body graphQLResponse) bool {

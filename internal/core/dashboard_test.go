@@ -22,11 +22,12 @@ import (
 )
 
 // boardAnswer is what the fake GitHub says: rows and errors per repository
-// name, or one error for the whole request.
+// name, or one error for the whole request. spent rides beside the rows.
 type boardAnswer struct {
-	prs  map[string][]github.PullRequest
-	errs map[string]error
-	err  error
+	prs   map[string][]github.PullRequest
+	errs  map[string]error
+	err   error
+	spent error
 }
 
 type fakeBoardGitHub struct {
@@ -74,7 +75,7 @@ func (g *fakeBoardGitHub) pulls(_ context.Context, _ string, targets []github.Br
 		}
 		results[i].PullRequests = append([]github.PullRequest{}, g.answer.prs[target.Name]...)
 	}
-	return "kieran", results, nil
+	return "kieran", results, g.answer.spent
 }
 
 type testBoard struct {
@@ -348,6 +349,34 @@ func TestARateLimitedRefreshKeepsRowsAndWaitsForTheReset(t *testing.T) {
 	b.refresh(t.Context())
 	if asked, s := b.gh.asked(), b.Snapshot(); asked != 3 || !s.PausedUntil.IsZero() {
 		t.Fatalf("at the reset: asked %d times, status %+v", asked, s)
+	}
+}
+
+// A 200 that spends the last point still answered, so dropping its rows loses a paid-for refresh.
+func TestARefreshThatSpendsTheLastPointKeepsItsRowsAndPausesUntilTheReset(t *testing.T) {
+	b := newTestBoard(t)
+	root := b.session(t, "pulls", editing("web", "feat/x"))
+	until := b.clock.now().Add(10 * time.Minute)
+	b.gh.say(boardAnswer{
+		prs:   map[string][]github.PullRequest{"web": {pr(1, "a")}},
+		spent: fmt.Errorf("github: listing pull requests: %w", &github.RateLimitError{Until: until}),
+	})
+	b.refresh(t.Context())
+
+	if rows := titles(b.rows(root)); !reflect.DeepEqual(rows, []string{"acme/web#a"}) {
+		t.Fatalf("rows from the last point = %v", rows)
+	}
+	if kept := b.cached(t).Sessions["pulls"]["acme/web"]["feat/x"]; len(kept) != 1 || kept[0].Title != "a" {
+		t.Fatalf("pulls.json = %+v", b.cached(t).Sessions)
+	}
+	if s := b.Snapshot(); !s.PausedUntil.Equal(until) || s.Failed || !s.CheckedAt.Equal(b.clock.now()) {
+		t.Fatalf("status after spending the last point = %+v", s)
+	}
+
+	b.clock.advance(time.Minute)
+	b.refresh(t.Context())
+	if asked := b.gh.asked(); asked != 1 {
+		t.Fatalf("asked GitHub %d times before the reset", asked)
 	}
 }
 

@@ -197,3 +197,33 @@ func TestGraphQLReturnsTransportErrors(t *testing.T) {
 		t.Fatal("a transport failure returned no error")
 	}
 }
+
+// A 200 that spends the last point is still an answer: dropping its data loses a refresh the budget paid for.
+func TestGraphQLA200ThatSpendsTheLastPointKeepsItsDataAndPausesUntilTheReset(t *testing.T) {
+	reset := graphQLNow.Add(17 * time.Minute)
+	client := graphQLServer(t, answer(http.StatusOK,
+		map[string]string{"x-ratelimit-remaining": "0", "x-ratelimit-reset": strconv.FormatInt(reset.Unix(), 10)},
+		`{"data":{"viewer":{"login":"octo"}}}`))
+
+	var out struct{ Viewer login }
+	_, err := GraphQL(context.Background(), client, "token", "q", nil, &out)
+	if until := rateLimitUntil(t, err); !until.Equal(reset) {
+		t.Fatalf("until = %v, want %v", until, reset)
+	}
+	if out.Viewer.Login != "octo" {
+		t.Fatalf("out = %#v, want the data the last point paid for", out)
+	}
+}
+
+// Only a body that says it was refused is empty; decoding it would overwrite rows with nothing.
+func TestGraphQLARateLimitedBodyDecodesNoData(t *testing.T) {
+	client := graphQLServer(t, answer(http.StatusOK, map[string]string{"x-ratelimit-remaining": "0"},
+		`{"data":{"viewer":{"login":"octo"}},"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}`))
+
+	var out struct{ Viewer login }
+	_, err := GraphQL(context.Background(), client, "token", "q", nil, &out)
+	rateLimitUntil(t, err)
+	if out.Viewer.Login != "" {
+		t.Fatalf("out = %#v, want nothing decoded from a refused response", out)
+	}
+}

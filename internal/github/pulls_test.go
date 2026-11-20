@@ -159,3 +159,14 @@ func TestBranchPullRequestsEmptyBranchIsAnEmptyNonNilList(t *testing.T) {
 		t.Fatalf("results = %#v, err = %v", results, err)
 	}
 }
+
+// The response that spends the last point still answers every target, so its rows must reach the caller.
+func TestBranchPullRequestsReturnsTheRowsOfAResponseThatSpendsTheLastPoint(t *testing.T) {
+	client := graphQLServer(t, answer(http.StatusOK, map[string]string{"x-ratelimit-remaining": "0"},
+		`{"data":{"viewer":{"login":"octo"},"r0":{"pullRequests":{"nodes":[`+ownNode+`]}}}}`))
+	viewer, results, err := BranchPullRequests(context.Background(), client, "token", []BranchTarget{{Owner: "acme", Name: "web", Branch: "feat"}})
+	rateLimitUntil(t, err)
+	if viewer != "octo" || len(results) != 1 || results[0].Err != nil || len(results[0].PullRequests) != 1 {
+		t.Fatalf("viewer %q, results %#v", viewer, results)
+	}
+}

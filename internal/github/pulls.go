@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -55,7 +56,8 @@ type pullsRepository struct {
 }
 
 // BranchPullRequests asks for every target's pull requests in one request;
-// results[i] answers targets[i].
+// results[i] answers targets[i]. A *RateLimitError comes with results when the
+// response that spent the last of the budget still answered.
 func BranchPullRequests(ctx context.Context, client *http.Client, token string, targets []BranchTarget) (viewer string, results []BranchResult, err error) {
 	if len(targets) == 0 {
 		return "", []BranchResult{}, nil
@@ -77,15 +79,20 @@ func BranchPullRequests(ctx context.Context, client *http.Client, token string, 
 
 	var data map[string]json.RawMessage
 	errs, err := GraphQL(ctx, client, token, query, vars, &data)
+	var spent error
 	if err != nil {
-		return "", nil, fmt.Errorf("github: listing pull requests: %w", err)
+		err = fmt.Errorf("github: listing pull requests: %w", err)
+		if !errors.Is(err, ErrRateLimited) || data == nil {
+			return "", nil, err
+		}
+		spent = err
 	}
 
 	results = make([]BranchResult, len(targets))
 	for _, e := range errs {
 		i, ok := aliasIndex(e.Path, index)
 		if !ok {
-			return "", nil, fmt.Errorf("github: listing pull requests: %w: %s", ErrQuery, e.Message)
+			return "", nil, errors.Join(fmt.Errorf("github: listing pull requests: %w: %s", ErrQuery, e.Message), spent)
 		}
 		if results[i].Err != nil {
 			continue
@@ -100,7 +107,7 @@ func BranchPullRequests(ctx context.Context, client *http.Client, token string, 
 	var who *login
 	if raw, ok := data[viewerField]; ok {
 		if err := json.Unmarshal(raw, &who); err != nil {
-			return "", nil, fmt.Errorf("github: listing pull requests: %w", err)
+			return "", nil, errors.Join(fmt.Errorf("github: listing pull requests: %w", err), spent)
 		}
 	}
 	if who != nil {
@@ -114,12 +121,12 @@ func BranchPullRequests(ctx context.Context, client *http.Client, token string, 
 		var repo *pullsRepository
 		if raw, ok := data[fmt.Sprintf(aliasFormat, i)]; ok {
 			if err := json.Unmarshal(raw, &repo); err != nil {
-				return "", nil, fmt.Errorf("github: listing pull requests: %w", err)
+				return "", nil, errors.Join(fmt.Errorf("github: listing pull requests: %w", err), spent)
 			}
 		}
 		results[i].PullRequests = ownPullRequests(repo, target.Owner)
 	}
-	return viewer, results, nil
+	return viewer, results, spent
 }
 
 func aliasIndex(path []any, index map[string]int) (int, bool) {

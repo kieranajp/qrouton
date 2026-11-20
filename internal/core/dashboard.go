@@ -374,18 +374,20 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 	}
 
 	var limited *github.RateLimitError
+	if errors.As(err, &limited) {
+		d.mu.Lock()
+		d.pausedUntil = limited.Until
+		d.mu.Unlock()
+	}
 	switch {
 	case errors.Is(err, github.ErrTokenRejected):
 		d.mu.Lock()
 		d.signedOut = true
 		d.mu.Unlock()
 		return pullsCache{}, false
-	case errors.As(err, &limited):
-		d.mu.Lock()
-		d.pausedUntil = limited.Until
-		d.mu.Unlock()
+	case limited != nil && results == nil:
 		return pullsCache{}, false
-	case err != nil:
+	case err != nil && limited == nil:
 		d.mu.Lock()
 		d.failed = true
 		d.mu.Unlock()
@@ -424,6 +426,9 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 	d.pulls = next
 	d.viewer, d.checkedAt = viewer, d.now()
 	d.failed, d.signedOut, d.pausedUntil = false, false, time.Time{}
+	if limited != nil {
+		d.pausedUntil = limited.Until
+	}
 	delete(d.logged, "")
 	return pullsCache{SchemaVersion: pullsCacheSchemaVersion, Viewer: d.viewer, CheckedAt: d.checkedAt, Sessions: next}, true
 }
