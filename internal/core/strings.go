@@ -48,6 +48,23 @@ const noConversationRefusal = "send the session one message before switching its
 const ollamaEvent = "ollama:status"
 
 const (
+	dashboardEvent = "dashboard:update"
+
+	// dashboardInterval paces the refresh of every session's pull requests and
+	// git stats; dashboardShownInterval paces pull requests alone while a session is shown.
+	dashboardInterval      = 5 * time.Minute
+	dashboardShownInterval = 60 * time.Second
+	dashboardTimeout       = 10 * time.Second
+	dashboardLogFormat     = "pull requests: %v"
+
+	pullsCacheSchemaVersion = 1
+	pullsCacheDirMode       = 0o755
+	pullsCacheFileMode      = 0o644
+	// pullsCacheLogKey files a failed write apart from the refresh and each alias.
+	pullsCacheLogKey = "pulls.json"
+)
+
+const (
 	ollamaStateReady       = "ready"
 	ollamaStateMissing     = "missing"
 	ollamaStatePulling     = "pulling"
@@ -140,11 +157,6 @@ const (
 
 	// repoStatInterval paces the git stats: three subprocesses per active repo.
 	repoStatInterval = 15 * time.Second
-
-	// pullRequestInterval paces the shown session's GitHub pull request fetch.
-	pullRequestInterval  = 60 * time.Second
-	pullRequestTimeout   = 10 * time.Second
-	pullRequestLogFormat = "pull requests: %s: %v"
 
 	// activityQuiet is how long the conversation PTY has to stay silent before
 	// the agent counts as idle. A runner redraws its spinner far faster.

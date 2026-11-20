@@ -77,7 +77,7 @@ func TestEachAdapterMethodReachesItsOwnCoreMethod(t *testing.T) {
 }
 
 func adapterRows() [][]adapterRow {
-	return [][]adapterRow{ollamaRows(), sessionsRows(), termRows(), windowsRows(), bugReportRows(), chromeRows(),
+	return [][]adapterRow{ollamaRows(), dashboardRows(), sessionsRows(), termRows(), windowsRows(), bugReportRows(), chromeRows(),
 		assemblyRows(), repositoriesRows(), orgsRows(), pickerRows(), settingsRows(), profilesRows(), firstRunRows(), placementRows()}
 }
 
@@ -106,6 +106,44 @@ func ollamaRows() []adapterRow {
 			arrives(t, client.pulled, "the pull never started")
 			adapter.CancelPull()
 			arrives(t, client.stopped, "CancelPull left the pull running")
+		}},
+	}
+}
+
+func dashboardRows() []adapterRow {
+	return []adapterRow{
+		{"Dashboard.Snapshot", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			if got := (&Dashboard{dashboard: a.kernel.Dashboard}).Snapshot(); got.Sessions[a.slug()].PullRequests == nil {
+				t.Fatalf("Snapshot has no card for %s: %+v", a.slug(), got)
+			}
+		}},
+		// Only Refresh can measure the second manifest: the startup measurement has already answered the first.
+		{"Dashboard.Refresh", func(t *testing.T) {
+			opts, _ := testOptions(t)
+			slug := filepath.Base(opts.SessionRoot)
+			write := func(names ...string) {
+				t.Helper()
+				var repos []session.ManifestRepo
+				for _, name := range names {
+					repos = append(repos, session.ManifestRepo{Org: "acme", Name: name, Role: session.RepoRoleReference, WorktreePath: "src/" + name})
+				}
+				if err := session.WriteManifest(opts.SessionRoot, session.Manifest{Slug: slug, Mode: session.ModeAssistant, Repos: repos}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			measured := func(kernel *core.Core, want int) func() bool {
+				return func() bool { return len(kernel.Dashboard.Snapshot().Sessions[slug].Repos) == want }
+			}
+			write("docs")
+			kernel := testWorkbench(t, newFakeRenderer(), &opts)
+			if err := kernel.Start(opts.Socket); err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, "the startup measurement", measured(kernel, 1))
+			write("docs", "web")
+			(&Dashboard{dashboard: kernel.Dashboard}).Refresh()
+			waitFor(t, "Refresh to measure git", measured(kernel, 2))
 		}},
 	}
 }
@@ -1025,6 +1063,7 @@ func profilesRows() []adapterRow {
 			}
 		}},
 		{"Profiles.ChooseFolder", func(t *testing.T) {
+			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
 				newLocalClient(newFakeRenderer(), newStubBoot(), func() (string, error) { return "/picked", nil }))
 			t.Cleanup(kernel.Shutdown)
@@ -1055,6 +1094,7 @@ func firstRunRows() []adapterRow {
 			markedFile(t, marker, "ran")
 		}},
 		{"FirstRun.ChooseRoot", func(t *testing.T) {
+			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
 				newLocalClient(newFakeRenderer(), newStubBoot(), func() (string, error) { return "/picked", nil }))
 			t.Cleanup(kernel.Shutdown)

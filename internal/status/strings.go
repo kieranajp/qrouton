@@ -30,6 +30,12 @@ const (
 	PullRequestStateClosed = "closed"
 )
 
+// A pull request row's review tag; empty when GitHub reports neither.
+const (
+	PullRequestReviewApproved         = "approved"
+	PullRequestReviewChangesRequested = "changes-requested"
+)
+
 var (
 	researchDir = kinds.Research.Dir
 	plansDir    = kinds.Plan.Dir

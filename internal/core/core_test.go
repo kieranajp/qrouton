@@ -21,6 +21,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -224,9 +225,10 @@ type workbenchOptions struct {
 }
 
 // testOptions is a session the core can open on, under a sessions root it can
-// boot others from, on an address of its own.
+// boot others from, on an address of its own, with a cache of its own.
 func testOptions(t *testing.T) (workbenchOptions, *stubBoot) {
 	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +237,7 @@ func testOptions(t *testing.T) (workbenchOptions, *stubBoot) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
 	return workbenchOptions{
-		Options:     Options{Root: root, Launcher: boot},
+		Options:     Options{Root: root, Launcher: boot, GitHubCredential: signedOut},
 		SessionRoot: sessionDir(t, root, "octopus"),
 		Socket:      socket,
 	}, boot
@@ -251,6 +253,9 @@ func testWorkbench(t *testing.T, r *fakeClient, opts workbenchOptions) *Core {
 	t.Cleanup(c.Shutdown)
 	return c
 }
+
+// signedOut keeps a test's dashboard off GitHub when a session it writes has a branch.
+func signedOut(context.Context) (github.Credential, string) { return github.CredentialSignedOut, "" }
 
 // startWorkbench starts the core on its process socket and opens it on the
 // session the options name, as a client does once its window is up.
@@ -828,7 +833,7 @@ func TestWatchChromeStopsWithItsContext(t *testing.T) {
 	cancel()
 	done := make(chan struct{})
 	go func() {
-		watchChrome(ctx, testRegistry(t, t.TempDir()), t.TempDir(), nil, func(string, any) {})
+		watchChrome(ctx, testRegistry(t, t.TempDir()), t.TempDir(), nil, func(string, any) {}, newFakePulls())
 		close(done)
 	}()
 	<-done
@@ -1043,7 +1048,7 @@ func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.
 	<-reg.touched
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, time.Hour, time.Hour, counts, noPulls)
+	go watch(ctx, reg, root, nil, emit, time.Millisecond, time.Hour, counts, newFakePulls())
 
 	waitFor(t, "the fast ticker to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := all.Load(); got != 1 {
@@ -2772,7 +2777,7 @@ func TestUncommittedAnswersAClickAndNeverATicker(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, 2*time.Millisecond, time.Hour, counts, noPulls)
+	go watch(ctx, reg, root, nil, emit, time.Millisecond, 2*time.Millisecond, counts, newFakePulls())
 	waitFor(t, "both tickers to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := checks.Load(); got != 0 {
 		t.Fatalf("the dirty check ran %d times over %d pushes, want none of them", got, pushes.Load())

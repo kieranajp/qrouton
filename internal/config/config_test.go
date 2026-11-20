@@ -518,6 +518,9 @@ func TestCacheDirFollowsXDGCacheHomeOnEveryPlatform(t *testing.T) {
 	if got, want := CacheDir(), filepath.Join(cache, "qrouton"); got != want {
 		t.Fatalf("CacheDir() = %q, want %q", got, want)
 	}
+	if got, want := PullsCachePath(), filepath.Join(cache, "qrouton", "pulls.json"); got != want {
+		t.Fatalf("PullsCachePath() = %q, want %q", got, want)
+	}
 }
 
 func TestLoadRejectsDuplicateProfileIDs(t *testing.T) {

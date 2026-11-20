@@ -92,11 +92,15 @@ type PullRequestList struct {
 
 // PullRequest is one row. Repo is org/name.
 type PullRequest struct {
-	Repo   string `json:"repo"`
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	URL    string `json:"url"`
-	State  string `json:"state"`
+	Repo          string    `json:"repo"`
+	Number        int       `json:"number"`
+	Title         string    `json:"title"`
+	URL           string    `json:"url"`
+	State         string    `json:"state"`
+	Author        string    `json:"author"`
+	Review        string    `json:"review"`
+	ChecksFailing bool      `json:"checksFailing"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 // EmptyFields is the value every producer starts from. No slice reaching the
