@@ -19,8 +19,9 @@ import (
 // ProfilesView lists each installed runner that has profiles. SessionShown is
 // whether Sign in has a pane to open its tab in.
 type ProfilesView struct {
-	Runners      []RunnerProfiles `json:"runners"`
-	SessionShown bool             `json:"sessionShown"`
+	Runners         []RunnerProfiles `json:"runners"`
+	SessionShown    bool             `json:"sessionShown"`
+	CanChooseFolder bool             `json:"canChooseFolder"`
 }
 
 // RunnerProfiles lists the named profiles only; every runner also has its default.
@@ -73,10 +74,11 @@ type Profiles struct {
 	windows      *Windows
 	environ      func() []string
 	probeTimeout time.Duration
+	client       Client
 }
 
 func newProfiles(cfg *config.Config, reconfigure func(*config.Config) error, runners func() ([]assembly.Runner, error),
-	launcher Launcher, sessions *Sessions, windows *Windows) *Profiles {
+	launcher Launcher, sessions *Sessions, windows *Windows, client Client) *Profiles {
 	return &Profiles{
 		cfg:          cfg,
 		pinnedRoot:   pinnedFileRoot(),
@@ -87,6 +89,7 @@ func newProfiles(cfg *config.Config, reconfigure func(*config.Config) error, run
 		windows:      windows,
 		environ:      os.Environ,
 		probeTimeout: profileProbeTimeout,
+		client:       client,
 	}
 }
 
@@ -97,7 +100,8 @@ func (p *Profiles) View() (ProfilesView, error) {
 	}
 	cfg := p.cfg.Snapshot()
 	manifests, scanErr := session.Scan(cfg.Root)
-	view := ProfilesView{Runners: []RunnerProfiles{}, SessionShown: p.sessions.Current() != nil}
+	view := ProfilesView{Runners: []RunnerProfiles{}, SessionShown: p.sessions.Current() != nil,
+		CanChooseFolder: p.client.Supports(CapabilityChooseDirectory)}
 	for _, r := range runners {
 		group := RunnerProfiles{ID: r.ID, Label: r.Label, Credentials: launch.CredentialsSet(r.ID, p.environ()),
 			Profiles: []ProfileRow{}}
@@ -144,6 +148,12 @@ func (p *Profiles) Suggest(runner, label string) ProfileSuggestion {
 	return ProfileSuggestion{ID: id, Dir: launch.DefaultProfileDir(runner, id)}
 }
 
+// ChooseFolder asks for a profile's folder. Cancelling answers the empty string,
+// so the form keeps the folder it had.
+func (p *Profiles) ChooseFolder() (string, error) {
+	return p.client.ChooseDirectory(true)
+}
+
 // Add derives the id from the label, fixed for the profile's life, and creates
 // its folder before saving.
 func (p *Profiles) Add(in ProfileInput) (ProfilesView, error) {
@@ -158,7 +168,7 @@ func (p *Profiles) Add(in ProfileInput) (ProfilesView, error) {
 	if _, taken := p.cfg.Profile(in.Runner, id); taken {
 		return ProfilesView{}, fmt.Errorf(profileTakenFormat, ErrProfileTaken, id)
 	}
-	dir := strings.TrimSpace(in.Dir)
+	dir := in.Dir
 	if dir == "" {
 		dir = launch.DefaultProfileDir(in.Runner, id)
 	}

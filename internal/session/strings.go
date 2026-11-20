@@ -21,6 +21,8 @@ const (
 
 	agentNoticeSeparator = "\n\n"
 
+	transcriptExt = ".jsonl"
+
 	gitBin = "git"
 
 	// dirFlag runs a git command against a directory without cd-ing to it.

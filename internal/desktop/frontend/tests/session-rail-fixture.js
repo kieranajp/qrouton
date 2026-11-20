@@ -11,6 +11,7 @@ let delay = 40;
 let failing = false;
 let unloadFailing = false;
 let reorderFailing = false;
+let switchFailure = "";
 let deferReorder = false;
 let completeReorder;
 
@@ -19,6 +20,7 @@ window.sessionRailBridge = {
   failNext: () => (failing = true),
   failNextUnload: () => (unloadFailing = true),
   failNextReorder: () => (reorderFailing = true),
+  failNextSwitch: (message = "copy failed") => (switchFailure = message),
   deferReorder: () => (deferReorder = true),
   completeReorder: () => completeReorder?.(),
   setDelay: (milliseconds) => (delay = milliseconds),
@@ -54,6 +56,15 @@ window.wailsCall = async (name, slug, targetSlug) => {
       throw new Error("session unavailable");
     }
     window.sessionRail?.unloaded(slug);
+    return;
+  }
+  if (name.endsWith(".SwitchProfile")) {
+    calls.push({ method: "switchProfile", slug, profile: targetSlug });
+    if (switchFailure) {
+      const message = switchFailure;
+      switchFailure = "";
+      throw new Error(message);
+    }
     return;
   }
   if (name.endsWith(".CycleSticker")) {

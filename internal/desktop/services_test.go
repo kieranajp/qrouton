@@ -260,6 +260,17 @@ func sessionsRows() []adapterRow {
 				t.Fatalf("Reload of a live session asked for %d supervisors, resumed %v", after-before, a.boot.resumed(a.opts.SessionRoot))
 			}
 		}},
+		{"Sessions.SwitchProfile", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			before, _ := a.boot.counts()
+			err := (&Sessions{sessions: a.kernel.Sessions}).SwitchProfile(a.slug(), "work")
+			if !errors.Is(err, core.ErrProfileUnswitchable) {
+				t.Fatalf("SwitchProfile of a session with no claude runner = %v, want the core's refusal", err)
+			}
+			if after, _ := a.boot.counts(); after != before {
+				t.Fatalf("a refused switch asked for %d supervisors", after-before)
+			}
+		}},
 		{"Sessions.Unload", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			if err := (&Sessions{sessions: a.kernel.Sessions}).Unload(a.slug()); err != nil {
@@ -1003,6 +1014,14 @@ func profilesRows() []adapterRow {
 				t.Fatalf("Status = %+v, %v", got, err)
 			}
 		}},
+		{"Profiles.ChooseFolder", func(t *testing.T) {
+			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
+				newLocalClient(newFakeRenderer(), newStubBoot(), func(bool) (string, error) { return "/picked", nil }))
+			t.Cleanup(kernel.Shutdown)
+			if got, err := (&Profiles{profiles: kernel.Profiles}).ChooseFolder(); err != nil || got != "/picked" {
+				t.Fatalf("ChooseFolder = %q, %v", got, err)
+			}
+		}},
 		{"Profiles.SignIn", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			a.boot.signIn = func(string, config.RunnerProfile) ([]string, error) {
@@ -1027,7 +1046,7 @@ func firstRunRows() []adapterRow {
 		}},
 		{"FirstRun.ChooseRoot", func(t *testing.T) {
 			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
-				newLocalClient(newFakeRenderer(), newStubBoot(), func() (string, error) { return "/picked", nil }))
+				newLocalClient(newFakeRenderer(), newStubBoot(), func(bool) (string, error) { return "/picked", nil }))
 			t.Cleanup(kernel.Shutdown)
 			if got, err := (&FirstRun{firstRun: kernel.FirstRun}).ChooseRoot(); err != nil || got != "/picked" {
 				t.Fatalf("ChooseRoot = %q, %v", got, err)

@@ -41,6 +41,10 @@ const (
 // supervisor signals; the two bound different processes and need not agree.
 const terminateGrace = 3 * time.Second
 
+const groupPollInterval = 20 * time.Millisecond
+
+const noConversationRefusal = "send the session one message before switching its profile"
+
 const ollamaEvent = "ollama:status"
 
 const (

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -96,9 +97,9 @@ func New(opts Options, client Client) *Core {
 	c.Picker = newPicker(ctx, opts.Config, reg, c.Repositories, client.Emit, signal)
 	c.Settings = newSettings(opts.Config, client.Emit, opts.ValidateEditor, opts.ValidateLaunch, opts.LinearCommand,
 		opts.LinearEnvironment, withoutTicket(opts.Relaunch), opts.Quit, reg.Touch, ReconfigureVault(c.Vault), runners, client)
-	c.Profiles = newProfiles(opts.Config, ReconfigureVault(c.Vault), runners, opts.Launcher, reg, windows)
+	c.Profiles = newProfiles(opts.Config, ReconfigureVault(c.Vault), runners, opts.Launcher, reg, windows, client)
 	c.FirstRun = newFirstRun(opts.Config, reg.Touch, pendingRelaunch(opts.Relaunch, c.PendingTicket), opts.Quit,
-		client.ChooseDirectory, ReconfigureVault(c.Vault))
+		func() (string, error) { return client.ChooseDirectory(false) }, ReconfigureVault(c.Vault))
 	c.Placement = newPlacement(opts.Config, reg)
 	c.FirstRun.onWelcomed = c.Placement.CheckInBackground
 	c.wire()
@@ -152,6 +153,7 @@ func (c *Core) wire() {
 					if req.PullRequestCreated {
 						reg.pullRequestsChanged(state.Root())
 					}
+					state.keepConversation(req)
 					notify(state.agents.apply(req))
 				},
 				picker: reg.QueuePicker,
@@ -175,6 +177,13 @@ func (c *Core) wire() {
 		reveal:      client.Reveal,
 		copyImage:   client.CopyImage,
 		copyFile:    client.CopyFile,
+		profile: func(runnerID, profileID string) (config.RunnerProfile, bool) {
+			if opts.Config == nil {
+				return config.RunnerProfile{}, false
+			}
+			return opts.Config.Profile(runnerID, profileID)
+		},
+		environ: os.Environ,
 	}
 	tree := func(state *SessionState) status.AgentTree { return sessionTree(opts.Config, state) }
 	reg.trees = newAgentTrees(client.Emit, agentTreeInterval, reg.Current, tree)

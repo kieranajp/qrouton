@@ -39,6 +39,7 @@ type fakeClient struct {
 	inFront  atomic.Bool
 	reveal   func(path string) error
 	openText func(path string) error
+	choose   func(showHidden bool) (string, error)
 	rung     []string
 }
 
@@ -66,7 +67,9 @@ func (f *fakeClient) SessionShown(root string) {
 	f.shown = append(f.shown, root)
 }
 
-func (f *fakeClient) Supports(c Capability) bool { return c == CapabilityOpenText && f.openText != nil }
+func (f *fakeClient) Supports(c Capability) bool {
+	return (c == CapabilityOpenText && f.openText != nil) || (c == CapabilityChooseDirectory && f.choose != nil)
+}
 
 func (f *fakeClient) Reveal(path string) error {
 	if f.reveal == nil {
@@ -86,7 +89,12 @@ func (f *fakeClient) CopyImage(string) error { return ErrUnavailable }
 
 func (f *fakeClient) CopyFile(string) error { return ErrUnavailable }
 
-func (f *fakeClient) ChooseDirectory() (string, error) { return "", ErrUnavailable }
+func (f *fakeClient) ChooseDirectory(showHidden bool) (string, error) {
+	if f.choose == nil {
+		return "", ErrUnavailable
+	}
+	return f.choose(showHidden)
+}
 
 func (f *fakeClient) Chime(sessionRoot string) {
 	f.mu.Lock()
@@ -285,8 +293,16 @@ func testSessions(t *testing.T, root string, boot *stubBoot) (*Sessions, *Window
 		},
 		teardown: windows.stop,
 		reveal:   r.Reveal,
+		profile:  func(string, string) (config.RunnerProfile, bool) { return config.RunnerProfile{}, false },
+		environ:  scratchEnviron(t),
 	}
 	return reg, windows, r
+}
+
+// scratchEnviron keeps a switch to the default profile out of the real ~/.claude.
+func scratchEnviron(t *testing.T) func() []string {
+	home := t.TempDir()
+	return func() []string { return []string{"HOME=" + home} }
 }
 
 // testRegistry is a workbench showing one session.
@@ -3129,4 +3145,24 @@ func (f *fakeClient) chimes() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.rung...)
+}
+
+// Catches the first-run root chooser and the profile chooser sharing one hidden-files setting.
+func TestOnlyTheProfileChooserShowsHiddenFolders(t *testing.T) {
+	client := newFakeClient()
+	var asked []bool
+	client.choose = func(showHidden bool) (string, error) {
+		asked = append(asked, showHidden)
+		return "", nil
+	}
+	kernel := testWorkbench(t, client, workbenchOptions{Options: Options{Config: &config.Config{Root: t.TempDir()}}})
+	if _, err := kernel.Profiles.ChooseFolder(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := kernel.FirstRun.ChooseRoot(); err != nil {
+		t.Fatal(err)
+	}
+	if want := []bool{true, false}; !reflect.DeepEqual(asked, want) {
+		t.Fatalf("show hidden asked as %v by the profile then first-run choosers, want %v", asked, want)
+	}
 }

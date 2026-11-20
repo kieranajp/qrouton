@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/randomid"
 	"github.com/kieranajp/qrouton/internal/session"
@@ -53,6 +55,43 @@ type SessionState struct {
 	// shells counts the shells the session has had rather than the ones still
 	// open: a number freed by a close would name two terminals at once.
 	shells int
+
+	conversationMu sync.Mutex
+	recorded       recordedConversation
+	held           bool
+}
+
+type recordedConversation struct {
+	generation   uint64
+	conversation session.Conversation
+}
+
+// keepConversation records the root conversation a hook names, once per
+// generation and change. A late hook from a runner already replaced is dropped,
+// so it cannot rewrite a record the new runner's launch cleared.
+func (s *SessionState) keepConversation(event workbench.AgentEventRequest) {
+	if event.ConversationID == "" || event.AgentID != "" || s.Root() == "" {
+		return
+	}
+	next := recordedConversation{event.Generation, session.Conversation{ID: event.ConversationID, Transcript: event.TranscriptPath}}
+	s.agents.whileCurrent(event.Provider, event.Generation, func() {
+		s.conversationMu.Lock()
+		defer s.conversationMu.Unlock()
+		if s.held || s.recorded == next {
+			return
+		}
+		if session.RecordConversation(s.Root(), next.conversation) == nil {
+			s.recorded = next
+		}
+	})
+}
+
+// holdConversation stops hooks rewriting the record, once any write already
+// under way has finished.
+func (s *SessionState) holdConversation() {
+	s.conversationMu.Lock()
+	defer s.conversationMu.Unlock()
+	s.held = true
 }
 
 // RequestPicker queues an escalation on this session under a fresh id. A later
@@ -221,18 +260,30 @@ func (s *SessionState) serve(control io.Closer) bool {
 // stop ends the session's process tree and closes the listener it was served on.
 // Both are cleared under the lock, so neither can be torn down twice.
 func (s *SessionState) stop() {
+	_ = s.halt(func(p *PTY) error {
+		p.Stop()
+		return nil
+	})
+}
+
+// drain is stop that also waits for the runner the supervisor ran to exit.
+func (s *SessionState) drain() error { return s.halt((*PTY).StopGroup) }
+
+func (s *SessionState) halt(end func(*PTY) error) error {
 	s.mu.Lock()
 	s.stopped = true
 	s.pruneBugReports(time.Now())
 	process, control := s.process, s.control
 	s.process, s.control = nil, nil
 	s.mu.Unlock()
+	var err error
 	if process != nil {
-		process.Stop()
+		err = end(process)
 	}
 	if control != nil {
 		_ = control.Close()
 	}
+	return err
 }
 
 type booting struct {
@@ -247,6 +298,8 @@ type booting struct {
 	copyImage   func(path string) error
 	copyFile    func(path string) error
 	stickers    func() []session.Sticker
+	profile     func(runnerID, profileID string) (config.RunnerProfile, bool)
+	environ     func() []string
 }
 
 type Sessions struct {
@@ -425,6 +478,124 @@ func (s *Sessions) replace(root string, fallback *SessionState, emptied bool) er
 	}
 	s.reveal(booted)
 	return nil
+}
+
+// SwitchProfile moves a session's conversation onto another profile of its
+// runner and boots it there. A move that fails boots it back on the profile it had.
+func (s *Sessions) SwitchProfile(slug, profileID string) error {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	root, err := s.validatedRoot(slug)
+	if err != nil {
+		return err
+	}
+	manifest, err := session.Load(root)
+	if err != nil || manifest.Slug != slug {
+		return UnknownSession(slug)
+	}
+	if !launch.SwitchesProfiles(manifest.Runner) {
+		return fmt.Errorf("%w: %q", ErrProfileUnswitchable, manifest.Runner)
+	}
+	if profileID == manifest.Profile {
+		return nil
+	}
+	stateDir, err := s.stateDir(manifest.Runner, profileID)
+	if err != nil {
+		return err
+	}
+	if _, ok := s.conversationToMove(root, manifest); !ok {
+		return ErrNoConversation
+	}
+	state := s.BySlug(slug)
+	if state == nil {
+		if pid, alive := session.AgentAlive(root); alive {
+			return agentAlreadyRunning(slug, pid)
+		}
+	}
+	var fallback *SessionState
+	var emptied bool
+	if state != nil {
+		state.holdConversation()
+		var drained error
+		if fallback, emptied, drained = s.recycleDrained(state); drained != nil {
+			return errors.Join(drained, s.replace(root, fallback, emptied))
+		}
+	}
+	// Read again once nothing can write it, so the copy and the boot name one conversation.
+	conversation, ok := s.conversationToMove(root, manifest)
+	if !ok {
+		return errors.Join(ErrNoConversation, s.replace(root, fallback, emptied))
+	}
+	return errors.Join(s.move(root, manifest, profileID, stateDir, conversation), s.replace(root, fallback, emptied))
+}
+
+// move copies the conversation into the target profile and commits the switch:
+// first the manifest names the profile, then the record names the copy. A record
+// that cannot follow puts the manifest back, so the two never disagree.
+func (s *Sessions) move(root string, from session.Manifest, profileID, stateDir string, c session.Conversation) error {
+	copied, err := launch.CopyConversation(from.Runner, c.Transcript, stateDir)
+	if err != nil {
+		return err
+	}
+	if err := setProfile(root, from.Slug, profileID); err != nil {
+		return err
+	}
+	if err := session.RecordConversation(root, session.Conversation{ID: c.ID, Transcript: copied}); err != nil {
+		return errors.Join(err, setProfile(root, from.Slug, from.Profile))
+	}
+	return nil
+}
+
+// conversationToMove is the recorded conversation with the transcript a switch
+// copies, and false until that transcript exists.
+func (s *Sessions) conversationToMove(root string, m session.Manifest) (session.Conversation, bool) {
+	c, ok := session.ReadConversation(root)
+	if !ok {
+		return c, false
+	}
+	c.Transcript = s.committedTranscript(m, c)
+	_, err := os.Stat(c.Transcript)
+	return c, err == nil
+}
+
+// committedTranscript is the committed profile's own copy of the conversation
+// when it holds one: a switch that stopped before rewriting the record leaves it
+// naming the profile it left.
+func (s *Sessions) committedTranscript(m session.Manifest, c session.Conversation) string {
+	dir, err := s.stateDir(m.Runner, m.Profile)
+	if err != nil {
+		return c.Transcript
+	}
+	own, err := launch.TranscriptIn(m.Runner, c.Transcript, dir)
+	if err != nil {
+		return c.Transcript
+	}
+	if _, err := os.Stat(own); err != nil {
+		return c.Transcript
+	}
+	return own
+}
+
+func setProfile(root, slug, profileID string) error {
+	return session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
+		if m.Slug != slug {
+			return m, UnknownSession(slug)
+		}
+		m.Profile = profileID
+		return m, nil
+	})
+}
+
+// stateDir is the folder the target profile keeps the runner's state in.
+func (s *Sessions) stateDir(runnerID, profileID string) (string, error) {
+	var profile config.RunnerProfile
+	if profileID != "" {
+		var ok bool
+		if profile, ok = s.boot.profile(runnerID, profileID); !ok {
+			return "", fmt.Errorf("%w: %q", launch.ErrProfileUnavailable, profileID)
+		}
+	}
+	return launch.StateDir(runnerID, profile, s.boot.environ())
 }
 
 func (s *Sessions) CycleSticker(slug string) (session.Sticker, error) {
@@ -623,6 +794,15 @@ func (s *Sessions) recycle(state *SessionState) (fallback *SessionState, wasShow
 	s.boot.teardown(state)
 	state.stop()
 	return s.forget(state)
+}
+
+// recycleDrained is recycle that waits for the runner to exit, so nothing is
+// still writing the conversation. An error means something may be.
+func (s *Sessions) recycleDrained(state *SessionState) (fallback *SessionState, wasShown bool, err error) {
+	s.boot.teardown(state)
+	err = state.drain()
+	fallback, wasShown = s.forget(state)
+	return fallback, wasShown, err
 }
 
 // retire ends one session without ending the app.

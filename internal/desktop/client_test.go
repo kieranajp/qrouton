@@ -117,7 +117,7 @@ func TestEveryCapabilitySentinelKeepsItsTextAndIsUnavailable(t *testing.T) {
 		"open text":  func() error { return client.OpenText("/") },
 		"copy image": func() error { return client.CopyImage("/") },
 		"copy file":  func() error { return client.CopyFile("/") },
-		"choose":     func() error { _, err := client.ChooseDirectory(); return err },
+		"choose":     func() error { _, err := client.ChooseDirectory(false); return err },
 	} {
 		if err := call(); !errors.Is(err, core.ErrUnavailable) {
 			t.Errorf("%s with nothing to run = %v, want ErrUnavailable", name, err)

@@ -3,6 +3,7 @@
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import TextField from "../forms/TextField.svelte";
+  import { PROFILE_DEFAULT_LABEL } from "../bridge/generated.js";
   import { Events, call } from "../wails.js";
   import * as go from "./calls.js";
   import { badge, byProfile, followSignIn, pinnedNote, statusKey } from "./profiles.js";
@@ -13,7 +14,7 @@
   /** @typedef {import("./calls.js").RunnerProfiles} RunnerProfiles */
   /** @typedef {import("./calls.js").ProfileRow} ProfileRow */
 
-  const DEFAULT_PROFILE = Object.freeze({ id: "", label: "Default", dir: "", sessions: 0 });
+  const DEFAULT_PROFILE = Object.freeze({ id: "", label: PROFILE_DEFAULT_LABEL, dir: "", sessions: 0 });
 
   /** @type {{labelledby?: string}} */
   let { labelledby } = $props();
@@ -24,7 +25,7 @@
   let statuses = $state(/** @type {Record<string, import("./calls.js").ProfileStatus>} */ ({}));
   let signingIn = $state(/** @type {Record<string, boolean>} */ ({}));
   let adding = $state(
-    /** @type {{runner: string, label: string, dir: string, edited: boolean, error: string, busy: boolean} | null} */ (null),
+    /** @type {{runner: string, label: string, dir: string, chosen: boolean, error: string, busy: boolean, picking: boolean} | null} */ (null),
   );
   let renaming = $state(/** @type {{runner: string, id: string, label: string, error: string} | null} */ (null));
   let deleting = $state(/** @type {{runner: string, id: string, error: string} | null} */ (null));
@@ -82,25 +83,45 @@
 
   /** @param {RunnerProfiles} runner */
   function startAdd(runner) {
-    adding = { runner: runner.id, label: "", dir: "", edited: false, error: "", busy: false };
+    adding = { runner: runner.id, label: "", dir: "", chosen: false, error: "", busy: false, picking: false };
   }
 
   async function suggest() {
-    if (!adding || adding.edited) return;
+    if (!adding || adding.chosen) return;
     const asked = ++suggestions;
     const answer = await call(go.suggestProfile(adding.runner, adding.label));
-    if (asked !== suggestions || !adding || adding.edited || !answer.ok) return;
+    if (asked !== suggestions || !adding || adding.chosen || !answer.ok) return;
     adding.dir = answer.value.dir;
   }
 
-  async function add() {
-    if (!adding || adding.busy) return;
-    adding.busy = true;
-    const answer = await call(go.addProfile({ runner: adding.runner, label: adding.label, dir: adding.dir }));
-    if (!adding) return;
-    adding.busy = false;
+  // A cancelled picker answers "" with no error, which keeps the folder shown.
+  async function chooseFolder() {
+    const draft = adding;
+    if (!draft || draft.picking) return;
+    draft.picking = true;
+    const answer = await call(go.chooseFolder());
+    draft.picking = false;
+    // Compare the object: a cancelled draft reopened for the same runner is a new draft.
+    if (!adding || adding !== draft) return;
     if (!answer.ok) {
       adding.error = message(answer.error);
+      return;
+    }
+    if (!answer.value) return;
+    adding.dir = answer.value;
+    adding.chosen = true;
+    adding.error = "";
+  }
+
+  async function add() {
+    const draft = adding;
+    if (!draft || draft.busy || draft.picking) return;
+    draft.busy = true;
+    const answer = await call(go.addProfile({ runner: draft.runner, label: draft.label, dir: draft.dir }));
+    draft.busy = false;
+    if (adding !== draft) return;
+    if (!answer.ok) {
+      draft.error = message(answer.error);
       return;
     }
     view = answer.value;
@@ -273,17 +294,21 @@
             bind:value={adding.label}
             oninput={suggest}
             onkeydown={addKey} />
-          <TextField
-            label="Folder"
-            aria-label="Profile folder"
-            valueVoice="literal"
-            bind:value={adding.dir}
-            oninput={() => adding && (adding.edited = true)}
-            onkeydown={addKey}
-            help={adding.error || "Holds this account's sign-in and history. It can't change once the profile is added."}
-            helpTone={adding.error ? "failed" : "muted"} />
+          <div class="folder">
+            <CapsLabel>Folder</CapsLabel>
+            <div class="folder-row">
+              <output class="path" class:empty={!adding.dir} aria-label="Profile folder"
+                >{adding.dir || "Follows the name"}</output>
+              {#if view?.canChooseFolder}
+                <Button variant="secondary" disabled={adding.picking} onclick={chooseFolder}>Choose…</Button>
+              {/if}
+            </div>
+            <span class="help" class:failed={adding.error}>
+              {adding.error || "Holds this account's sign-in and history. It can't change once the profile is added."}
+            </span>
+          </div>
           <div class="add-actions">
-            <Button variant="cube" disabled={adding.busy} onclick={add}>Add</Button>
+            <Button variant="cube" disabled={adding.busy || adding.picking} onclick={add}>Add</Button>
             <button type="button" class="link" onclick={() => (adding = null)}>Cancel</button>
           </div>
         </div>
@@ -404,6 +429,43 @@
 
   .add-actions {
     grid-column: 1 / -1;
+  }
+
+  .folder {
+    display: flex;
+    flex-direction: column;
+    gap: calc(7px * var(--ui-scale));
+    min-width: 0;
+  }
+
+  .folder-row {
+    display: flex;
+    gap: calc(8px * var(--ui-scale));
+  }
+
+  .path {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--border-subtle);
+    padding: calc(9px * var(--ui-scale)) calc(12px * var(--ui-scale));
+    font: var(--literal);
+    color: var(--text-secondary);
+  }
+
+  .path.empty {
+    font: var(--machine-md);
+    color: var(--text-faint);
+  }
+
+  .help {
+    font: var(--machine-sm);
+    font-size: calc(11px * var(--ui-scale));
+    color: var(--text-muted);
+  }
+
+  .help.failed {
+    color: var(--state-failed);
   }
 
   .body {

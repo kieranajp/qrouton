@@ -135,6 +135,36 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 	}
 }
 
+// Catches claude resuming by --continue, which starts afresh without error when
+// the conversation is missing, once qrouton knows the conversation's ID.
+func TestRunnerResumeNamesTheRecordedConversation(t *testing.T) {
+	const id = "b8aaffa4-120a-4a6d-bf40-cc703dc147b8"
+	dir := sessionWithOwnHome(t)
+	if err := session.RecordConversation(dir, session.Conversation{ID: id, Transcript: "/p/-s/" + id + ".jsonl"}); err != nil {
+		t.Fatal(err)
+	}
+	wants := map[string][]string{
+		runnerIDClaude: {claudeResumeFlag, id},
+		runnerIDCodex:  {codexResumeCmd, codexResumeLast},
+	}
+	for _, runner := range builtinRunners {
+		want, ok := wants[runner.ID]
+		if !ok {
+			continue
+		}
+		argv, _, err := runnerLaunch(runner, "/bin/qrouton", dir, EditorCommand{}, testHandle(), 1, true, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(argv, want[0]) || argv[slices.Index(argv, want[0])+1] != want[1] {
+			t.Errorf("%s resume argv = %v, want %v", runner.ID, argv, want)
+		}
+		if runner.ID == runnerIDClaude && slices.Contains(argv, claudeContinueFlag) {
+			t.Errorf("claude resume argv = %v, carries %s beside the ID", argv, claudeContinueFlag)
+		}
+	}
+}
+
 func TestRunnerResumeArgvCarriesARepositoryNoticeWithoutAFreshOpening(t *testing.T) {
 	const notice = "qrouton: session repositories changed"
 	for _, runner := range builtinRunners {
@@ -821,7 +851,7 @@ func argvFor(t *testing.T, r Runner, resume bool, mode, initialPrompt string) []
 	if !ok {
 		t.Fatalf("no spec for runner %q", r.ID)
 	}
-	return runnerArgv(spec, r, resume, mode, "", initialPrompt)
+	return runnerArgv(spec, r, resume, "", mode, "", initialPrompt)
 }
 
 // ByID answers the runner the caller named, whether that is the identifier, the
@@ -1007,5 +1037,29 @@ func TestCodexInjectsTheNoticeHooks(t *testing.T) {
 	}
 	if slices.Contains(RunnerHooks(runnerIDCodex), agentevent.HookPostToolUse) {
 		t.Fatal("the notice hook made Codex declare PostToolUse events it never reports")
+	}
+}
+
+// Catches /resume inside Claude going unrecorded until the next prompt, so a
+// Reload or a profile switch in between would still resume the old conversation.
+func TestClaudeReportsAConversationChangeAsItStarts(t *testing.T) {
+	argv, _, err := runnerLaunch(Runner{ID: runnerIDClaude, Command: []string{runnerIDClaude}}, "/bin/qrouton", t.TempDir(),
+		EditorCommand{}, testHandle(), 1, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(argv[slices.Index(argv, "--settings")+1]), &settings); err != nil {
+		t.Fatal(err)
+	}
+	groups := settings.Hooks["SessionStart"]
+	if len(groups) == 0 || len(groups[0].Hooks) == 0 || !strings.Contains(groups[0].Hooks[0].Command, AgentEventSubcommand) {
+		t.Fatalf("SessionStart hooks = %+v, want the agent-event callback", groups)
 	}
 }

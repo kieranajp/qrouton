@@ -166,17 +166,23 @@ var claudeAndCodex = []assembly.Runner{
 // directory of its own.
 func testProfiles(t *testing.T, cfg *config.Config) (*Profiles, *stubBoot) {
 	t.Helper()
+	profiles, boot, _ := testProfilesClient(t, cfg)
+	return profiles, boot
+}
+
+func testProfilesClient(t *testing.T, cfg *config.Config) (*Profiles, *stubBoot, *fakeClient) {
+	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	if cfg.Root == "" {
 		cfg.Root = t.TempDir()
 	}
 	writeConfigFile(t, cfg)
 	boot := newStubBoot("/bin/cat")
-	reg, windows, _ := testSessions(t, cfg.Root, boot)
+	reg, windows, client := testSessions(t, cfg.Root, boot)
 	runners := func() ([]assembly.Runner, error) {
 		return assembly.WithProfiles(claudeAndCodex, cfg.Snapshot().Profiles), nil
 	}
-	return newProfiles(cfg, nil, runners, boot, reg, windows), boot
+	return newProfiles(cfg, nil, runners, boot, reg, windows, client), boot, client
 }
 
 func savedProfiles(t *testing.T) map[string][]config.RunnerProfile {
@@ -224,6 +230,28 @@ func TestAddDerivesTheIDAndCreatesThePrivateFolder(t *testing.T) {
 	}
 	if _, err := profiles.Add(ProfileInput{Runner: "opencode", Label: "Other"}); !errors.Is(err, launch.ErrProfilesUnsupported) {
 		t.Fatalf("adding an OpenCode profile = %v, want %v", err, launch.ErrProfilesUnsupported)
+	}
+}
+
+// Catches the save path trimming a picked folder into its sibling.
+func TestAddKeepsThePickedFolderExactly(t *testing.T) {
+	profiles, _ := testProfiles(t, &config.Config{})
+	base := t.TempDir()
+	spaced := filepath.Join(base, "work ")
+	for _, dir := range []string{filepath.Join(base, "work"), spaced} {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	view, err := profiles.Add(ProfileInput{Runner: "claude", Label: "Spaced", Dir: spaced})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := view.Runners[0].Profiles; len(got) != 1 || got[0].Dir != spaced {
+		t.Fatalf("claude's profiles = %+v, want the folder %q byte for byte", got, spaced)
+	}
+	if _, err := profiles.Add(ProfileInput{Runner: "claude", Label: "Blank", Dir: "  "}); !errors.Is(err, ErrProfileFolder) {
+		t.Fatalf("adding a blank folder = %v, want %v", err, ErrProfileFolder)
 	}
 }
 
@@ -495,5 +523,36 @@ func TestViewAndStatusListEachRunnerOnceWhenItHasProfiles(t *testing.T) {
 	}
 	if len(got) != 4 || probes.Load() != 4 {
 		t.Fatalf("Status answered %d rows from %d probes, want 4 of each: %+v", len(got), probes.Load(), got)
+	}
+}
+
+func TestViewOffersTheFolderPickerOnlyWhereTheClientHasOne(t *testing.T) {
+	profiles, _, client := testProfilesClient(t, &config.Config{})
+	if view, _ := profiles.View(); view.CanChooseFolder {
+		t.Fatal("the view offers a folder picker the client cannot show")
+	}
+	client.choose = func(bool) (string, error) { return "/picked", nil }
+	if view, _ := profiles.View(); !view.CanChooseFolder {
+		t.Fatal("the view hides the folder picker the client has")
+	}
+}
+
+func TestChooseFolderPassesTheClientsAnswerAndACancelThrough(t *testing.T) {
+	profiles, _, client := testProfilesClient(t, &config.Config{})
+	answers := []string{"/Volumes/work/claude", ""}
+	client.choose = func(bool) (string, error) {
+		answer := answers[0]
+		answers = answers[1:]
+		return answer, nil
+	}
+	if got, err := profiles.ChooseFolder(); err != nil || got != "/Volumes/work/claude" {
+		t.Fatalf("ChooseFolder = %q, %v; want the picked folder", got, err)
+	}
+	if got, err := profiles.ChooseFolder(); err != nil || got != "" {
+		t.Fatalf("a cancelled ChooseFolder = %q, %v; want the empty string", got, err)
+	}
+	client.choose = nil
+	if _, err := profiles.ChooseFolder(); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("ChooseFolder without a picker = %v, want %v", err, ErrUnavailable)
 	}
 }

@@ -37,6 +37,7 @@ export const PRESENTER_NOTE = "github.com/kieranajp/qrouton/internal/desktop.Pre
 export const PRESENTER_OPEN = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Open";
 export const PRESENTER_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Show";
 export const PROFILES_ADD = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Add";
+export const PROFILES_CHOOSE_FOLDER = "github.com/kieranajp/qrouton/internal/desktop.Profiles.ChooseFolder";
 export const PROFILES_DELETE = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Delete";
 export const PROFILES_RENAME = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Rename";
 export const PROFILES_SIGN_IN = "github.com/kieranajp/qrouton/internal/desktop.Profiles.SignIn";
@@ -55,6 +56,7 @@ export const SESSIONS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.S
 export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reveal";
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
+export const SESSIONS_SWITCH_PROFILE = "github.com/kieranajp/qrouton/internal/desktop.Sessions.SwitchProfile";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
 export const SESSIONS_UNLOAD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Unload";
 export const SETTINGS_ADJUST_UI_SCALE = "github.com/kieranajp/qrouton/internal/desktop.Settings.AdjustUIScale";
@@ -343,6 +345,18 @@ export const SESSION_UNLOAD_FAILED = "Session could not be unloaded";
 
 export const SESSION_REORDER_FAILED = "Session could not be moved";
 
+export const SESSION_SWITCH_PROFILE_LABEL = "Switch profile";
+
+export const SESSION_SWITCH_PROFILE_FAILED = "Profile could not be switched";
+
+export const SESSION_SWITCH_PROFILE_NEEDS_MESSAGE = "Send one message, then switch profile";
+
+export const PROFILE_CURRENT_META = "current";
+
+export const PROFILE_DEFAULT_LABEL = "Default";
+
+export const NO_CONVERSATION_REFUSAL = "send the session one message before switching its profile";
+
 export const SWITCHER_LABEL = "Switch session";
 
 export const SWITCHER_SEARCH = "Search sessions";
@@ -381,7 +395,7 @@ export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green
 /** @type {readonly StickerSymbol[]} */
 export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, pickerID: string, welcoming: boolean, placing: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, pickerID: string, welcoming: boolean, placing: boolean, stickers: any[], profiles: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -412,6 +426,7 @@ export const CHROME_DEFAULTS = {
   welcoming: false,
   placing: false,
   stickers: [],
+  profiles: [],
   sessionSummary: {
     text: "",
     stage: "",

@@ -29,8 +29,13 @@ const calls = [];
 let closes = 0;
 
 // ?shown=1 puts a session on screen for Sign in; ?credential=1 sets ANTHROPIC_API_KEY;
-// ?uncounted=1 is a sessions root that could not be read.
+// ?uncounted=1 is a sessions root that could not be read; ?chooser=off is a client with no folder picker.
 const shown = params.get("shown") === "1";
+const chooser = params.get("chooser") !== "off";
+// Each folder pick takes the next queued answer: a path, "" for a cancel, or an Error the picker throws.
+const folders = [];
+// A held method answers only once the test releases it.
+const held = new Map();
 const uncounted = params.get("uncounted") === "1";
 const credential = params.get("credential") === "1";
 const profiles = {
@@ -41,6 +46,7 @@ const profileCalls = [];
 const slug = (label) => label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const profilesView = () => ({
   sessionShown: shown,
+  canChooseFolder: chooser,
   runners: [
     {
       id: "claude",
@@ -54,8 +60,9 @@ const profilesView = () => ({
     { id: "codex", label: "Codex CLI", credentials: [], profiles: profiles.codex.map((row) => ({ ...row })) },
   ],
 });
-const profilesCall = (method, args) => {
+const profilesCall = async (method, args) => {
   profileCalls.push({ method, args });
+  await held.get(method)?.promise;
   if (method === "View") return profilesView();
   if (method === "Suggest") {
     const [runner, label] = args;
@@ -78,6 +85,11 @@ const profilesCall = (method, args) => {
     profiles[runner] = profiles[runner].filter((row) => row.id !== id);
     return profilesView();
   }
+  if (method === "ChooseFolder") {
+    const next = folders.shift() ?? "";
+    if (next instanceof Error) throw next;
+    return next;
+  }
   if (method === "Status")
     return [
       { runner: "claude", profile: "", state: "signed-in", email: "k@example.com" },
@@ -89,6 +101,16 @@ const profilesCall = (method, args) => {
 };
 
 window.settingsFixture = {
+  queueFolders: (...answers) => folders.push(...answers.map((answer) => (answer?.error ? new Error(answer.error) : answer))),
+  hold: (method) => {
+    let release = () => {};
+    const promise = new Promise((resolve) => (release = resolve));
+    held.set(method, { promise, release });
+  },
+  release: (method) => {
+    held.get(method)?.release();
+    held.delete(method);
+  },
   profileCalls: () => profileCalls.map((call) => ({ ...call })),
   endSignIn: (id) => {
     emitWailsEvent(WINDOW_EXIT_EVENT + id, 0);

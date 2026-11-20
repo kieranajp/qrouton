@@ -28,6 +28,10 @@ func (s *Sessions) Reload(slug string) error { return s.sessions.Reload(slug) }
 
 func (s *Sessions) Unload(slug string) error { return s.sessions.Unload(slug) }
 
+func (s *Sessions) SwitchProfile(slug, profile string) error {
+	return s.sessions.SwitchProfile(slug, profile)
+}
+
 func (s *Sessions) Reorder(slug, targetSlug string) error {
 	return s.sessions.Reorder(slug, targetSlug)
 }
@@ -205,6 +209,8 @@ func (p *Profiles) Delete(runner, id string) (core.ProfilesView, error) {
 func (p *Profiles) Status() ([]core.ProfileStatus, error) { return p.profiles.Status() }
 
 func (p *Profiles) SignIn(runner, id string) (string, error) { return p.profiles.SignIn(runner, id) }
+
+func (p *Profiles) ChooseFolder() (string, error) { return p.profiles.ChooseFolder() }
 
 type FirstRun struct{ firstRun *core.FirstRun }
 
