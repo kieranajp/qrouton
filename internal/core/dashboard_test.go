@@ -642,3 +642,21 @@ func TestDashboardStopWaitsForTheRefreshInFlight(t *testing.T) {
 		t.Fatalf("a cancelled refresh wrote pulls.json: %v", err)
 	}
 }
+
+// Catches pulls.json, which names private repositories and their pull requests, being readable by other users.
+func TestDashboardWritesPullsJSONReadableOnlyByTheUser(t *testing.T) {
+	b := newTestBoard(t)
+	b.session(t, "pulls", editing("web", "feat/x"))
+	b.gh.say(boardAnswer{prs: map[string][]github.PullRequest{"web": {pr(1, "a")}}})
+
+	b.refresh(t.Context())
+
+	info, err := os.Stat(b.cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Fatalf("pulls.json mode = %v", mode)
+	}
+}
+

@@ -59,7 +59,7 @@ const (
 
 	pullsCacheSchemaVersion = 1
 	pullsCacheDirMode       = 0o755
-	pullsCacheFileMode      = 0o644
+	pullsCacheFileMode      = 0o600
 	// pullsCacheLogKey files a failed write apart from the refresh and each alias.
 	pullsCacheLogKey = "pulls.json"
 )
