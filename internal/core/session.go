@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -567,7 +568,7 @@ func (s *Sessions) start(root, runnerID, profileID string, resume bool) (*Sessio
 		switch {
 		case err == nil:
 			runnerID, profileID = m.Runner, m.Profile
-		case !errors.Is(err, fs.ErrNotExist):
+		case resume || !errors.Is(err, fs.ErrNotExist):
 			return nil, manifestUnreadable(sessionpaths.Manifest(root), err)
 		}
 	}
@@ -646,14 +647,25 @@ func (s *Sessions) retireLocked(state *SessionState) {
 		return
 	}
 	if fallback == nil {
-		if root := s.nextInactiveRoot(state.Slug()); root != "" {
-			fallback, _ = s.start(root, "", "", true)
-		}
+		fallback = s.startNextInactive(state.Slug())
 	}
 	s.reveal(fallback)
 }
 
-func (s *Sessions) nextInactiveRoot(after string) string {
+// startNextInactive resumes the first inactive rail row after the given slug
+// that boots, so one broken session does not leave the window empty.
+func (s *Sessions) startNextInactive(after string) *SessionState {
+	for _, root := range s.inactiveRoots(after) {
+		booted, err := s.start(root, "", "", true)
+		if err == nil {
+			return booted
+		}
+		log.Printf(fallbackLogFormat, filepath.Base(root), err)
+	}
+	return nil
+}
+
+func (s *Sessions) inactiveRoots(after string) []string {
 	s.mu.Lock()
 	rail := append([]string(nil), s.rail...)
 	registered := make(map[string]bool, len(s.slugs))
@@ -669,16 +681,17 @@ func (s *Sessions) nextInactiveRoot(after string) string {
 			break
 		}
 	}
+	var roots []string
 	for i := range rail {
 		slug := rail[(start+i)%len(rail)]
 		if slug == after || registered[slug] {
 			continue
 		}
 		if root := s.boot.root(slug); root != "" {
-			return root
+			roots = append(roots, root)
 		}
 	}
-	return ""
+	return roots
 }
 
 func (s *Sessions) stopAll() {

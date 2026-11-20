@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -96,6 +97,30 @@ func TestAnUnreadableManifestLeavesTheSessionUnbooted(t *testing.T) {
 	}
 	if agents, _ := boot.counts(); agents != 0 || reg.BySlug("octopus") != nil {
 		t.Fatalf("a session whose manifest will not load asked for %d supervisors", agents)
+	}
+}
+
+// Breaks if a resume whose manifest vanished after discovery boots the
+// workbench's runner on the default account.
+func TestAResumeWhoseManifestVanishedLeavesTheSessionUnbooted(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	profiledSession(t, root, "octopus", "claude", "work")
+	dir := reg.boot.root("octopus")
+	if dir == "" {
+		t.Fatal("the session was not discovered")
+	}
+	if err := os.Remove(sessionpaths.Manifest(dir)); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := reg.start(dir, "", "", true)
+	if !errors.Is(err, ErrManifestUnreadable) || !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("start = %v, want %v for a missing file", err, ErrManifestUnreadable)
+	}
+	if agents, _ := boot.counts(); agents != 0 || reg.BySlug("octopus") != nil {
+		t.Fatalf("a resume with no manifest asked for %d supervisors", agents)
 	}
 }
 
