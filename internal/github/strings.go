@@ -37,7 +37,7 @@ const (
 	pullsQueryFormat     = "query(%s) { viewer { login } %s }"
 	pullsVariablesFormat = "$o%[1]d: String!, $n%[1]d: String!, $b%[1]d: String!"
 	pullsAliasFormat     = "%[1]s: repository(owner: $o%[2]d, name: $n%[2]d) { pullRequests(headRefName: $b%[2]d, first: %[3]d, orderBy: {field: UPDATED_AT, direction: DESC}) { nodes { " + pullNodeFields + " } } } "
-	pullNodeFields       = "number title url state isDraft updatedAt author { login } reviewDecision headRepositoryOwner { login } statusCheckRollup { state }"
+	pullNodeFields       = "number title url state isDraft updatedAt author { login } latestOpinionatedReviews(first: 20, writersOnly: true) { nodes { state } } headRepositoryOwner { login } statusCheckRollup { state }"
 	aliasFormat          = "r%d"
 	viewerField          = "viewer"
 	ownerVariableFormat  = "o%d"

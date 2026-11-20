@@ -22,7 +22,7 @@ func pullsAnswer(t *testing.T, body string, sent *graphQLRequest) *http.Client {
 }
 
 const ownNode = `{"number":7,"title":"Add pulls","url":"https://github.com/acme/web/pull/7","state":"OPEN","isDraft":false,` +
-	`"updatedAt":"2026-11-19T10:00:00Z","author":{"login":"octo"},"reviewDecision":"APPROVED",` +
+	`"updatedAt":"2026-11-19T10:00:00Z","author":{"login":"octo"},"latestOpinionatedReviews":{"nodes":[{"state":"CHANGES_REQUESTED"},{"state":"APPROVED"}]},` +
 	`"headRepositoryOwner":{"login":"ACME"},"statusCheckRollup":{"state":"FAILURE"}}`
 
 func TestBranchPullRequestsPassesTargetsOnlyAsVariables(t *testing.T) {
@@ -43,7 +43,7 @@ func TestBranchPullRequestsPassesTargetsOnlyAsVariables(t *testing.T) {
 	if !reflect.DeepEqual(sent.Variables, want) {
 		t.Fatalf("variables = %#v", sent.Variables)
 	}
-	for _, s := range []string{"$o1: String!", "r1: repository(owner: $o1, name: $n1)", "headRefName: $b1", "first: 50", "viewer { login }"} {
+	for _, s := range []string{"$o1: String!", "r1: repository(owner: $o1, name: $n1)", "headRefName: $b1", "first: 50", "viewer { login }", "latestOpinionatedReviews(first: 20, writersOnly: true) { nodes { state } }"} {
 		if !strings.Contains(sent.Query, s) {
 			t.Fatalf("query lacks %q: %s", s, sent.Query)
 		}
@@ -54,7 +54,7 @@ func TestBranchPullRequestsPassesTargetsOnlyAsVariables(t *testing.T) {
 func TestBranchPullRequestsFlattensAuthorReviewChecksAndUpdatedAt(t *testing.T) {
 	client := pullsAnswer(t, `{"data":{"viewer":{"login":"octo"},"r0":{"pullRequests":{"nodes":[`+ownNode+`,`+
 		`{"number":8,"title":"Ghost","url":"u8","state":"MERGED","isDraft":true,"updatedAt":"2026-11-18T09:30:00Z",`+
-		`"author":null,"reviewDecision":null,"headRepositoryOwner":{"login":"acme"},"statusCheckRollup":null}]}}}}`, nil)
+		`"author":null,"latestOpinionatedReviews":null,"headRepositoryOwner":{"login":"acme"},"statusCheckRollup":null}]}}}}`, nil)
 
 	viewer, results, err := BranchPullRequests(context.Background(), client, "token", []BranchTarget{{Owner: "acme", Name: "web", Branch: "feat"}})
 	if err != nil {
@@ -65,7 +65,7 @@ func TestBranchPullRequestsFlattensAuthorReviewChecksAndUpdatedAt(t *testing.T) 
 	}
 	want := []BranchResult{{PullRequests: []PullRequest{
 		{Number: 7, Title: "Add pulls", URL: "https://github.com/acme/web/pull/7", State: PullStateOpen,
-			UpdatedAt: time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC), Author: "octo", ReviewDecision: ReviewApproved, CheckState: CheckFailure},
+			UpdatedAt: time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC), Author: "octo", Reviews: []string{ReviewChangesRequested, ReviewApproved}, CheckState: CheckFailure},
 		{Number: 8, Title: "Ghost", URL: "u8", State: PullStateMerged, IsDraft: true,
 			UpdatedAt: time.Date(2026, 11, 18, 9, 30, 0, 0, time.UTC)},
 	}}}

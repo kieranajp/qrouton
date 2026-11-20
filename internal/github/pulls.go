@@ -12,15 +12,15 @@ import (
 
 // PullRequest is one pull request as GraphQL reports it, flattened.
 type PullRequest struct {
-	Number         int
-	Title          string
-	URL            string
-	State          string
-	IsDraft        bool
-	UpdatedAt      time.Time
-	Author         string // empty for a deleted account
-	ReviewDecision string
-	CheckState     string
+	Number     int
+	Title      string
+	URL        string
+	State      string
+	IsDraft    bool
+	UpdatedAt  time.Time
+	Author     string   // empty for a deleted account
+	Reviews    []string // each writer's latest APPROVED or CHANGES_REQUESTED, oldest first
+	CheckState string
 }
 
 type BranchTarget struct{ Owner, Name, Branch string }
@@ -35,15 +35,19 @@ type login struct {
 }
 
 type pullNode struct {
-	Number              int       `json:"number"`
-	Title               string    `json:"title"`
-	URL                 string    `json:"url"`
-	State               string    `json:"state"`
-	IsDraft             bool      `json:"isDraft"`
-	UpdatedAt           time.Time `json:"updatedAt"`
-	Author              *login    `json:"author"`
-	ReviewDecision      string    `json:"reviewDecision"`
-	HeadRepositoryOwner *login    `json:"headRepositoryOwner"`
+	Number    int       `json:"number"`
+	Title     string    `json:"title"`
+	URL       string    `json:"url"`
+	State     string    `json:"state"`
+	IsDraft   bool      `json:"isDraft"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Author    *login    `json:"author"`
+	Reviews   *struct {
+		Nodes []*struct {
+			State string `json:"state"`
+		} `json:"nodes"`
+	} `json:"latestOpinionatedReviews"`
+	HeadRepositoryOwner *login `json:"headRepositoryOwner"`
 	StatusCheckRollup   *struct {
 		State string `json:"state"`
 	} `json:"statusCheckRollup"`
@@ -152,13 +156,19 @@ func ownPullRequests(repo *pullsRepository, owner string) []PullRequest {
 			continue
 		}
 		pr := PullRequest{
-			Number:         node.Number,
-			Title:          node.Title,
-			URL:            node.URL,
-			State:          node.State,
-			IsDraft:        node.IsDraft,
-			UpdatedAt:      node.UpdatedAt,
-			ReviewDecision: node.ReviewDecision,
+			Number:    node.Number,
+			Title:     node.Title,
+			URL:       node.URL,
+			State:     node.State,
+			IsDraft:   node.IsDraft,
+			UpdatedAt: node.UpdatedAt,
+		}
+		if node.Reviews != nil {
+			for _, review := range node.Reviews.Nodes {
+				if review != nil {
+					pr.Reviews = append(pr.Reviews, review.State)
+				}
+			}
 		}
 		if node.Author != nil {
 			pr.Author = node.Author.Login

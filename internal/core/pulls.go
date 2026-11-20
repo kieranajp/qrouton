@@ -1,6 +1,8 @@
 package core
 
 import (
+	"slices"
+
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -20,7 +22,7 @@ func pullRequestRows(id string, prs []github.PullRequest) []status.PullRequest {
 			URL:           pr.URL,
 			State:         pullRequestState(pr),
 			Author:        pr.Author,
-			Review:        pullRequestReview(pr.ReviewDecision),
+			Review:        pullRequestReview(pr.Reviews),
 			ChecksFailing: pr.CheckState == github.CheckFailure || pr.CheckState == github.CheckError,
 			UpdatedAt:     pr.UpdatedAt,
 		})
@@ -42,13 +44,14 @@ func pullRequestState(pr github.PullRequest) string {
 	}
 }
 
-func pullRequestReview(decision string) string {
-	switch decision {
-	case github.ReviewApproved:
-		return status.PullRequestReviewApproved
-	case github.ReviewChangesRequested:
+// pullRequestReview reads the reviews themselves rather than reviewDecision, which reports
+// REVIEW_REQUIRED over an approval that does not yet meet the branch's rule.
+func pullRequestReview(latest []string) string {
+	if slices.Contains(latest, github.ReviewChangesRequested) {
 		return status.PullRequestReviewChangesRequested
-	default:
-		return ""
 	}
+	if slices.Contains(latest, github.ReviewApproved) {
+		return status.PullRequestReviewApproved
+	}
+	return ""
 }

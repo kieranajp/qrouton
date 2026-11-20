@@ -33,9 +33,9 @@ func TestPullRequestStateFollowsMergedClosedDraftOpen(t *testing.T) {
 func TestPullRequestRowsCarryAuthorReviewChecksAndUpdate(t *testing.T) {
 	at := time.Date(2026, 11, 19, 8, 41, 0, 0, time.UTC)
 	rows := pullRequestRows("acme/web", []github.PullRequest{
-		{Number: 1, Author: "kieran", ReviewDecision: github.ReviewApproved, CheckState: "SUCCESS", UpdatedAt: at},
-		{Number: 2, ReviewDecision: github.ReviewChangesRequested, CheckState: github.CheckFailure},
-		{Number: 3, ReviewDecision: "REVIEW_REQUIRED", CheckState: github.CheckError},
+		{Number: 1, Author: "kieran", Reviews: []string{github.ReviewApproved}, CheckState: "SUCCESS", UpdatedAt: at},
+		{Number: 2, Reviews: []string{github.ReviewChangesRequested}, CheckState: github.CheckFailure},
+		{Number: 3, CheckState: github.CheckError},
 		{Number: 4, CheckState: "PENDING"},
 	})
 	want := []struct {
@@ -54,5 +54,26 @@ func TestPullRequestRowsCarryAuthorReviewChecksAndUpdate(t *testing.T) {
 	}
 	if rows[0].Author != "kieran" || !rows[0].UpdatedAt.Equal(at) || rows[0].Repo != "acme/web" {
 		t.Fatalf("row 0 = %+v", rows[0])
+	}
+}
+
+// Reading reviewDecision instead hid an approval behind REVIEW_REQUIRED, and on a repository with no rule behind null.
+func TestPullRequestReviewComesFromEachReviewersLatestReview(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		latest []string
+		want   string
+	}{
+		{"none", nil, ""},
+		{"approved", []string{github.ReviewApproved}, status.PullRequestReviewApproved},
+		{"changes requested", []string{github.ReviewChangesRequested}, status.PullRequestReviewChangesRequested},
+		{"one reviewer's changes outweigh another's approval", []string{github.ReviewApproved, github.ReviewChangesRequested}, status.PullRequestReviewChangesRequested},
+		{"a dismissed review counts for neither", []string{"DISMISSED"}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := pullRequestReview(tc.latest); got != tc.want {
+				t.Fatalf("review = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
