@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -136,4 +137,11 @@ func retryAfter(now time.Time, header http.Header) time.Time {
 		return now.Add(time.Duration(seconds) * time.Second)
 	}
 	return now.Add(rateLimitFallback)
+}
+
+var requestID = regexp.MustCompile(requestIDPattern)
+
+// WithoutRequestID is message less GitHub's per-request id, so two reports of one failure compare equal.
+func WithoutRequestID(message string) string {
+	return requestID.ReplaceAllString(message, "")
 }

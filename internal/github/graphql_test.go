@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -225,5 +226,18 @@ func TestGraphQLARateLimitedBodyDecodesNoData(t *testing.T) {
 	rateLimitUntil(t, err)
 	if out.Viewer.Login != "" {
 		t.Fatalf("out = %#v, want nothing decoded from a refused response", out)
+	}
+}
+
+// GitHub's generic error names a fresh request id each time; left in, one failure reads as many.
+func TestWithoutRequestIDMakesTwoReportsOfOneFailureEqual(t *testing.T) {
+	const generic = "Something went wrong while executing your query. Please include `%s` when reporting this issue."
+	first := WithoutRequestID(fmt.Sprintf(generic, "C0A1:2B3C:4D5E6F:7A8B9C:65A1B2C3"))
+	second := WithoutRequestID(fmt.Sprintf(generic, "0400:1F2E:9A8B7C:1D2E3F:65A1B2D4"))
+	if first != second || !strings.HasPrefix(first, "Something went wrong") {
+		t.Fatalf("normalised to %q and %q", first, second)
+	}
+	if got := WithoutRequestID("502 Bad Gateway"); got != "502 Bad Gateway" {
+		t.Fatalf("a message with no id became %q", got)
 	}
 }

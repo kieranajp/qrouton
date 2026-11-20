@@ -451,7 +451,7 @@ func (d *Dashboard) logOnce(key string, err error) {
 }
 
 func (d *Dashboard) logOnceLocked(key string, err error) {
-	if text := err.Error(); d.logged[key] != text {
+	if text := github.WithoutRequestID(err.Error()); d.logged[key] != text {
 		log.Printf(dashboardLogFormat, err)
 		d.logged[key] = text
 	}

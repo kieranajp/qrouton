@@ -231,6 +231,24 @@ func TestDashboardLogsARepeatedAliasFailureOnce(t *testing.T) {
 	}
 }
 
+// GitHub's generic error carries a new request id on every refresh, which must not count as a new failure.
+func TestDashboardLogsAGenericGitHubErrorOnceAcrossRequestIDs(t *testing.T) {
+	var logged bytes.Buffer
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	b := newTestBoard(t)
+	b.session(t, "pulls", editing("web", "feat/x"))
+
+	for _, id := range []string{"C0A1:2B3C:4D5E6F:7A8B9C:65A1B2C3", "0400:1F2E:9A8B7C:1D2E3F:65A1B2D4", "9F10:3C4D:5E6F70:8A9BAC:65A1B2E5"} {
+		b.gh.say(boardAnswer{errs: map[string]error{"web": fmt.Errorf("github: %w: Something went wrong while executing your query. Please include `%s` when reporting this issue.", github.ErrQuery, id)}})
+		b.refresh(t.Context())
+	}
+
+	if got := strings.Count(logged.String(), "Something went wrong"); got != 1 {
+		t.Fatalf("logged the failure %d times:\n%s", got, logged.String())
+	}
+}
+
 func TestDashboardAsksOnceForABranchTwoSessionsShare(t *testing.T) {
 	b := newTestBoard(t)
 	one := b.session(t, "one", editing("web", "feat/x"))
