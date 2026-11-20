@@ -37,7 +37,7 @@
   let header = $derived(freshness(status, now));
   let disabled = $derived(refreshDisabled(status, now));
   let sections = $derived(
-    sessions.map((row) => pullSection(status, row.slug, now, { repos: Boolean(row.repos?.length), expanded: expanded.has(row.slug) })),
+    sessions.map((row) => pullSection(status, row.slug, now, { expanded: expanded.has(row.slug) })),
   );
 
   let width = $state(0);

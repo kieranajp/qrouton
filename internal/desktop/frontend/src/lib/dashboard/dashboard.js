@@ -1,4 +1,4 @@
-import { MODE_LABELS, PULL_REQUEST_REVIEWS, PULL_REQUEST_STATES, REPO_ROLES } from "../bridge/generated.js";
+import { DASHBOARD_PULL_STATES, MODE_LABELS, PULL_REQUEST_REVIEWS, PULL_REQUEST_STATES, REPO_ROLES } from "../bridge/generated.js";
 import { SIGNED_OUT } from "../overview/pulls.js";
 import { stamp } from "../relative.js";
 import { repositoryLine } from "../session/rail.js";
@@ -49,6 +49,15 @@ export const REFRESH = "Refresh";
 export const GITHUB_SETTINGS = "GitHub settings";
 export const CHECKING = "Checking GitHub…";
 export const NO_PULLS = "No pull requests";
+export const NO_SOURCE = "No branch to check";
+export const UNAVAILABLE = "Couldn't load pull requests";
+export const PARTIAL = "Couldn't load every repository";
+/** @type {Readonly<Record<string, string>>} */
+const PULL_STATE_NOTES = Object.freeze({
+  [DASHBOARD_PULL_STATES.ANSWERED]: NO_PULLS,
+  [DASHBOARD_PULL_STATES.UNAVAILABLE]: UNAVAILABLE,
+  [DASHBOARD_PULL_STATES.NONE]: NO_SOURCE,
+});
 export const SHOWN_PULLS = 4;
 
 /** @param {number} count */
@@ -74,7 +83,7 @@ const MINUTE = 60000;
 
 /** @typedef {{repo: string, number: number, title: string, url: string, state: string, author?: string, review?: string, checksFailing?: boolean, updatedAt?: string}} PullRequest */
 /** @typedef {{name: string, role?: string, measured?: boolean, commits?: number, insertions?: number, deletions?: number}} RepoStat */
-/** @typedef {{viewer?: string, checkedAt?: string, refreshing?: boolean, failed?: boolean, signedOut?: boolean, pausedUntil?: string, sessions?: Record<string, {pullRequests?: PullRequest[] | null, repos?: RepoStat[] | null}>}} DashboardStatus */
+/** @typedef {{viewer?: string, checkedAt?: string, refreshing?: boolean, failed?: boolean, signedOut?: boolean, pausedUntil?: string, sessions?: Record<string, {pullRequests?: PullRequest[] | null, pullState?: string, repos?: RepoStat[] | null}>}} DashboardStatus */
 
 /** Go marshals never as year one, which parses to a negative time.
  * @param {string | undefined} at */
@@ -100,17 +109,20 @@ export function pullTags(pr) {
   return [review, open(pr) && pr.checksFailing ? CHECKS_FAILING : undefined].filter((tag) => tag !== undefined);
 }
 
-/** A session with no editing repository can have no pull requests, so it never waits on GitHub.
- * @param {DashboardStatus} status @param {string} slug @param {number} now @param {{repos?: boolean, expanded?: boolean}} [card]
+/** A card reads its own branches' answer, never the whole refresh's.
+ * @param {DashboardStatus} status @param {string} slug @param {number} now @param {{expanded?: boolean}} [card]
  * @returns {{shown: PullRequest[], more: number, note: string}} */
-export function pullSection(status, slug, now, { repos = true, expanded = false } = {}) {
-  const rows = ownPulls(status.sessions?.[slug]?.pullRequests, status.viewer);
+export function pullSection(status, slug, now, { expanded = false } = {}) {
+  const session = status.sessions?.[slug];
+  const rows = ownPulls(session?.pullRequests, status.viewer);
   if (rows.length) {
     const shown = expanded ? rows : rows.slice(0, SHOWN_PULLS);
-    return { shown, more: rows.length - shown.length, note: "" };
+    const note = session?.pullState === DASHBOARD_PULL_STATES.UNAVAILABLE ? PARTIAL : "";
+    return { shown, more: rows.length - shown.length, note };
   }
-  if (!repos || time(status.checkedAt)) return { shown: [], more: 0, note: NO_PULLS };
-  // The header already says why GitHub has never answered, and it will not answer by waiting.
+  const note = session?.pullState ? PULL_STATE_NOTES[session.pullState] : undefined;
+  if (note) return { shown: [], more: 0, note };
+  // The header already says why GitHub has not answered, and it will not answer by waiting.
   if (status.signedOut || status.failed || paused(status, now)) return { shown: [], more: 0, note: "" };
   return { shown: [], more: 0, note: CHECKING };
 }

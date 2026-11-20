@@ -4,6 +4,9 @@ import { SIGNED_OUT } from "../overview/pulls.js";
 import {
   CHECKING,
   NO_PULLS,
+  NO_SOURCE,
+  PARTIAL,
+  UNAVAILABLE,
   cardHeight,
   columnCount,
   estimatedHeight,
@@ -133,16 +136,45 @@ test("a card's height estimate counts at most four pull requests, expanded or no
   assert.equal(cardHeight({ shown: [pull(1)], more: 0 }), estimatedHeight(1));
 });
 
-// Waiting on a cache that will never fill would leave every card saying it is checking for good.
-test("a card checks GitHub only while the cache has never filled and nothing has said why", () => {
-  const empty = { checkedAt: NEVER, viewer: "", sessions: {} };
+// Waiting on a card GitHub has not answered would leave it saying it is checking for good once the header explains why.
+test("a card checks GitHub only while its own branches wait and nothing has said why", () => {
+  const empty = { checkedAt: NEVER, viewer: "", sessions: { billing: { pullRequests: [], pullState: "pending", repos: [] } } };
   assert.equal(pullSection(empty, "billing", NOW).note, CHECKING);
   assert.equal(pullSection({ ...empty, signedOut: true }, "billing", NOW).note, "");
   assert.equal(pullSection({ ...empty, failed: true }, "billing", NOW).note, "");
   assert.equal(pullSection({ ...empty, pausedUntil: minutesAgo(-5) }, "billing", NOW).note, "");
   assert.equal(pullSection({ ...empty, pausedUntil: minutesAgo(5) }, "billing", NOW).note, CHECKING, "a pause that has passed is waiting on GitHub again");
-  assert.equal(pullSection(empty, "billing", NOW, { repos: false }).note, NO_PULLS);
-  assert.equal(pullSection(fresh(), "billing", NOW).note, NO_PULLS);
+  assert.equal(pullSection(fresh({ sessions: {} }), "billing", NOW).note, CHECKING, "a session the payload has not reached yet is still waiting");
+});
+
+const card = (pullState, pullRequests = []) => ({ pullRequests, pullState, repos: [] });
+
+// Reading the global checkedAt let one session's answer mark another, whose only branch failed, as empty.
+test("on an empty cache, one answered session leaves another whose branch failed unavailable", () => {
+  const status = fresh({ checkedAt: minutesAgo(0), sessions: { web: card("answered"), api: card("unavailable") } });
+  assert.equal(pullSection(status, "web", NOW).note, NO_PULLS);
+  assert.equal(pullSection(status, "api", NOW).note, UNAVAILABLE);
+});
+
+// A session with no branch to ask about never gets an answer, so waiting on one would say Checking GitHub for good.
+test("a session with no branch to ask about says so at once, whatever the header says", () => {
+  for (const extra of [{ checkedAt: NEVER, viewer: "" }, {}, { signedOut: true }, { failed: true }]) {
+    assert.equal(pullSection(fresh({ ...extra, sessions: { docs: card("none") } }), "docs", NOW).note, NO_SOURCE);
+  }
+});
+
+// Hiding an unavailable card behind the header would leave a failed branch looking like one still being checked.
+test("an unavailable card says so even while the header reports the failure", () => {
+  assert.equal(pullSection(fresh({ failed: true, sessions: { api: card("unavailable") } }), "api", NOW).note, UNAVAILABLE);
+});
+
+// A mixed card that read as empty, or dropped its rows, would hide either the failure or the work.
+test("a card with one branch answered and another failed shows its rows and says not every repository loaded", () => {
+  const status = fresh({ sessions: { billing: card("unavailable", [pull(1)]) } });
+  const section = pullSection(status, "billing", NOW);
+  assert.deepEqual(section.shown.map((pr) => pr.number), [1]);
+  assert.equal(section.note, PARTIAL);
+  assert.equal(pullSection(fresh({ sessions: { billing: card("answered", [pull(1)]) } }), "billing", NOW).note, "");
 });
 
 // A review tag on a merged pull request would claim a decision that no longer matters.

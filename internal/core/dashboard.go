@@ -34,6 +34,7 @@ type DashboardStatus struct {
 
 type DashboardSession struct {
 	PullRequests []status.PullRequest `json:"pullRequests"`
+	PullState    string               `json:"pullState"`
 	Repos        []status.RepoStat    `json:"repos"`
 }
 
@@ -94,6 +95,8 @@ type Dashboard struct {
 	pausedUntil time.Time
 	pulls       map[string]map[string]map[string][]status.PullRequest
 	stats       map[string][]status.RepoStat
+	// unavailable holds each session's branches whose last answer failed with no rows to show, by repo key.
+	unavailable map[string]map[string]bool
 	// logged is the last failure logged per alias, with the whole refresh under "".
 	logged map[string]string
 	cancel context.CancelFunc
@@ -291,9 +294,25 @@ func (d *Dashboard) status(sessions []dashboardSession) DashboardStatus {
 		if repos == nil {
 			repos = []status.RepoStat{}
 		}
-		out.Sessions[s.slug] = DashboardSession{PullRequests: d.rowsLocked(s.slug, s.repos), Repos: repos}
+		out.Sessions[s.slug] = DashboardSession{PullRequests: d.rowsLocked(s.slug, s.repos), PullState: d.pullStateLocked(s), Repos: repos}
 	}
 	return out
+}
+
+func (d *Dashboard) pullStateLocked(s dashboardSession) string {
+	if len(s.repos) == 0 {
+		return dashboardPullsNone
+	}
+	state := dashboardPullsAnswered
+	for _, repo := range s.repos {
+		if d.unavailable[s.slug][repo.key()] {
+			return dashboardPullsUnavailable
+		}
+		if _, ok := d.pulls[s.slug][repo.id][repo.target.Branch]; !ok {
+			state = dashboardPullsPending
+		}
+	}
+	return state
 }
 
 func (d *Dashboard) publish() {
@@ -401,6 +420,7 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 	defer d.mu.Unlock()
 	reuse := viewer == "" || d.viewer == "" || viewer == d.viewer
 	next := map[string]map[string]map[string][]status.PullRequest{}
+	unavailable := map[string]map[string]bool{}
 	answered := false
 	for _, s := range sessions {
 		for _, repo := range s.repos {
@@ -417,6 +437,10 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 				d.logOnceLocked(repo.key(), result.Err)
 				previous, kept := d.pulls[s.slug][repo.id][repo.target.Branch]
 				if !reuse || !kept {
+					if unavailable[s.slug] == nil {
+						unavailable[s.slug] = map[string]bool{}
+					}
+					unavailable[s.slug][repo.key()] = true
 					continue
 				}
 				rows = previous
@@ -427,6 +451,7 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 			next[s.slug][repo.id] = map[string][]status.PullRequest{repo.target.Branch: rows}
 		}
 	}
+	d.unavailable = unavailable
 	if !answered {
 		d.failed = true
 		if reuse {

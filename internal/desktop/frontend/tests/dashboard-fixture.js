@@ -29,7 +29,9 @@ const status = (extra = {}) => ({
   signedOut: false,
   pausedUntil: NEVER,
   sessions: {
+    ...Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`session-${i + 2}`, { pullRequests: [], pullState: "none", repos: [] }])),
     billing: {
+      pullState: "answered",
       pullRequests: [
         pull("acme/billing", 3, "Retire the v1 billing client", { state: "merged", review: "approved" }),
         pull("acme/web", 41, "Swap PaymentIntent for the v2 client and move refunds onto the new webhook handler", {
@@ -41,6 +43,7 @@ const status = (extra = {}) => ({
       repos: [stat("acme/web", 3, 600, 200), stat("acme/billing", 2, 11, 4), stat("acme/docs", 9, 9, 9, "reference")],
     },
     "session-3": {
+      pullState: "answered",
       pullRequests: Array.from({ length: 7 }, (_, i) => pull("acme/api", i + 1, `Endpoint ${i + 1}`)),
       repos: [stat("acme/api", 0, 0, 0)],
     },

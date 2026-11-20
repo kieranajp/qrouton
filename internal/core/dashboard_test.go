@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -806,6 +807,89 @@ func TestDashboardDropsAnotherViewersRowsWhenEveryAliasFails(t *testing.T) {
 	}
 }
 
+func pullStates(s DashboardStatus) map[string]string {
+	out := map[string]string{}
+	for slug, session := range s.Sessions {
+		out[slug] = session.PullState
+	}
+	return out
+}
+
+// Catches a card judged by the whole refresh: on an empty cache, one session's answer must not mark another whose only branch failed.
+func TestDashboardStatesEachSessionByItsOwnBranches(t *testing.T) {
+	b := newTestBoard(t)
+	b.session(t, "answered", editing("web", "feat/x"))
+	b.session(t, "broken", editing("api", "feat/x"))
+	b.session(t, "mixed", editing("web", "feat/y"), editing("api", "feat/y"))
+	b.session(t, "reference", session.ManifestRepo{Org: "acme", Name: "docs", Role: session.RepoRoleReference, WorktreePath: "src/docs"})
+	b.session(t, "unbranched", editing("cli", ""))
+	b.session(t, "empty")
+
+	none := map[string]string{"reference": dashboardPullsNone, "unbranched": dashboardPullsNone, "empty": dashboardPullsNone}
+	want := map[string]string{"answered": dashboardPullsPending, "broken": dashboardPullsPending, "mixed": dashboardPullsPending}
+	maps.Copy(want, none)
+	if got := pullStates(b.Snapshot()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("states before any refresh = %v", got)
+	}
+
+	b.gh.say(boardAnswer{errs: map[string]error{"api": fmt.Errorf("github: %w: Something went wrong", github.ErrQuery)}})
+	b.refresh(t.Context())
+
+	want = map[string]string{"answered": dashboardPullsAnswered, "broken": dashboardPullsUnavailable, "mixed": dashboardPullsUnavailable}
+	maps.Copy(want, none)
+	if got := pullStates(b.Snapshot()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("states after api failed = %v", got)
+	}
+}
+
+// Catches an install with no branch anywhere waiting on GitHub for good: no refresh is ever asked, so nothing may read pending.
+func TestDashboardWithNoBranchAnywhereHasNoPullRequestSource(t *testing.T) {
+	b := newTestBoard(t)
+	b.session(t, "unbranched", editing("web", ""))
+	b.session(t, "reference", session.ManifestRepo{Org: "acme", Name: "docs", Role: session.RepoRoleReference, WorktreePath: "src/docs"})
+
+	b.refresh(t.Context())
+
+	s := b.Snapshot()
+	want := map[string]string{"unbranched": dashboardPullsNone, "reference": dashboardPullsNone}
+	if got := pullStates(s); !s.CheckedAt.IsZero() || !reflect.DeepEqual(got, want) {
+		t.Fatalf("checked at %v, states %v", s.CheckedAt, got)
+	}
+}
+
+// Catches a failed branch with rows still on show reading as unavailable, or a whole failure wiping each card's answer.
+func TestDashboardKeepsASessionAnsweredWhileItsRowsShow(t *testing.T) {
+	b := newTestBoard(t)
+	b.session(t, "pulls", editing("web", "feat/x"))
+	b.gh.say(boardAnswer{prs: map[string][]github.PullRequest{"web": {pr(1, "a")}}})
+	b.refresh(t.Context())
+
+	b.gh.say(boardAnswer{errs: map[string]error{"web": fmt.Errorf("github: %w: Something went wrong", github.ErrQuery)}})
+	b.refresh(t.Context())
+	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsAnswered {
+		t.Fatalf("state with kept rows = %q", got)
+	}
+
+	b.gh.say(boardAnswer{err: fmt.Errorf("github: listing pull requests: %w: Parse error", github.ErrQuery)})
+	b.refresh(t.Context())
+	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsAnswered {
+		t.Fatalf("state after a whole failure = %q", got)
+	}
+}
+
+// Catches an empty cache where every branch failed leaving each card waiting rather than saying it could not load.
+func TestDashboardWithNoCacheWhereEveryAliasFailsMarksEachSessionUnavailable(t *testing.T) {
+	b := newTestBoard(t)
+	b.session(t, "pulls", editing("web", "feat/x"))
+	b.gh.say(boardAnswer{errs: map[string]error{"web": fmt.Errorf("github: %w: 502 Bad Gateway", github.ErrQuery)}})
+
+	b.refresh(t.Context())
+
+	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsUnavailable {
+		t.Fatalf("state after every alias failed on an empty cache = %q", got)
+	}
+}
+
 // Catches an answer that names no viewer dropping a failed alias's rows: only a named, different viewer proves the account changed.
 func TestDashboardAnswerNamingNoViewerKeepsAFailedAliasRows(t *testing.T) {
 	b := newTestBoard(t)
@@ -818,5 +902,33 @@ func TestDashboardAnswerNamingNoViewerKeepsAFailedAliasRows(t *testing.T) {
 	b.refresh(t.Context())
 	if rows := titles(b.rows(root)); !reflect.DeepEqual(rows, []string{"acme/web#a", "acme/api#d"}) {
 		t.Fatalf("rows after an answer naming no viewer = %v", rows)
+	}
+
+	b.gh.say(boardAnswer{anonymous: true, errs: map[string]error{"web": broken, "api": broken}})
+	b.refresh(t.Context())
+	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsAnswered {
+		t.Fatalf("a card whose rows still show reads %q", got)
+	}
+}
+
+// Catches a whole failure wiping a card's unavailable state, or the next answer leaving it stuck there.
+func TestDashboardUnavailableSessionOutlastsAWholeFailureAndClearsOnTheNextAnswer(t *testing.T) {
+	b := newTestBoard(t)
+	b.session(t, "pulls", editing("web", "feat/x"))
+	b.gh.say(boardAnswer{errs: map[string]error{"web": fmt.Errorf("github: %w: Something went wrong", github.ErrQuery)}})
+	b.refresh(t.Context())
+
+	b.gh.say(boardAnswer{err: fmt.Errorf("github: listing pull requests: %w: Parse error", github.ErrQuery)})
+	b.refresh(t.Context())
+	b.gh.say(boardAnswer{err: fmt.Errorf("github: %w: 401 Unauthorized", github.ErrTokenRejected)})
+	b.refresh(t.Context())
+	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsUnavailable {
+		t.Fatalf("state after whole failures = %q", got)
+	}
+
+	b.gh.say(boardAnswer{})
+	b.refresh(t.Context())
+	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsAnswered {
+		t.Fatalf("state after the branch answered = %q", got)
 	}
 }

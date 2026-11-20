@@ -64,6 +64,15 @@ const (
 	pullsCacheLogKey = "pulls.json"
 )
 
+// A session's pull requests are pending until each of its branches is answered,
+// unavailable while any branch failed with no rows to show, and none with no branch to ask about.
+const (
+	dashboardPullsPending     = "pending"
+	dashboardPullsAnswered    = "answered"
+	dashboardPullsUnavailable = "unavailable"
+	dashboardPullsNone        = "none"
+)
+
 const (
 	ollamaStateReady       = "ready"
 	ollamaStateMissing     = "missing"

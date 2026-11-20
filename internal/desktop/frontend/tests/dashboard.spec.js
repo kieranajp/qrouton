@@ -161,16 +161,28 @@ test("a block's link and the card head are separate targets", async ({ page }) =
   expect(await page.evaluate(() => window.dashboardBridge.opened)).toEqual(["billing"]);
 });
 
-// Waiting on a cache GitHub cannot fill would leave every card checking for good.
-test("an empty cache checks GitHub on each card, until the header says why it cannot", async ({ page }) => {
-  await push(page, { checkedAt: NEVER, viewer: "", sessions: {} });
+const state = (pullState, pullRequests = []) => ({ pullRequests, pullState, repos: [] });
+
+// Judging cards by the whole refresh let one session's answer mark another as empty, and left a card with no branch checking for good.
+test("each card says whether its own branches wait, answered, failed or have none to ask about", async ({ page }) => {
+  await push(page, { checkedAt: NEVER, viewer: "", sessions: { billing: state("pending"), "session-2": state("none") } });
   await expect(card(page, "billing").locator(".note")).toHaveText("Checking GitHub…");
-  // The rail row lists editing repositories only, so a reference-only session arrives with none.
-  await expect(card(page, "session-2").locator(".note")).toHaveText("No pull requests");
-  await push(page, { checkedAt: NEVER, viewer: "", sessions: {}, signedOut: true });
+  await expect(card(page, "session-2").locator(".note")).toHaveText("No branch to check");
+  await push(page, { checkedAt: NEVER, viewer: "", signedOut: true, sessions: { billing: state("pending"), "session-2": state("none") } });
   await expect(card(page, "billing").locator(".note")).toHaveCount(0);
-  await push(page, { sessions: {} });
+  await expect(card(page, "session-2").locator(".note")).toHaveText("No branch to check");
+  await push(page, { checkedAt: new Date().toISOString(), sessions: { billing: state("answered"), "session-2": state("unavailable") } });
   await expect(card(page, "billing").locator(".note")).toHaveText("No pull requests");
+  await expect(card(page, "session-2").locator(".note")).toHaveText("Couldn't load pull requests");
+});
+
+// A card with one branch failed must keep the rows it has and still say the rest did not load.
+test("a card with rows from one branch and another failed shows both", async ({ page }) => {
+  await push(page, {
+    sessions: { billing: state("unavailable", [{ repo: "acme/web", number: 41, title: "Kept", url: "https://github.com/acme/web/pull/41", state: "open", author: "octocat" }]) },
+  });
+  await expect(card(page, "billing").locator("a")).toHaveCount(1);
+  await expect(card(page, "billing").locator(".note")).toHaveText("Couldn't load every repository");
 });
 
 // A Refresh that stayed live mid-refresh would queue repeat requests and give no sign anything was happening.

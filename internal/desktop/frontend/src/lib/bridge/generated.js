@@ -182,6 +182,14 @@ export const BUG_REPORT_STATUSES = Object.freeze({
   UNKNOWN: "unknown",
 });
 
+/** @typedef {"pending"|"answered"|"unavailable"|"none"} DashboardPullState */
+export const DASHBOARD_PULL_STATES = Object.freeze({
+  PENDING: "pending",
+  ANSWERED: "answered",
+  UNAVAILABLE: "unavailable",
+  NONE: "none",
+});
+
 /** @typedef {"diff"|"assets"|"markdown"} DocumentFormat */
 export const DOCUMENT_FORMATS = Object.freeze({
   DIFF: "diff",
