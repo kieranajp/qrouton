@@ -249,8 +249,25 @@ func TestACreatedMarkAndARepositoryChangeEachRequestARefresh(t *testing.T) {
 	reg.RepositoriesChanged(alpha.Root())
 	expectRequest(t, pulls)
 
-	reg.pullRequestsChanged(beta.Root())
 	reg.RepositoriesChanged(beta.Root())
+	expectNoRequest(t, pulls)
+}
+
+// Catches a gh pr create behind the dashboard, or in a session not shown, waiting for the five-minute tick.
+func TestACreatedMarkOnAnySessionRequestsARefreshWithTheDashboardShown(t *testing.T) {
+	reg, alpha, beta, pulls, _ := pullWatch(t, time.Hour)
+	expectRequest(t, pulls)
+
+	reg.pullRequestsChanged(beta.Root())
+	expectRequest(t, pulls)
+
+	reg.reveal(nil)
+	expectNoRequest(t, pulls)
+	reg.pullRequestsChanged(alpha.Root())
+	expectRequest(t, pulls)
+	reg.pullRequestsChanged(beta.Root())
+	expectRequest(t, pulls)
+	reg.Touch()
 	expectNoRequest(t, pulls)
 }
 

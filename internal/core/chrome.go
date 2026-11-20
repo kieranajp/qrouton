@@ -148,10 +148,8 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 					requestedFor = ""
 				}
 			}
-			for _, root := range reg.takePullRequestChanges() {
-				if root == requestedFor {
-					requestedFor = ""
-				}
+			if len(reg.takePullRequestChanges()) > 0 {
+				pulls.Request()
 			}
 			refresh()
 			request()
