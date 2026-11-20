@@ -95,8 +95,8 @@ type Dashboard struct {
 	pausedUntil time.Time
 	pulls       map[string]map[string]map[string][]status.PullRequest
 	stats       map[string][]status.RepoStat
-	// unavailable holds each session's branches whose last answer failed with no rows to show, by repo key.
-	unavailable map[string]map[string]bool
+	// unanswered holds each session's branches whose alias failed in the last per-alias answer, by repo key.
+	unanswered map[string]map[string]bool
 	// logged is the last failure logged per alias, with the whole refresh under "".
 	logged map[string]string
 	cancel context.CancelFunc
@@ -305,7 +305,7 @@ func (d *Dashboard) pullStateLocked(s dashboardSession) string {
 	}
 	state := dashboardPullsAnswered
 	for _, repo := range s.repos {
-		if d.unavailable[s.slug][repo.key()] {
+		if d.unanswered[s.slug][repo.key()] {
 			return dashboardPullsUnavailable
 		}
 		if _, ok := d.pulls[s.slug][repo.id][repo.target.Branch]; !ok {
@@ -420,7 +420,7 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 	defer d.mu.Unlock()
 	reuse := viewer == "" || d.viewer == "" || viewer == d.viewer
 	next := map[string]map[string]map[string][]status.PullRequest{}
-	unavailable := map[string]map[string]bool{}
+	unanswered := map[string]map[string]bool{}
 	answered := false
 	for _, s := range sessions {
 		for _, repo := range s.repos {
@@ -435,12 +435,12 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 				delete(d.logged, repo.key())
 			default:
 				d.logOnceLocked(repo.key(), result.Err)
+				if unanswered[s.slug] == nil {
+					unanswered[s.slug] = map[string]bool{}
+				}
+				unanswered[s.slug][repo.key()] = true
 				previous, kept := d.pulls[s.slug][repo.id][repo.target.Branch]
 				if !reuse || !kept {
-					if unavailable[s.slug] == nil {
-						unavailable[s.slug] = map[string]bool{}
-					}
-					unavailable[s.slug][repo.key()] = true
 					continue
 				}
 				rows = previous
@@ -451,7 +451,7 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 			next[s.slug][repo.id] = map[string][]status.PullRequest{repo.target.Branch: rows}
 		}
 	}
-	d.unavailable = unavailable
+	d.unanswered = unanswered
 	if !answered {
 		d.failed = true
 		if reuse {

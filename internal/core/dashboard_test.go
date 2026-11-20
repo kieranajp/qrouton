@@ -857,23 +857,23 @@ func TestDashboardWithNoBranchAnywhereHasNoPullRequestSource(t *testing.T) {
 	}
 }
 
-// Catches a failed branch with rows still on show reading as unavailable, or a whole failure wiping each card's answer.
-func TestDashboardKeepsASessionAnsweredWhileItsRowsShow(t *testing.T) {
+// Catches a whole failure wiping the state of a card whose stale rows still show, or dropping those rows.
+func TestDashboardKeepsAStaleCardUnavailableThroughAWholeFailure(t *testing.T) {
 	b := newTestBoard(t)
-	b.session(t, "pulls", editing("web", "feat/x"))
+	root := b.session(t, "pulls", editing("web", "feat/x"))
 	b.gh.say(boardAnswer{prs: map[string][]github.PullRequest{"web": {pr(1, "a")}}})
 	b.refresh(t.Context())
-
 	b.gh.say(boardAnswer{errs: map[string]error{"web": fmt.Errorf("github: %w: Something went wrong", github.ErrQuery)}})
 	b.refresh(t.Context())
-	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsAnswered {
-		t.Fatalf("state with kept rows = %q", got)
-	}
 
 	b.gh.say(boardAnswer{err: fmt.Errorf("github: listing pull requests: %w: Parse error", github.ErrQuery)})
 	b.refresh(t.Context())
-	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsAnswered {
+
+	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsUnavailable {
 		t.Fatalf("state after a whole failure = %q", got)
+	}
+	if rows := titles(b.rows(root)); !reflect.DeepEqual(rows, []string{"acme/web#a"}) {
+		t.Fatalf("rows after a whole failure = %v", rows)
 	}
 }
 
@@ -906,8 +906,8 @@ func TestDashboardAnswerNamingNoViewerKeepsAFailedAliasRows(t *testing.T) {
 
 	b.gh.say(boardAnswer{anonymous: true, errs: map[string]error{"web": broken, "api": broken}})
 	b.refresh(t.Context())
-	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsAnswered {
-		t.Fatalf("a card whose rows still show reads %q", got)
+	if rows := titles(b.rows(root)); !reflect.DeepEqual(rows, []string{"acme/web#a", "acme/api#d"}) {
+		t.Fatalf("rows after every alias failed with no viewer named = %v", rows)
 	}
 }
 
@@ -930,5 +930,46 @@ func TestDashboardUnavailableSessionOutlastsAWholeFailureAndClearsOnTheNextAnswe
 	b.refresh(t.Context())
 	if got := b.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsAnswered {
 		t.Fatalf("state after the branch answered = %q", got)
+	}
+}
+
+// Catches a failed branch whose cached answer was empty reading "No pull requests" under a header that says it just updated.
+func TestDashboardFailedBranchWithAnEmptyCachedAnswerIsUnavailableNotAnswered(t *testing.T) {
+	b := newTestBoard(t)
+	b.session(t, "first", editing("web", "feat/x"))
+	b.session(t, "second", editing("api", "feat/x"))
+	b.refresh(t.Context())
+
+	b.clock.advance(time.Minute)
+	b.gh.say(boardAnswer{errs: map[string]error{"web": fmt.Errorf("github: %w: Something went wrong", github.ErrQuery)}})
+	b.refresh(t.Context())
+
+	s := b.Snapshot()
+	want := map[string]string{"first": dashboardPullsUnavailable, "second": dashboardPullsAnswered}
+	if got := pullStates(s); !s.CheckedAt.Equal(b.clock.now()) || !reflect.DeepEqual(got, want) {
+		t.Fatalf("checked at %v, states %v", s.CheckedAt, got)
+	}
+	if kept, ok := b.cached(t).Sessions["first"]["acme/web"]["feat/x"]; !ok || len(kept) != 0 {
+		t.Fatalf("pulls.json lost first's cached empty answer: %+v", b.cached(t).Sessions)
+	}
+}
+
+// Catches a failed branch whose cached rows still show reading as answered, which hides that they are stale.
+func TestDashboardFailedBranchWithCachedRowsKeepsThemAndIsUnavailable(t *testing.T) {
+	b := newTestBoard(t)
+	first := b.session(t, "first", editing("web", "feat/x"))
+	b.session(t, "second", editing("api", "feat/x"))
+	b.gh.say(boardAnswer{prs: map[string][]github.PullRequest{"web": {pr(1, "a")}}})
+	b.refresh(t.Context())
+
+	b.gh.say(boardAnswer{errs: map[string]error{"web": fmt.Errorf("github: %w: Something went wrong", github.ErrQuery)}})
+	b.refresh(t.Context())
+
+	want := map[string]string{"first": dashboardPullsUnavailable, "second": dashboardPullsAnswered}
+	if got := pullStates(b.Snapshot()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("states = %v", got)
+	}
+	if rows := titles(b.rows(first)); !reflect.DeepEqual(rows, []string{"acme/web#a"}) {
+		t.Fatalf("rows after web failed = %v", rows)
 	}
 }

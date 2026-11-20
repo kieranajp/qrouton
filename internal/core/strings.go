@@ -65,7 +65,7 @@ const (
 )
 
 // A session's pull requests are pending until each of its branches is answered,
-// unavailable while any branch failed with no rows to show, and none with no branch to ask about.
+// unavailable while any branch failed its last answer, and none with no branch to ask about.
 const (
 	dashboardPullsPending     = "pending"
 	dashboardPullsAnswered    = "answered"
