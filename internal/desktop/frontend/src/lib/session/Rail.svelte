@@ -16,6 +16,7 @@
     PROFILE_CURRENT_META,
     PROFILE_DEFAULT_LABEL,
     SESSION_REORDER_FAILED,
+    SESSION_SHOW_FAILED,
     SESSION_SWITCH_PROFILE_FAILED,
     SESSION_SWITCH_PROFILE_LABEL,
     SESSION_SWITCH_PROFILE_NEEDS_MESSAGE,
@@ -132,7 +133,7 @@
     const valid = sourceExists && target && sessions.some((row) => row.slug === target);
     clearDrag();
     if (!moved) {
-      if (sourceExists) show(source);
+      if (sourceExists) openSession(source);
       return;
     }
     if (!valid) return;
@@ -164,7 +165,7 @@
       const row = rowAt(sessions, event);
       if (!row) return;
       event.preventDefault();
-      show(row.slug);
+      openSession(row.slug);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("blur", clearDrag);
@@ -175,6 +176,15 @@
       clearDrag();
     };
   });
+
+  export async function openSession(slug) {
+    try {
+      await show(slug);
+    } catch (err) {
+      const reason = String(err?.message ?? "").trim();
+      showRowNotice(slug, reason ? `${SESSION_SHOW_FAILED}: ${reason}` : SESSION_SHOW_FAILED, true);
+    }
+  }
 
   function showRowNotice(slug, text, failed = false) {
     if (!mounted) return;
@@ -370,7 +380,7 @@
         {stickers}
         stickerBusy={(pendingStickers[row.slug] ?? 0) > 0}
         feedback={rowNotice.value?.slug === row.slug ? rowNotice.value : null}
-        onSelect={() => show(row.slug)}
+        onSelect={() => openSession(row.slug)}
         onSticker={(event) => changeSticker(event, row)}
         onContextMenu={(event) => openMenu(event, row)} />
     {/each}

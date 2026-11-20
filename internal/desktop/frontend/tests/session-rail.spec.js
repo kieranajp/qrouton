@@ -673,6 +673,23 @@ test("an Unload refusal leaves the row loaded and returns focus with row feedbac
   await expect(page.getByRole("button", { name: "Unload", exact: true })).toBeEnabled();
 });
 
+// Catches a rejected open (bad runner, no agent installed) vanishing, leaving the click looking dead.
+test("a row click whose open is refused shows the reason on that row", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.failNextShow("no supported coding agent is installed"));
+  await sessionButton(page, "Session 2").click();
+  await expect(page.getByRole("alert")).toHaveText("Session could not be opened: no supported coding agent is installed");
+  expect(await page.getByRole("alert").evaluate((node) => node.closest(".row")?.querySelector(".name")?.textContent)).toBe("Session 2");
+  await expect(sessionButton(page, "Checkout migration")).toHaveAttribute("aria-current", "page");
+});
+
+// Catches the dashboard cards opening a session by a path that skips the rail's failure notice.
+test("an open started outside the rail reports its refusal on the rail row", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.failNextShow());
+  await page.evaluate(() => window.sessionRail.openElsewhere("session-3"));
+  await expect(page.getByRole("alert")).toHaveText("Session could not be opened");
+  expect(await page.getByRole("alert").evaluate((node) => node.closest(".row")?.querySelector(".name")?.textContent)).toBe("Session 3");
+});
+
 const sessionButton = (page, name) => page.getByRole("button", { name: new RegExp("^" + name + " ·") });
 const railOrder = (page) => page.locator(".session-list .name").allTextContents();
 const beginDrag = async (page, source, target) => {

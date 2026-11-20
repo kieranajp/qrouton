@@ -1,19 +1,18 @@
 <script>
   import { MODE_LABELS } from "../bridge/generated.js";
   import { age } from "../relative.js";
-  import { show } from "../sessions.js";
   import { shortcut } from "../shortcuts.js";
   import { guided, repoList } from "./dashboard.js";
 
-  /** @type {{row: {slug: string, name: string, mode?: string, repos?: {name: string}[], opened: string}, position: number}} */
-  let { row, position } = $props();
+  /** @type {{row: {slug: string, name: string, mode?: string, repos?: {name: string}[], opened: string}, position: number, onOpen: (slug: string) => void}} */
+  let { row, position, onOpen } = $props();
 
   let repos = $derived(repoList(row.repos));
   let hint = $derived(shortcut(position));
 </script>
 
 <article class="card" data-card={row.slug}>
-  <button type="button" class="head" onclick={() => show(row.slug)}>
+  <button type="button" class="head" onclick={() => onOpen(row.slug)}>
     <span class="top">
       <span class="title">{row.name}</span>
       {#if hint}<span class="hint">{hint}</span>{/if}

@@ -110,6 +110,7 @@ var valueNames = []valueName{
 	{desktopPackage, "stickerDuplicate"},
 	{desktopPackage, "sessionUnloadLabel"},
 	{desktopPackage, "sessionUnloadFailed"},
+	{desktopPackage, "sessionShowFailed"},
 	{desktopPackage, "sessionReorderFailed"},
 	{desktopPackage, "sessionSwitchProfileLabel"},
 	{desktopPackage, "sessionSwitchProfileFailed"},

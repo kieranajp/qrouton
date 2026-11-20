@@ -3,8 +3,8 @@
   import SessionCard from "./SessionCard.svelte";
   import { COLUMN_GAP, DASHBOARD_TITLE, columnCount, estimatedHeight, masonry } from "./dashboard.js";
 
-  /** @type {{sessions: any[]}} */
-  let { sessions = [] } = $props();
+  /** @type {{sessions: any[], onOpen: (slug: string) => void}} */
+  let { sessions = [], onOpen } = $props();
 
   let width = $state(0);
   let columns = $derived(
@@ -27,7 +27,7 @@
     {#each columns as column, c (c)}
       <div class="column">
         {#each column as index (sessions[index].slug)}
-          <SessionCard row={sessions[index]} position={index} />
+          <SessionCard row={sessions[index]} position={index} {onOpen} />
         {/each}
       </div>
     {/each}

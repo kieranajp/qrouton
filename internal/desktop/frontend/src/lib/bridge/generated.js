@@ -344,6 +344,8 @@ export const SESSION_UNLOAD_LABEL = "Unload";
 
 export const SESSION_UNLOAD_FAILED = "Session could not be unloaded";
 
+export const SESSION_SHOW_FAILED = "Session could not be opened";
+
 export const SESSION_REORDER_FAILED = "Session could not be moved";
 
 export const SESSION_SWITCH_PROFILE_LABEL = "Switch profile";

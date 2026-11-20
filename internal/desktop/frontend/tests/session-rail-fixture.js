@@ -12,6 +12,7 @@ let failing = false;
 let unloadFailing = false;
 let reorderFailing = false;
 let switchFailure = "";
+let showFailure = null;
 let deferReorder = false;
 let completeReorder;
 
@@ -20,6 +21,7 @@ window.sessionRailBridge = {
   failNext: () => (failing = true),
   failNextUnload: () => (unloadFailing = true),
   failNextReorder: () => (reorderFailing = true),
+  failNextShow: (message = "") => (showFailure = { message }),
   failNextSwitch: (message = "copy failed") => (switchFailure = message),
   deferReorder: () => (deferReorder = true),
   completeReorder: () => completeReorder?.(),
@@ -36,6 +38,11 @@ window.wailsCall = async (name, slug, targetSlug) => {
   }
   if (name.endsWith(".Show")) {
     calls.push({ method: "show", slug });
+    if (showFailure) {
+      const { message } = showFailure;
+      showFailure = null;
+      throw new Error(message);
+    }
     window.sessionRail?.shown(slug);
     return;
   }

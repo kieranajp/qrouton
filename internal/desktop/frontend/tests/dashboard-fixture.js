@@ -4,7 +4,9 @@ import DashboardFixture from "./DashboardFixture.svelte";
 
 const calls = [];
 
-window.dashboardBridge = { calls: () => [...calls] };
+const opened = [];
+
+window.dashboardBridge = { calls: () => [...calls], opened };
 
 window.wailsCall = async (name, ...args) => {
   calls.push({ method: name.split(".").at(-1), args });

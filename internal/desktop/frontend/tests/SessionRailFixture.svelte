@@ -72,7 +72,11 @@
     );
   }
 
+  /** @type {Rail | undefined} */
+  let rail = $state();
+
   window.sessionRail = {
+    openElsewhere: (slug) => rail?.openSession(slug),
     setProfiles: (groups) => (profiles = groups),
     stateless,
     headline,
@@ -120,6 +124,7 @@
 <button class="focus-probe" aria-label="Conversation focus" bind:this={focusProbe}>Conversation focus</button>
 <div class="frame">
   <Rail
+    bind:this={rail}
     {sessions}
     slug={selected}
     {stickers}

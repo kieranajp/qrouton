@@ -58,11 +58,13 @@ test("cards follow a reordered rail", async ({ page }) => {
   await expect(card(page, "session-3")).toContainText("⌘1");
 });
 
-test("a card head is one button that opens its session", async ({ page }) => {
+// Catches a card calling the bridge itself, where a refused open would go unreported.
+test("a card head is one button that hands its slug to the shared opener", async ({ page }) => {
   const billing = card(page, "billing");
   await expect(billing.getByRole("button")).toHaveCount(1);
   await billing.getByRole("button").click();
-  expect(await page.evaluate(() => window.dashboardBridge.calls())).toEqual([{ method: "Show", args: ["billing"] }]);
+  expect(await page.evaluate(() => window.dashboardBridge.opened)).toEqual(["billing"]);
+  expect(await page.evaluate(() => window.dashboardBridge.calls())).toEqual([]);
 });
 
 test("a head names its repositories, tags a guided session and says when it was last opened", async ({ page }) => {

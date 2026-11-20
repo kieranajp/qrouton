@@ -37,6 +37,8 @@
 
   /** @type {HTMLDivElement} */
   let work;
+  /** @type {Rail | undefined} */
+  let rail = $state();
   // WebKit leaves focus on a hidden terminal after a click elsewhere, so keys typed on the dashboard would reach it.
   $effect(() => {
     if (view.dashboard && document.activeElement instanceof HTMLElement && work?.contains(document.activeElement)) {
@@ -74,6 +76,7 @@
 
   <div class="panels" inert={view.switcher.visible} bind:clientWidth={view.panels}>
     <Rail
+      bind:this={rail}
       sessions={fields.sessions}
       slug={fields.slug}
       stickers={fields.stickers}
@@ -95,7 +98,7 @@
       label="Resize the sidebar" />
 
     {#if view.dashboard}
-      <Dashboard sessions={fields.sessions} />
+      <Dashboard sessions={fields.sessions} onOpen={(slug) => rail?.openSession(slug)} />
     {/if}
 
     <!-- Hidden rather than unmounted under the dashboard, so the agent terminals keep their scrollback. -->

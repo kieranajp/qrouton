@@ -32,7 +32,7 @@
 </script>
 
 <div class="frame" style:width="{width}px">
-  <Dashboard {sessions} />
+  <Dashboard {sessions} onOpen={(slug) => window.dashboardBridge.opened.push(slug)} />
 </div>
 
 <style>
