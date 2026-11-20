@@ -48,9 +48,15 @@ export function matchSessions(rows = [], query = "") {
 
 const sessions = (matches) => matches.filter(({ row }) => !row.dashboard);
 
-/** The Dashboard entry is passed over, so opening and pressing Enter still switches session. */
-export const initialSelection = (matches, current) =>
-  (sessions(matches).find(({ row }) => row.slug !== current) ?? sessions(matches)[0] ?? matches[0])?.row.slug ?? "";
+const openedAt = (row) => Math.max(0, new Date(row.opened ?? 0).getTime() || 0);
+const lastOpened = (matches) => matches.reduce((best, match) => (openedAt(match.row) > openedAt(best.row) ? match : best), matches[0]);
+
+/** The Dashboard entry is passed over, so opening and pressing Enter still switches session: from the dashboard, to the one opened last. */
+export function initialSelection(matches, current) {
+  const rows = sessions(matches);
+  const pick = current === DASHBOARD_KEY ? lastOpened(rows) : rows.find(({ row }) => row.slug !== current) ?? rows[0];
+  return (pick ?? matches[0])?.row.slug ?? "";
+}
 
 /** A query picks its best match; an empty one leaves the Dashboard entry for the user to choose. */
 export const preferredSelection = (matches, query = "") =>

@@ -32,6 +32,15 @@ test("opening on the dashboard or a session still selects a session first", () =
   assert.equal(initialSelection(matchSessions([]), shownKey("")), DASHBOARD_KEY);
 });
 
+// Catches ⌘K then Enter from the dashboard landing on the top rail row instead of the session just left.
+test("opening on the dashboard selects the session opened last, whatever its rail position", () => {
+  const rail = [{ ...row("a"), opened: "2026-11-20T08:00:00Z" }, { ...row("b"), opened: "2026-11-20T09:00:00Z" }];
+  assert.equal(initialSelection(matchSessions(rail), shownKey("")), "b");
+  assert.deepEqual(matchSessions(rail).map(({ row }) => row.slug), [DASHBOARD_KEY, "a", "b"]);
+  assert.equal(initialSelection(matchSessions(rail), "b"), "a");
+  assert.equal(initialSelection(matchSessions([{ ...row("a"), opened: "0001-01-01T00:00:00Z" }, row("b")]), shownKey("")), "a");
+});
+
 test("the Dashboard entry matches its name and nothing a session carries", () => {
   const rows = [row("billing", "Billing", ["acme/dash-api"]), row("web")];
   assert.deepEqual(slugs(rows, "dashboard"), [DASHBOARD_KEY]);
