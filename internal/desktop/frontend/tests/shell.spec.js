@@ -375,7 +375,7 @@ test("the Overview keeps its rows through chrome and tree updates", async ({ pag
 });
 
 const ON_DISK = [{ slug: "octopus", name: "Octopus", initials: "OC", terminal: "term-1", repos: [] }];
-const dashboard = (page) => page.getByRole("heading", { name: "Dashboard", level: 1 });
+const dashboard = (page) => page.getByRole("region", { name: "Dashboard" });
 const assembly = (page) => page.getByRole("button", { name: "Choose repositories" });
 
 test("showing the dashboard releases the keyboard from the hidden agent terminal", async ({ page }) => {
@@ -389,6 +389,17 @@ test("showing the dashboard releases the keyboard from the hidden agent terminal
   await page.evaluate(() => window.shell.snapshot({ slug: "", terminal: "" }));
   await expect(dashboard(page)).toBeVisible();
   await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest(".work")))).toBe(false);
+});
+
+// An identity button with no session would open a menu of disabled items under an empty name.
+test("on the dashboard the titlebar says Dashboard as plain text, and a session brings back its name and menu", async ({ page }) => {
+  await page.goto("/tests/shell.html");
+  await page.evaluate((sessions) => window.shell.snapshot({ slug: "", identity: "", terminal: "", sessions }), ON_DISK);
+  const titlebar = page.locator(".titlebar .identity");
+  await expect(titlebar).toHaveText("Dashboard");
+  await expect(titlebar.getByRole("button")).toHaveCount(0);
+  await page.evaluate(() => window.shell.snapshot({ slug: "octopus", identity: "Octopus", terminal: "term-1" }));
+  await expect(titlebar.getByRole("button", { name: "Octopus" })).toBeVisible();
 });
 
 // Gated, Escape would trap the user in the dialog; opening unasked, it would cover the dashboard on every cold start.

@@ -1,4 +1,4 @@
-import { DASHBOARD_PULL_STATES, MODE_LABELS, PULL_REQUEST_REVIEWS, PULL_REQUEST_STATES, REPO_ROLES } from "../bridge/generated.js";
+import { DASHBOARD_PULL_STATES, PULL_REQUEST_REVIEWS, PULL_REQUEST_STATES, REPO_ROLES } from "../bridge/generated.js";
 import { SIGNED_OUT } from "../overview/pulls.js";
 import { stamp } from "../relative.js";
 import { repositoryLine } from "../session/rail.js";
@@ -41,9 +41,6 @@ export function masonry(heights, columns) {
 /** @param {{name?: string}[]} [repos] */
 export const repoList = (repos = []) =>
   repos.length ? repos.map((repo) => repo.name).join(", ") : repositoryLine(repos).name;
-
-/** @param {{mode?: string}} row */
-export const guided = (row) => row.mode === MODE_LABELS.RPI;
 
 export const REFRESH = "Refresh";
 export const GITHUB_SETTINGS = "GitHub settings";
@@ -105,7 +102,7 @@ export function ownPulls(pulls, viewer) {
 
 /** @param {PullRequest} pr @returns {{label: string, tone: string}[]} */
 export function pullTags(pr) {
-  const review = open(pr) && pr.review ? REVIEW_TAGS[pr.review] : undefined;
+  const review = pr.review ? REVIEW_TAGS[pr.review] : undefined;
   return [review, open(pr) && pr.checksFailing ? CHECKS_FAILING : undefined].filter((tag) => tag !== undefined);
 }
 

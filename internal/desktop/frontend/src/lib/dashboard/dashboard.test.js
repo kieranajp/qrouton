@@ -12,7 +12,6 @@ import {
   estimatedHeight,
   freshness,
   gitLine,
-  guided,
   masonry,
   ownPulls,
   pullSection,
@@ -69,12 +68,6 @@ test("one column holds every card in order, and no cards leave every column empt
 test("the repos line names every repository, and none says so", () => {
   assert.equal(repoList([{ name: "acme/web" }, { name: "acme/api" }]), "acme/web, acme/api");
   assert.equal(repoList([]), "No editing repositories");
-});
-
-test("only a guided session carries the RPI tag", () => {
-  assert.equal(guided({ mode: "RPI" }), true);
-  assert.equal(guided({ mode: "ASSISTANT" }), false);
-  assert.equal(guided({}), false);
 });
 
 const NEVER = "0001-01-01T00:00:00Z";
@@ -177,14 +170,15 @@ test("a card with one branch answered and another failed shows its rows and says
   assert.equal(pullSection(fresh({ sessions: { billing: card("answered", [pull(1)]) } }), "billing", NOW).note, "");
 });
 
-// A review tag on a merged pull request would claim a decision that no longer matters.
-test("review and checks tags mark only open and draft pull requests, and may sit side by side", () => {
+// Gating the review on open hid the approval a merged pull request landed with.
+test("every state keeps its review tag, checks failing marks only open and draft, and both may sit side by side", () => {
   const labels = (pr) => pullTags(pr).map((tag) => `${tag.label}:${tag.tone}`);
   assert.deepEqual(labels(pull(1, { review: "approved" })), ["Approved:success"]);
   assert.deepEqual(labels(pull(1, { state: "draft", review: "changes-requested" })), ["Changes requested:waiting"]);
   assert.deepEqual(labels(pull(1, { review: "approved", checksFailing: true })), ["Approved:success", "Checks failing:failed"]);
   assert.deepEqual(labels(pull(1, { state: "draft", checksFailing: true })), ["Checks failing:failed"]);
-  assert.deepEqual(labels(pull(1, { state: "merged", review: "approved", checksFailing: true })), []);
+  assert.deepEqual(labels(pull(1, { state: "merged", review: "approved", checksFailing: true })), ["Approved:success"]);
+  assert.deepEqual(labels(pull(1, { state: "closed", review: "changes-requested" })), ["Changes requested:waiting"]);
   assert.deepEqual(labels(pull(1, { state: "closed", checksFailing: true })), []);
   assert.deepEqual(labels(pull(1)), []);
 });

@@ -7,6 +7,7 @@
   import CubeMark from "./lib/core/CubeMark.svelte";
   import { dismissible } from "./lib/core/dismiss.js";
   import Dashboard from "./lib/dashboard/Dashboard.svelte";
+  import { DASHBOARD_TITLE } from "./lib/dashboard/dashboard.js";
   import { dashboard } from "./lib/dashboard.svelte.js";
   import OverviewPane from "./lib/overview/OverviewPane.svelte";
   import SessionSwitcher from "./lib/session/SessionSwitcher.svelte";
@@ -53,22 +54,26 @@
   <div class="titlebar" inert={view.switcher.visible}>
     <div class="identity">
       <CubeMark size={20} />
-      <div class="anchored" use:dismissible={() => (view.identityOpen = false)}>
-        <button
-          class="name"
-          aria-expanded={view.identityOpen}
-          onclick={() => (view.identityOpen = !view.identityOpen)}>
-          <span class="said">{fields.identity}</span>
-          <span class="caret"><Icon name="menu" /></span>
-        </button>
-        {#if view.identityOpen}
-          <Menu
-            items={view.identityMenu}
-            width={280}
-            offsetY={34}
-            onSelect={(item) => view.chose(item)} />
-        {/if}
-      </div>
+      {#if view.dashboard}
+        <span class="said">{DASHBOARD_TITLE}</span>
+      {:else}
+        <div class="anchored" use:dismissible={() => (view.identityOpen = false)}>
+          <button
+            class="name"
+            aria-expanded={view.identityOpen}
+            onclick={() => (view.identityOpen = !view.identityOpen)}>
+            <span class="said">{fields.identity}</span>
+            <span class="caret"><Icon name="menu" /></span>
+          </button>
+          {#if view.identityOpen}
+            <Menu
+              items={view.identityMenu}
+              width={280}
+              offsetY={34}
+              onSelect={(item) => view.chose(item)} />
+          {/if}
+        </div>
+      {/if}
     </div>
     <span class="tools">
       <UpdateButton />

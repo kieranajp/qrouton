@@ -13,16 +13,18 @@ const columns = (page) =>
     nodes.map((node) => [...node.querySelectorAll("[data-card]")].map((card) => card.getAttribute("data-card"))),
   );
 
-test("the title is centred over the grid in the display face", async ({ page }) => {
-  const title = page.getByRole("heading", { name: "Dashboard", level: 1 });
-  await expect(title).toBeVisible();
-  expect(await title.evaluate((node) => getComputedStyle(node).fontFamily)).toContain("Space Grotesk");
-  const centres = await page.locator(".dashboard header").evaluate((header) => {
-    const outer = header.getBoundingClientRect();
-    const inner = header.querySelector("h1").getBoundingClientRect();
-    return { header: outer.left + outer.width / 2, title: inner.left + inner.width / 2 };
-  });
-  expect(Math.abs(centres.header - centres.title)).toBeLessThan(1);
+// The titlebar names the dashboard; a heading here as well sat off the titlebar's centre by half the rail.
+test("the header carries no heading, only the freshness line and Refresh at its end", async ({ page }) => {
+  await expect(page.getByRole("region", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading")).toHaveCount(0);
+  const edges = await page.locator(".dashboard header").evaluate((header) => ({
+    header: header.getBoundingClientRect().right,
+    refresh: header.querySelector("button").getBoundingClientRect().right,
+    freshness: header.querySelector(".freshness").getBoundingClientRect().right,
+    left: header.querySelector("button").getBoundingClientRect().left,
+  }));
+  expect(Math.abs(edges.header - edges.refresh)).toBeLessThan(1);
+  expect(edges.freshness).toBeLessThanOrEqual(edges.left);
 });
 
 // Cards placed column by column would put ⌘2 under ⌘1 instead of beside it.
@@ -67,17 +69,17 @@ test("a card head is one button that hands its slug to the shared opener", async
   expect(await page.evaluate(() => window.dashboardBridge.calls())).toEqual([]);
 });
 
-test("a head names its repositories, tags a guided session and says when it was last opened", async ({ page }) => {
+// An RPI marker on the card would add noise to every guided session.
+test("a head names its repositories and says when it was last opened, with no RPI marker", async ({ page }) => {
   const billing = card(page, "billing");
   const repos = billing.locator(".repos");
   await expect(repos).toHaveText("acme/web, acme/billing, acme/a-very-long-repository-name-that-overflows");
   expect(await repos.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
   expect(await repos.evaluate((node) => getComputedStyle(node).textOverflow)).toBe("ellipsis");
-  await expect(billing.locator(".tag")).toHaveText("RPI");
+  await expect(billing.locator(".head")).not.toContainText("RPI");
   await expect(billing.locator(".age")).toHaveText("3w");
 
   const plain = card(page, "session-2");
-  await expect(plain.locator(".tag")).toHaveCount(0);
   await expect(plain.locator(".repos")).toHaveText("No editing repositories");
   await expect(plain.locator(".age")).toHaveText("2h");
 });
@@ -100,16 +102,20 @@ test("another author's pull request on the same branch stays off the card", asyn
   await expect(billing).not.toContainText("Their pull request");
 });
 
-// A review tag on the merged pull request, or the open one sorted below it, would misreport what needs doing.
-test("a block leads with its state, tags an open pull request and names repo, number and age", async ({ page }) => {
+// A visible state word would repeat the icon on every row; a review tag gated on open would hide a merged pull request's approval.
+test("a block leads with its state icon, named only to assistive tech, then its tags, repo, number and age on one line", async ({ page }) => {
   const [first, second] = await card(page, "billing").getByRole("link").all();
-  await expect(first.locator(".state")).toHaveText("Open");
+  await expect(first.getByRole("img", { name: "Open" })).toHaveCount(1);
+  await expect(first.locator(".row")).not.toContainText("Open");
   await expect(first.locator(".chip")).toHaveText(["Changes requested", "Checks failing"]);
   await expect(first.locator(".repo")).toHaveText("acme/web#41");
   await expect(first.locator(".when")).toHaveText("41m");
-  await expect(second.locator(".state")).toHaveText("Merged");
-  await expect(second.locator(".chip")).toHaveCount(0);
+  await expect(second.getByRole("img", { name: "Merged" })).toHaveCount(1);
+  await expect(second.locator(".row")).not.toContainText("Merged");
+  await expect(second.locator(".chip")).toHaveText(["Approved"]);
   expect(await second.locator(".state").evaluate((node) => getComputedStyle(node).color)).toBe("rgb(198, 160, 246)");
+  const row = await first.locator(".row").evaluate((node) => ({ height: node.getBoundingClientRect().height, line: parseFloat(getComputedStyle(node).lineHeight) }));
+  expect(row.height).toBeLessThan(row.line * 2);
   const lines = await first.locator(".headline").evaluate((node) => node.getBoundingClientRect().height / parseFloat(getComputedStyle(node).lineHeight));
   expect(Math.round(lines)).toBe(2);
 });

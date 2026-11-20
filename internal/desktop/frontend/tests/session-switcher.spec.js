@@ -251,7 +251,7 @@ test("the Dashboard entry leads the list, answers to its name, and ⌘K then Ent
   await expect.poll(() => page.evaluate(() => window.shell.dashboards())).toBe(1);
   await page.evaluate(() => window.shell.snapshot({ slug: "", terminal: "" }));
   await expect(query(page)).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Dashboard", level: 1 })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Dashboard" })).toBeVisible();
   expect(await page.evaluate(() => window.shell.shows())).toEqual([]);
 
   await page.keyboard.press("Control+k");
@@ -265,13 +265,13 @@ test("the Dashboard entry leads the list, answers to its name, and ⌘K then Ent
 test("the dashboard covers the panes without unmounting the conversation", async ({ page }) => {
   await setup(page);
   await page.evaluate(() => window.shell.snapshot({ slug: "", terminal: "" }));
-  await expect(page.getByRole("heading", { name: "Dashboard", level: 1 })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Dashboard" })).toBeVisible();
   await expect(page.locator(".agent")).toBeHidden();
   await expect(page.locator(".human")).toBeHidden();
   await expect(page.locator('[data-terminal-id="term-1"]')).toBeAttached();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.evaluate(() => window.shell.snapshot({ slug: "octopus", terminal: "term-1" }));
-  await expect(page.getByRole("heading", { name: "Dashboard", level: 1 })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Dashboard" })).toHaveCount(0);
   await expect(page.locator(".agent")).toBeVisible();
   expect((await page.evaluate(() => window.shell.started())).filter(([kind]) => kind === "Term")).toEqual([["Term", "term-1"]]);
 });

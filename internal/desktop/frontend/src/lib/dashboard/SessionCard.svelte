@@ -1,12 +1,11 @@
 <script>
   import { tick } from "svelte";
-  import { MODE_LABELS } from "../bridge/generated.js";
   import { age } from "../relative.js";
   import { shortcut } from "../shortcuts.js";
-  import { SHOWN_PULLS, guided, repoList, showMore, showMoreLabel } from "./dashboard.js";
+  import { SHOWN_PULLS, repoList, showMore, showMoreLabel } from "./dashboard.js";
   import PullBlock from "./PullBlock.svelte";
 
-  /** @type {{row: {slug: string, name: string, mode?: string, repos?: {name: string}[], opened: string}, position: number, onOpen: (slug: string) => void, section: {shown: import("./dashboard.js").PullRequest[], more: number, note: string}, git: string, now: number, onExpand: (slug: string) => void}} */
+  /** @type {{row: {slug: string, name: string, repos?: {name: string}[], opened: string}, position: number, onOpen: (slug: string) => void, section: {shown: import("./dashboard.js").PullRequest[], more: number, note: string}, git: string, now: number, onExpand: (slug: string) => void}} */
   let { row, position, onOpen, section, git, now, onExpand } = $props();
 
   let repos = $derived(repoList(row.repos));
@@ -30,7 +29,6 @@
     </span>
     <span class="meta">
       <span class="repos" title={repos}>{repos}</span>
-      {#if guided(row)}<span class="tag">{MODE_LABELS.RPI}</span>{/if}
     </span>
     <span class="meta">
       <span class="git">{git}</span>
@@ -60,8 +58,8 @@
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: calc(8px * var(--ui-scale));
-    padding: calc(14px * var(--ui-scale));
+    gap: calc(6px * var(--ui-scale));
+    padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(11px * var(--ui-scale));
     border: 0;
     background: transparent;
     color: inherit;
@@ -88,6 +86,7 @@
 
   .top {
     align-items: flex-start;
+    gap: calc(9px * var(--ui-scale));
   }
 
   .meta {
@@ -99,7 +98,7 @@
     flex: 1;
     min-width: 0;
     font: var(--display-xs);
-    letter-spacing: -0.01em;
+    letter-spacing: var(--display-tracking);
     color: var(--text-primary);
     overflow-wrap: anywhere;
     display: -webkit-box;
@@ -111,7 +110,9 @@
 
   .hint {
     flex: none;
+    padding-top: calc(2px * var(--ui-scale));
     font: var(--machine-xs);
+    font-size: calc(10px * var(--ui-scale));
     color: var(--text-faint);
   }
 
@@ -123,18 +124,11 @@
     color: var(--text-secondary);
   }
 
-  .tag {
-    flex: none;
-    padding: 1px calc(4px * var(--ui-scale));
-    border: 1px solid currentColor;
-    font: 700 calc(9px * var(--ui-scale))/1.2 var(--font-machine);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--state-guided);
-  }
-
   .git {
     min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: var(--text-muted);
   }
 
@@ -146,7 +140,7 @@
 
   .more {
     width: 100%;
-    padding: calc(8px * var(--ui-scale)) calc(14px * var(--ui-scale));
+    padding: calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale));
     border: 0;
     border-top: 1px solid var(--border-subtle);
     background: var(--surface-chrome);
@@ -168,7 +162,7 @@
 
   .note {
     margin: 0;
-    padding: calc(9px * var(--ui-scale)) calc(14px * var(--ui-scale));
+    padding: calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale));
     border-top: 1px solid var(--border-subtle);
     font: var(--machine-xs);
     color: var(--text-faint);
