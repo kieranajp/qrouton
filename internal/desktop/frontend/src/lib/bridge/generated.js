@@ -56,6 +56,7 @@ export const SESSIONS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.S
 export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reveal";
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
+export const SESSIONS_SHOW_DASHBOARD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.ShowDashboard";
 export const SESSIONS_SWITCH_PROFILE = "github.com/kieranajp/qrouton/internal/desktop.Sessions.SwitchProfile";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
 export const SESSIONS_UNLOAD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Unload";

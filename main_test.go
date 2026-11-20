@@ -82,40 +82,59 @@ func TestTheAgentCommandReturnsTheProviderResolvedForALegacyManifest(t *testing.
 	}
 }
 
-// Every path that opens a workbench opens it, editor or no editor: resuming a
-// session with nothing on PATH to edit with gets a window, not a terminal error.
-func TestOpeningASessionWithNoEditorStillOpensTheWorkbench(t *testing.T) {
+// A cold start opens the dashboard: a session on disk, even one opened recently,
+// boots no agent until the user picks it, and no editor on PATH keeps it shut.
+func TestAColdStartWithSessionsOnDiskOpensNoSession(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("QROUTON_ROOT", root)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
+	dir := filepath.Join(root, "octopus")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.WriteManifest(dir, session.Manifest{Slug: "octopus", Mode: session.ModeAssistant}); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.MarkOpened(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
 	previous := detachProcess
-	defer func() { detachProcess = previous }()
-	var spec launch.WorkbenchSpec
-	detachProcess = func(s launch.WorkbenchSpec, _ []string) error { spec = s; return nil }
+	previousDiscovery := discoverProcess
+	defer func() { detachProcess, discoverProcess = previous, previousDiscovery }()
+	discoverProcess = func() workbench.Discovery { return workbench.Discovery{} }
+	var got launch.WorkbenchSpec
+	detachProcess = func(spec launch.WorkbenchSpec, _ []string) error {
+		got = spec
+		return nil
+	}
 
-	dir := t.TempDir()
-	if err := launchRunner(&config.Config{}, dir, launch.Runner{ID: "codex"}, true); err != nil {
-		t.Fatalf("resuming a session with no editor: %v", err)
+	if err := open(rootContext(t)); err != nil {
+		t.Fatal(err)
 	}
-	if spec.SessionRoot != dir || !spec.Resume {
-		t.Fatalf("workbench spec = %#v, want %q resumed", spec, dir)
+	if got.SessionRoot != "" || got.Resume || got.Socket == "" {
+		t.Fatalf("cold workbench spec = %+v, want a socket and no session to resume", got)
 	}
-	if len(spec.Editor.Argv) != 0 {
-		t.Fatalf("spec editor = %#v, want none", spec.Editor)
+	if len(got.Editor.Argv) != 0 {
+		t.Fatalf("spec editor = %#v, want none", got.Editor)
 	}
 }
 
 // Two workbenches would each believe they were the only one holding a session's
-// supervisor, so every path that opens on one refuses — bare qrouton included —
-// and says where a session is started instead.
-func TestOpeningASessionRefusesWhileAWorkbenchIsUp(t *testing.T) {
+// supervisor, so bare qrouton refuses while one is up and says where a session is
+// started instead.
+func TestOpeningAWorkbenchRefusesWhileOneIsUp(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("QROUTON_ROOT", root)
-	// No config and nothing on PATH, so a broken guard stops at an unresolvable
-	// runner instead of detaching a second workbench out of the test binary.
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("PATH", t.TempDir())
+	previous := detachProcess
+	defer func() { detachProcess = previous }()
+	detachProcess = func(launch.WorkbenchSpec, []string) error {
+		t.Fatal("a second workbench detached")
+		return nil
+	}
 	dir := filepath.Join(root, "octopus")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -238,49 +257,6 @@ func TestLinearIssueRefusesALegacyRunningWorkbench(t *testing.T) {
 	discoverProcess = func() workbench.Discovery { return workbench.Discovery{Legacy: true} }
 	if err := open(rootContext(t, "--linear-issue", "LIF-2841")); !errors.Is(err, errLegacyWorkbench) {
 		t.Fatalf("legacy workbench refusal = %v, want %v", err, errLegacyWorkbench)
-	}
-}
-
-// Opening the app comes back to the session you were last in, not the newest one
-// on disk.
-func TestLastShownPrefersTheMostRecentlyStampedSession(t *testing.T) {
-	root := t.TempDir()
-	sessions := []session.Manifest{
-		{Slug: "octopus", CreatedAt: time.Now().Add(-72 * time.Hour)},
-		{Slug: "kraken", CreatedAt: time.Now().Add(-48 * time.Hour)},
-		{Slug: "squid", CreatedAt: time.Now()},
-	}
-	stampSession(t, root, "octopus", time.Now().Add(-2*time.Hour))
-	stampSession(t, root, "kraken", time.Now().Add(-time.Hour))
-
-	got, ok := session.Preferred(root, sessions)
-	if !ok || got.Slug != "kraken" {
-		t.Fatalf("lastShown = %q, %v; want kraken, the last one shown", got.Slug, ok)
-	}
-}
-
-func TestLastShownFallsBackToTheNewestSession(t *testing.T) {
-	sessions := []session.Manifest{
-		{Slug: "octopus", CreatedAt: time.Now().Add(-48 * time.Hour)},
-		{Slug: "kraken", CreatedAt: time.Now()},
-	}
-	got, ok := session.Preferred(t.TempDir(), sessions)
-	if !ok || got.Slug != "kraken" {
-		t.Fatalf("lastShown with nothing stamped = %q, %v; want the newest session kraken", got.Slug, ok)
-	}
-}
-
-// Nothing to come back to opens the landing list instead.
-func TestLastShownReportsNothingWithoutASession(t *testing.T) {
-	if got, ok := session.Preferred(t.TempDir(), nil); ok {
-		t.Fatalf("lastShown named %q under a root holding no sessions", got.Slug)
-	}
-}
-
-func stampSession(t *testing.T, root, slug string, at time.Time) {
-	t.Helper()
-	if err := session.MarkOpened(filepath.Join(root, slug), at); err != nil {
-		t.Fatal(err)
 	}
 }
 

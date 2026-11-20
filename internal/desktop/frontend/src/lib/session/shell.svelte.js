@@ -2,7 +2,7 @@ import { sessionSwitcher } from "./switcher.svelte.js";
 import { macOS } from "../platform.js";
 import { untrack } from "svelte";
 import { escalate as escalateSession, pending as pendingAssembly } from "../assembly/calls.js";
-import { assemblyOpen, pickerKey, pickerOpen } from "../assembly/steps.js";
+import { assemblyGated, assemblyOpen, pickerKey, pickerOpen } from "../assembly/steps.js";
 import { ASSEMBLY_REQUESTED_EVENT, MODE_LABELS, WINDOW_KINDS } from "../bridge/generated.js";
 import { chrome } from "../chrome.svelte.js";
 import { findShortcut } from "../find.js";
@@ -28,7 +28,7 @@ import {
 } from "../layout.js";
 import { present } from "../panes/present.svelte.js";
 import { relative } from "../relative.js";
-import { show, reveal } from "../sessions.js";
+import { show, showDashboard, reveal } from "../sessions.js";
 import { opensSettings, opensSwitcher, position } from "../shortcuts.js";
 import {
   consumeTerminalFocus,
@@ -41,6 +41,7 @@ import { copyText, Events } from "../wails.js";
 export function shell() {
   const session = chrome();
   let fields = $derived(session.fields);
+  let dashboard = $derived(!fields.slug);
   const open = surfaces(() => fields.slug);
 
   let dragged = $state(/** @type {Record<string, number>} */ ({}));
@@ -191,7 +192,8 @@ export function shell() {
   // session takes its picker with it. Add-repos is this page's, and belongs to
   // the session it was pressed on for the same reason.
   let added = $state("");
-  let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug));
+  let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug, fields.sessions.length));
+  let gated = $derived(assemblyGated(fields.slug, fields.sessions.length));
   let pickerFor = $derived(pickerKey(added, fields.slug, fields.pickerID));
   let picker = $derived(pickerOpen(added, fields.slug, fields.pickerID));
   let covered = $derived(
@@ -203,7 +205,7 @@ export function shell() {
   const clearFocus = () => { terminalFocus = {}; };
   const switcher = sessionSwitcher({ fields: () => fields,
     blocked: () => covered || railBlocked || contextBlocked || identityOpen || listing,
-    covered: () => covered, show, clearFocus, request });
+    covered: () => covered, show, showDashboard, clearFocus, request });
   const gate = (event) => {
     if (opensSwitcher(event, macOS)) {
       event.preventDefault();
@@ -273,6 +275,7 @@ export function shell() {
 
   return {
     switcher,
+    get dashboard() { return dashboard; },
     get focusEligible() { return !covered && !switcher.ownsFocus; },
     railOwnership: (value) => { railBlocked = value; },
     contextOwnership: (value) => { contextBlocked = value; },
@@ -370,6 +373,9 @@ export function shell() {
 
     get assembling() {
       return assembling;
+    },
+    get gated() {
+      return gated;
     },
     get picker() {
       return picker;

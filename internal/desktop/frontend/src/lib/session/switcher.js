@@ -1,3 +1,13 @@
+import { DASHBOARD_TITLE } from "../dashboard/dashboard.js";
+
+// Slugs are [a-z0-9-], so a colon keeps this key clear of every session.
+export const DASHBOARD_KEY = ":dashboard";
+const DASHBOARD = Object.freeze({ dashboard: true, slug: DASHBOARD_KEY, name: DASHBOARD_TITLE, repos: [] });
+
+/** The switcher's key for what is on screen: the session, or the dashboard when none is.
+ * @param {string} slug */
+export const shownKey = (slug) => slug || DASHBOARD_KEY;
+
 function score(token, value) {
   value = String(value ?? "").toLowerCase();
   if (value === token) return 4000;
@@ -18,8 +28,8 @@ export function matchSessions(rows = [], query = "") {
   const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const names = new Map();
   for (const row of rows) names.set(row.name, (names.get(row.name) ?? 0) + 1);
-  return rows.map((row, order) => {
-    const fields = [row.name, row.slug, ...(row.repos ?? []).map((repo) => repo.name)];
+  return [DASHBOARD, ...rows].map((row, order) => {
+    const fields = row.dashboard ? [row.name] : [row.name, row.slug, ...(row.repos ?? []).map((repo) => repo.name)];
     let quality = 0;
     let priority = 0;
     const context = new Set(names.get(row.name) > 1 ? [row.slug] : []);
@@ -36,5 +46,15 @@ export function matchSessions(rows = [], query = "") {
   }).filter((match) => match !== null).sort((a, b) => b.quality - a.quality || a.priority - b.priority || a.order - b.order);
 }
 
-export const initialSelection = (matches, current) => (matches.find(({ row }) => row.slug !== current) ?? matches[0])?.row.slug ?? "";
-export const reconcileSelection = (matches, slug) => matches.some(({ row }) => row.slug === slug) ? slug : matches[0]?.row.slug ?? "";
+const sessions = (matches) => matches.filter(({ row }) => !row.dashboard);
+
+/** The Dashboard entry is passed over, so opening and pressing Enter still switches session. */
+export const initialSelection = (matches, current) =>
+  (sessions(matches).find(({ row }) => row.slug !== current) ?? sessions(matches)[0] ?? matches[0])?.row.slug ?? "";
+
+/** A query picks its best match; an empty one leaves the Dashboard entry for the user to choose. */
+export const preferredSelection = (matches, query = "") =>
+  (query.trim() ? matches[0] : sessions(matches)[0] ?? matches[0])?.row.slug ?? "";
+
+export const reconcileSelection = (matches, slug, query = "") =>
+  matches.some(({ row }) => row.slug === slug) ? slug : preferredSelection(matches, query);

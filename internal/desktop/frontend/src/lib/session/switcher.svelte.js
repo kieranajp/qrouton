@@ -1,8 +1,8 @@
 import { tick, untrack } from "svelte";
 import { SWITCHER_FAILED } from "../bridge/generated.js";
-import { matchSessions, initialSelection, reconcileSelection } from "./switcher.js";
+import { DASHBOARD_KEY, matchSessions, initialSelection, preferredSelection, reconcileSelection, shownKey } from "./switcher.js";
 
-export function sessionSwitcher({ fields, blocked, covered, show, clearFocus, request }) {
+export function sessionSwitcher({ fields, blocked, covered, show, showDashboard, clearFocus, request }) {
   let opened = $state(false);
   let query = $state("");
   let active = $state("");
@@ -17,6 +17,7 @@ export function sessionSwitcher({ fields, blocked, covered, show, clearFocus, re
   let originTerminal = "";
   let matches = $derived(matchSessions(fields().sessions, query));
   let visible = $derived(opened && !covered());
+  const shown = () => shownKey(fields().slug);
 
   function reset() {
     opened = false;
@@ -31,8 +32,8 @@ export function sessionSwitcher({ fields, blocked, covered, show, clearFocus, re
     clearFocus();
     await tick();
     if (covered() || opened) return;
-    if (fields().slug === origin && originTerminal && originElement?.isConnected && originElement.getClientRects().length) request(originTerminal);
-    else if (fields().slug === origin && originElement?.isConnected && originElement.getClientRects().length) originElement.focus();
+    if (shown() === origin && originTerminal && originElement?.isConnected && originElement.getClientRects().length) request(originTerminal);
+    else if (shown() === origin && originElement?.isConnected && originElement.getClientRects().length) originElement.focus();
     else request(fields().terminal);
   }
 
@@ -45,7 +46,7 @@ export function sessionSwitcher({ fields, blocked, covered, show, clearFocus, re
   function open() {
     if (opened) { cancel(); return; }
     if (blocked() || target) return;
-    origin = fields().slug;
+    origin = shown();
     originElement = document.activeElement;
     originTerminal = originElement?.closest("[data-terminal-id]")?.getAttribute("data-terminal-id") ?? "";
     clearFocus();
@@ -59,13 +60,13 @@ export function sessionSwitcher({ fields, blocked, covered, show, clearFocus, re
   async function activate(slug = active) {
     if (!opened || busy || !matches.some(({ row }) => row.slug === slug)) return;
     active = slug;
-    if (slug === fields().slug) { cancel(); return; }
+    if (slug === shown()) { cancel(); return; }
     busy = true;
     error = "";
     target = slug;
     const attempt = ++generation;
     try {
-      await show(slug);
+      await (slug === DASHBOARD_KEY ? showDashboard() : show(slug));
       if (attempt !== generation) return;
       busy = false;
       opened = false;
@@ -75,7 +76,7 @@ export function sessionSwitcher({ fields, blocked, covered, show, clearFocus, re
       if (attempt !== generation) return;
       busy = false;
       target = "";
-      if (fields().slug === origin) {
+      if (shown() === origin) {
         deferredError = covered();
         error = SWITCHER_FAILED;
       } else {
@@ -87,11 +88,11 @@ export function sessionSwitcher({ fields, blocked, covered, show, clearFocus, re
   }
 
   $effect(() => {
-    const next = reconcileSelection(matches, active);
+    const next = reconcileSelection(matches, active, query);
     if (next !== active) active = next;
   });
   $effect(() => {
-    const slug = fields().slug;
+    const slug = shown();
     const terminal = fields().terminal;
     const overlay = covered();
     const searching = opened;
@@ -104,10 +105,11 @@ export function sessionSwitcher({ fields, blocked, covered, show, clearFocus, re
       if (slug !== origin && slug !== destination) { reset(); clearFocus(); return; }
       if (overlay && searching && !pending && !failedWhileCovered) { reset(); return; }
       if (!overlay) deferredError = false;
-      if (completed && slug === destination && terminal && !overlay) {
+      // The dashboard has no terminal to wait for, and takes no keyboard.
+      if (completed && slug === destination && (terminal || slug === DASHBOARD_KEY) && !overlay) {
         reset();
         clearFocus();
-        request(terminal);
+        if (terminal) request(terminal);
       }
     });
   });
@@ -118,7 +120,7 @@ export function sessionSwitcher({ fields, blocked, covered, show, clearFocus, re
     get busy() { return busy; },
     get error() { return error; },
     get query() { return query; },
-    set query(value) { if (!busy) { query = value; active = matchSessions(fields().sessions, query)[0]?.row.slug ?? ""; } },
+    set query(value) { if (!busy) { query = value; active = preferredSelection(matchSessions(fields().sessions, query), query); } },
     get active() { return active; },
     get matches() { return matches; },
     open, cancel, activate,

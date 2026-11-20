@@ -271,6 +271,16 @@ func sessionsRows() []adapterRow {
 				t.Fatalf("a refused switch asked for %d supervisors", after-before)
 			}
 		}},
+		{"Sessions.ShowDashboard", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			(&Sessions{sessions: a.kernel.Sessions}).ShowDashboard()
+			if shown := a.kernel.Sessions.Current(); shown != nil {
+				t.Fatalf("ShowDashboard left %q on screen", shown.Slug())
+			}
+			if a.kernel.Sessions.BySlug(a.slug()) == nil {
+				t.Fatal("ShowDashboard unloaded the session it hid")
+			}
+		}},
 		{"Sessions.Unload", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			if err := (&Sessions{sessions: a.kernel.Sessions}).Unload(a.slug()); err != nil {

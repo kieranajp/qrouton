@@ -29,6 +29,11 @@ window.sessionRailBridge = {
 };
 
 window.wailsCall = async (name, slug, targetSlug) => {
+  if (name.endsWith(".ShowDashboard")) {
+    calls.push({ method: "showDashboard" });
+    window.sessionRail?.shown("");
+    return;
+  }
   if (name.endsWith(".Show")) {
     calls.push({ method: "show", slug });
     window.sessionRail?.shown(slug);

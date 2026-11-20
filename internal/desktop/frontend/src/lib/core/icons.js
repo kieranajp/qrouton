@@ -8,6 +8,7 @@ export const ICONS = Object.freeze({
   close: icon("M4 4l8 8M12 4l-8 8", null),
   command: icon("M2 2h12v12H2zM2 5h12M5 8l2 1.5-2 1.5", null),
   copy: icon("M3 3h7v7H3zM6 13h7V6", null),
+  dashboard: icon("M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z", null),
   "disclosure-closed": icon("M6 4.5v7l4-3.5z", null),
   "disclosure-open": icon("M4.5 6h7L8 10z", null),
   document: icon("M3 2h6l4 4v8H3zM9 2v4h4", null),

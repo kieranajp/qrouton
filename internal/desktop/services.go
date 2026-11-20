@@ -28,6 +28,8 @@ func (s *Sessions) Reload(slug string) error { return s.sessions.Reload(slug) }
 
 func (s *Sessions) Unload(slug string) error { return s.sessions.Unload(slug) }
 
+func (s *Sessions) ShowDashboard() { s.sessions.ShowDashboard() }
+
 func (s *Sessions) SwitchProfile(slug, profile string) error {
 	return s.sessions.SwitchProfile(slug, profile)
 }

@@ -40,7 +40,6 @@
     { runner: "claude", profiles: [{ id: "work", label: "Work" }, { id: "home", label: "Home" }] },
   ]);
   let selected = $state("checkout");
-  let history = ["checkout"];
   /** @type {HTMLButtonElement | undefined} */
   let focusProbe;
   let stickers = $state(labelled({}));
@@ -79,7 +78,6 @@
     headline,
     shown: (slug) => {
       selected = slug;
-      history = [slug, ...history.filter((item) => item !== slug)];
       load(slug);
     },
     load,
@@ -104,9 +102,7 @@
             }
           : session,
       );
-      if (selected === slug) {
-        selected = history.find((item) => sessions.some((row) => row.slug === item && row.terminal)) ?? "";
-      }
+      if (selected === slug) selected = "";
     },
     rename: (slug, name) => {
       sessions = sessions.map((session) => (session.slug === slug ? { ...session, name } : session));

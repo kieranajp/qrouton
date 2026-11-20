@@ -223,18 +223,17 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 		fields.PullRequests = cached.list()
 	}
 	agentSnapshots := reg.agentActivitySnapshots()
-	// Dereferenced on every tick: a value captured at wiring time re-raises the
-	// overlay two seconds after it closes. A window holding a session never asks,
-	// so the questions can never land over a live conversation — and an install
-	// that always opens on one stays unasked until it opens on none.
-	fields.Welcoming = configSnapshot != nil && !configSnapshot.Welcomed && fields.Slug == ""
-	fields.Placing = reg.Placing() && !fields.Welcoming
 	if snapshot, ok := agentSnapshots[fields.Slug]; ok {
 		fields.StagesLive = status.StagesFor(snapshot.LiveTypes)
 	}
 	// The rail populates with nothing on screen: a window opening on no session at
 	// all still has to offer the ones on disk.
 	fields.Sessions = reg.railOrder(status.Sessions(root))
+	// Dereferenced on every tick: a value captured at wiring time re-raises the
+	// overlay two seconds after it closes. An install with sessions has been set up
+	// already, so only an empty one is asked.
+	fields.Welcoming = configSnapshot != nil && !configSnapshot.Welcomed && fields.Slug == "" && len(fields.Sessions) == 0
+	fields.Placing = reg.Placing() && !fields.Welcoming
 	for i, row := range fields.Sessions {
 		// A terminal id and an activity are this workbench's own knowledge, so only
 		// the sessions it has booted carry them. The id goes when the supervisor

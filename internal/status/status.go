@@ -52,8 +52,8 @@ type Fields struct {
 	// PickerID names the waiting escalation, so an answer reaches only that one.
 	PickerID string `json:"pickerID"`
 	// Welcoming means this window is asking the first-run questions, which only a
-	// window holding no session does. Workbench-side knowledge too, so a file read
-	// never sets it.
+	// window in an install with no sessions does. Workbench-side knowledge too, so
+	// a file read never sets it.
 	Welcoming bool `json:"welcoming"`
 	// Placing means the placement check has misplaced or skipped sessions to
 	// show, or the user ran it. Never set while Welcoming.

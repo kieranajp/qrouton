@@ -235,3 +235,43 @@ test("a press in the panel released on the scrim keeps the switcher open, a pres
   await page.mouse.up();
   await expect(query(page)).toHaveCount(0);
 });
+
+test("the Dashboard entry leads the list, answers to its name, and ⌘K then Enter still switches session", async ({ page }) => {
+  await setup(page);
+  await page.keyboard.press("Control+k");
+  await expect(page.getByRole("option").first()).toHaveAccessibleName("Dashboard");
+  await expect(page.getByRole("option", { selected: true })).toContainText("switcher");
+  await page.keyboard.press("Escape");
+
+  await page.keyboard.press("Control+k");
+  await query(page).fill("dashboard");
+  await expect(page.getByRole("option")).toHaveCount(1);
+  await expect(page.getByRole("option", { selected: true })).toHaveAccessibleName("Dashboard");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.shell.dashboards())).toBe(1);
+  await page.evaluate(() => window.shell.snapshot({ slug: "", terminal: "" }));
+  await expect(query(page)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Dashboard", level: 1 })).toBeVisible();
+  expect(await page.evaluate(() => window.shell.shows())).toEqual([]);
+
+  await page.keyboard.press("Control+k");
+  await expect(page.getByRole("option").first()).toHaveAccessibleName("Dashboard · Current");
+  await expect(page.getByRole("option", { selected: true })).toContainText("Octopus");
+  await page.keyboard.press("Enter");
+  expect(await page.evaluate(() => window.shell.shows())).toEqual([["octopus"]]);
+});
+
+// Hiding the panes by unmounting them would end the conversation's terminal and its scrollback.
+test("the dashboard covers the panes without unmounting the conversation", async ({ page }) => {
+  await setup(page);
+  await page.evaluate(() => window.shell.snapshot({ slug: "", terminal: "" }));
+  await expect(page.getByRole("heading", { name: "Dashboard", level: 1 })).toBeVisible();
+  await expect(page.locator(".agent")).toBeHidden();
+  await expect(page.locator(".human")).toBeHidden();
+  await expect(page.locator('[data-terminal-id="term-1"]')).toBeAttached();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.evaluate(() => window.shell.snapshot({ slug: "octopus", terminal: "term-1" }));
+  await expect(page.getByRole("heading", { name: "Dashboard", level: 1 })).toHaveCount(0);
+  await expect(page.locator(".agent")).toBeVisible();
+  expect((await page.evaluate(() => window.shell.started())).filter(([kind]) => kind === "Term")).toEqual([["Term", "term-1"]]);
+});
