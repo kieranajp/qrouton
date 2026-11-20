@@ -59,9 +59,9 @@ func (c *Chrome) publishFields(fields status.Fields) {
 // watchChrome pushes what the window can observe about the session on screen
 // until the context is cancelled. Escalation rewrites the manifest, so
 // re-reading it on a poll is what keeps the window agreeing with the session.
-func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter) {
-	watch(ctx, reg, root, cfg, emit, chromeInterval, repoStatInterval, pullRequestInterval,
-		unseenCounts{all: status.Unseen, in: status.UnseenIn}, livePullRequestAPI().fetch)
+func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, pulls pullRequestSource) {
+	watch(ctx, reg, root, cfg, emit, chromeInterval, repoStatInterval,
+		unseenCounts{all: status.Unseen, in: status.UnseenIn}, pulls)
 }
 
 // unseenCounts is what the rail knows about documents nobody has looked at: every
@@ -72,6 +72,12 @@ type unseenCounts struct {
 	in  func(sessionRoot string) (int, bool)
 }
 
+// pullRequestSource is the Dashboard as the chrome loop sees it.
+type pullRequestSource interface {
+	rows(root string) status.PullRequestList
+	Request()
+}
+
 // measurement is one session's repository stats, named by the session they were
 // measured for: a switch must not inherit the last session's numbers.
 type measurement struct {
@@ -79,24 +85,14 @@ type measurement struct {
 	stats []status.RepoStat
 }
 
-// pullFetch builds a session's next pull request cache from its last one.
-type pullFetch func(ctx context.Context, root string, previous sessionPulls) sessionPulls
-
-type pullResult struct {
-	root  string
-	pulls sessionPulls
-}
-
-// watch takes its intervals, its unseen count and its pull request fetch so a
-// test can drive the tickers apart. Everything a background session costs
-// rides the slow one; pull requests are fetched for the shown session only.
-func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, field, slow, prs time.Duration, count unseenCounts, fetchPulls pullFetch) {
+// watch takes its intervals, its unseen count and its pull requests so a test
+// can drive the tickers apart. Everything a background session costs rides the
+// slow one.
+func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, field, slow time.Duration, count unseenCounts, pulls pullRequestSource) {
 	fields := time.NewTicker(field)
 	defer fields.Stop()
 	stats := time.NewTicker(slow)
 	defer stats.Stop()
-	prTicker := time.NewTicker(prs)
-	defer prTicker.Stop()
 
 	measured := map[string][]status.RepoStat{}
 	unseen := count.all(root)
@@ -116,25 +112,22 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 		go func() { result <- measurement{root: shown, stats: status.Repos(ctx, shown)} }()
 	}
 
-	pulls := map[string]sessionPulls{}
-	pulled := make(chan pullResult, 1)
-	pullPending := false
-	lastPulled := ""
-	fetch := func(arrivalOnly bool) {
+	// requestedFor is the shown root pull requests were last asked for; clearing
+	// it asks again.
+	requestedFor := ""
+	request := func() {
 		shown := reg.Current().Root()
-		if shown == "" {
-			lastPulled = ""
-		}
-		if pullPending || shown == "" || (arrivalOnly && shown == lastPulled) {
+		if shown == requestedFor {
 			return
 		}
-		pullPending, lastPulled = true, shown
-		previous := pulls[shown]
-		go func() { pulled <- pullResult{root: shown, pulls: fetchPulls(ctx, shown, previous)} }()
+		requestedFor = shown
+		if shown != "" {
+			pulls.Request()
+		}
 	}
 
 	refresh()
-	fetch(true)
+	request()
 	pushChrome(reg, root, cfg, measured, pulls, unseen, emit)
 	for {
 		select {
@@ -144,12 +137,6 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 			pending = false
 			measured[done.root] = done.stats
 			refresh()
-		case done := <-pulled:
-			pullPending = false
-			pulls[done.root] = done.pulls
-			fetch(true)
-		case <-prTicker.C:
-			fetch(false)
 		case <-stats.C:
 			delete(measured, reg.Current().Root())
 			refresh()
@@ -157,17 +144,15 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 		case <-reg.touched:
 			for _, root := range reg.takeRepositoryChanges() {
 				delete(measured, root)
-				if root == lastPulled {
-					lastPulled = ""
+				if root == requestedFor {
+					requestedFor = ""
 				}
 			}
-			for _, root := range reg.takePullRequestChanges() {
-				if root == lastPulled {
-					lastPulled = ""
-				}
+			if len(reg.takePullRequestChanges()) > 0 {
+				pulls.Request()
 			}
 			refresh()
-			fetch(true)
+			request()
 			// Arriving at a session is looking at what it wrote, and a marker still
 			// lit after that is a marker nobody reads.
 			if shown := reg.Current().Root(); shown != "" {
@@ -186,7 +171,7 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 
 // pushChrome emits even with the session-level fields empty: the page cannot
 // attach to a conversation whose terminal id it has not been told.
-func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, pulls map[string]sessionPulls, unseen map[string]int, emit Emitter) {
+func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, pulls pullRequestSource, unseen map[string]int, emit Emitter) {
 	for _, state := range reg.all() {
 		state.mu.Lock()
 		state.pruneBugReports(reg.now())
@@ -219,22 +204,21 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	if repos, ok := measured[shownRoot]; ok {
 		fields.Repos = repos
 	}
-	if cached, ok := pulls[shownRoot]; ok {
-		fields.PullRequests = cached.list()
+	if pulls != nil && shownRoot != "" {
+		fields.PullRequests = pulls.rows(shownRoot)
 	}
 	agentSnapshots := reg.agentActivitySnapshots()
-	// Dereferenced on every tick: a value captured at wiring time re-raises the
-	// overlay two seconds after it closes. A window holding a session never asks,
-	// so the questions can never land over a live conversation — and an install
-	// that always opens on one stays unasked until it opens on none.
-	fields.Welcoming = configSnapshot != nil && !configSnapshot.Welcomed && fields.Slug == ""
-	fields.Placing = reg.Placing() && !fields.Welcoming
 	if snapshot, ok := agentSnapshots[fields.Slug]; ok {
 		fields.StagesLive = status.StagesFor(snapshot.LiveTypes)
 	}
 	// The rail populates with nothing on screen: a window opening on no session at
 	// all still has to offer the ones on disk.
 	fields.Sessions = reg.railOrder(status.Sessions(root))
+	// Dereferenced on every tick: a value captured at wiring time re-raises the
+	// overlay two seconds after it closes. An install with sessions has been set up
+	// already, so only an empty one is asked.
+	fields.Welcoming = configSnapshot != nil && !configSnapshot.Welcomed && fields.Slug == "" && len(fields.Sessions) == 0
+	fields.Placing = reg.Placing() && !fields.Welcoming
 	for i, row := range fields.Sessions {
 		// A terminal id and an activity are this workbench's own knowledge, so only
 		// the sessions it has booted carry them. The id goes when the supervisor

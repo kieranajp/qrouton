@@ -108,6 +108,7 @@ func Run(opts Options) error {
 	opts.updates = updates
 	r.register(application.NewService(updates))
 	r.register(application.NewService(&Ollama{ollama: kernel.Ollama}))
+	r.register(application.NewService(&Dashboard{dashboard: kernel.Dashboard}))
 	r.register(application.NewService(&Assembly{assembly: kernel.Assembly}))
 	r.register(application.NewService(&Picker{picker: kernel.Picker}))
 	r.register(application.NewService(newPresenter(r, r.Emit)))

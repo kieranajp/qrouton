@@ -10,6 +10,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/vault"
@@ -38,6 +39,8 @@ type Options struct {
 	// LinearCommand and LinearEnvironment are what Settings installs for Linear.
 	LinearCommand     []string
 	LinearEnvironment []string
+	// GitHubCredential answers the dashboard's GitHub token; nil asks gh, then the environment.
+	GitHubCredential func(ctx context.Context) (github.Credential, string)
 }
 
 type Core struct {
@@ -46,6 +49,7 @@ type Core struct {
 	Windows    *Windows
 	BugReports *BugReports
 	Chrome     *Chrome
+	Dashboard  *Dashboard
 	Ollama     *Ollama
 	Vault      *vault.Set
 
@@ -92,6 +96,12 @@ func New(opts Options, client Client) *Core {
 		signal, runners = opts.Launcher.Signal, opts.Launcher.Runners
 	}
 	c.Repositories = newRepositories(opts.Config, client.Emit)
+	dashboardAPI := liveDashboardAPI()
+	if opts.GitHubCredential != nil {
+		dashboardAPI.credential = opts.GitHubCredential
+	}
+	c.Dashboard = newDashboard(opts.Root, func() bool { return reg.Current() != nil }, client.Emit,
+		dashboardAPI, time.Now, config.PullsCachePath())
 	c.Orgs = &Orgs{cfg: opts.Config}
 	c.Assembly = newAssembly(opts.Config, c.Repositories, reg, client.Emit, signal, runners)
 	c.Picker = newPicker(ctx, opts.Config, reg, c.Repositories, client.Emit, signal)
@@ -223,7 +233,8 @@ func (c *Core) Start(socket string) error {
 		return err
 	}
 	c.server = server
-	go watchChrome(c.ctx, c.Sessions, c.opts.Root, c.opts.Config, c.Chrome.publish)
+	c.Dashboard.start(c.ctx)
+	go watchChrome(c.ctx, c.Sessions, c.opts.Root, c.opts.Config, c.Chrome.publish, c.Dashboard)
 	if c.Vault != nil {
 		c.Vault.Warm(c.ctx)
 	}
@@ -263,6 +274,7 @@ func (c *Core) Shutdown() {
 		c.cancel()
 		c.Picker.stop()
 		c.Repositories.stop()
+		c.Dashboard.stop()
 		c.Placement.wait()
 		if c.Vault != nil {
 			c.Vault.Wait()

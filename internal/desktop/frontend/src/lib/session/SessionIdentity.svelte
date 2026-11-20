@@ -31,12 +31,13 @@
 {#if context}<span class="context">{context}</span>{/if}
 </div>
 <style>
-.identity { display:flex; align-items:center; gap:calc(10px * var(--ui-scale)); min-width:0; flex:1; }
+.identity { display:flex; align-items:flex-start; gap:calc(9px * var(--ui-scale)); min-width:0; flex:1; }
 .context { font:var(--machine-xs); color:var(--text-muted); overflow-wrap:anywhere; }
   .avatar {
     position: relative;
-    width: calc(30px * var(--ui-scale));
-    height: calc(30px * var(--ui-scale));
+    width: calc(26px * var(--ui-scale));
+    height: calc(26px * var(--ui-scale));
+    box-sizing: border-box;
     flex: none;
     display: flex;
     align-items: center;
@@ -61,7 +62,7 @@
 
   .keyed {
     font: var(--machine-md);
-    font-size: calc(11px * var(--ui-scale));
+    font-size: calc(10px * var(--ui-scale));
   }
 
   .text {
@@ -79,16 +80,18 @@
   .name {
     font: var(--machine-md);
     font-size: calc(11px * var(--ui-scale));
-    color: var(--text-muted);
+    line-height: 1.35;
+    color: var(--text-secondary);
   }
 
   .identity.running .name {
-    color: var(--text-secondary);
+    color: var(--text-primary);
   }
 
   .identity.selected .name {
     font: var(--machine-bold);
     font-size: calc(11px * var(--ui-scale));
+    line-height: 1.35;
     color: var(--text-primary);
   }
 

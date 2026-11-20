@@ -44,11 +44,15 @@ export function destination(branch, repos) {
 /** @param {string} branch */
 export const joining = (branch) => (branch ? `Added repositories join ${branch}` : "");
 
-/** The empty-session fallback waits until the first payload settles.
- * @param {boolean} requested
- * @param {boolean} settled
- * @param {string} slug */
-export const assemblyOpen = (requested, settled, slug) => !!settled && (!!requested || !slug);
+/** An install with no sessions has nothing to cancel back to, so the dialog is all it shows.
+ * A shown session counts before the rail lists it.
+ * @param {string} slug @param {number} sessions */
+export const assemblyGated = (slug, sessions) => !slug && !sessions;
+
+/** The empty-install fallback waits until the first payload settles.
+ * @param {boolean} requested @param {boolean} settled @param {string} slug @param {number} sessions */
+export const assemblyOpen = (requested, settled, slug, sessions) =>
+  !!settled && (!!requested || assemblyGated(slug, sessions));
 
 export const ADD_KEY = "add";
 

@@ -128,6 +128,7 @@
     display: flex;
     align-items: stretch;
     width: 100%;
+    box-sizing: border-box;
     flex: none;
     border: 1px solid transparent;
     background: transparent;
@@ -160,7 +161,7 @@
     gap: calc(10px * var(--ui-scale));
     min-width: 0;
     flex: 1;
-    padding: calc(8px * var(--ui-scale)) calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale));
+    padding: calc(6px * var(--ui-scale)) calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
     cursor: pointer;
     border: 0;
     background: transparent;

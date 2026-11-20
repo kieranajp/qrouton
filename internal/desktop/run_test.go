@@ -18,6 +18,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -270,7 +271,9 @@ func testOptions(t *testing.T) (Options, *stubBoot) {
 func testWorkbench(t *testing.T, r *fakeRenderer, opts *Options) *core.Core {
 	t.Helper()
 	var quit func()
-	kernel := core.New(coreOptions(*opts, func() { quit() }), newLocalClient(r, opts.Launcher, nil))
+	coreOpts := coreOptions(*opts, func() { quit() })
+	coreOpts.GitHubCredential = signedOut
+	kernel := core.New(coreOpts, newLocalClient(r, opts.Launcher, nil))
 	quit = quitter(kernel, r)
 	t.Cleanup(kernel.Shutdown)
 	return kernel
@@ -893,3 +896,6 @@ func TestARunWhoseStartFailsWaitsForThePlacementCheck(t *testing.T) {
 		t.Fatalf("placement check unfinished when run returned: %+v, %v", file, err)
 	}
 }
+
+// signedOut keeps a test's dashboard off GitHub when a session it writes has a branch.
+func signedOut(context.Context) (github.Credential, string) { return github.CredentialSignedOut, "" }

@@ -18,17 +18,17 @@ import (
 
 type headlessClient struct{}
 
-func (headlessClient) Emit(string, any)                 {}
-func (headlessClient) Focused() bool                    { return false }
-func (headlessClient) Raise()                           {}
-func (headlessClient) SessionShown(string)              {}
-func (headlessClient) Supports(core.Capability) bool    { return false }
-func (headlessClient) Reveal(string) error              { return core.ErrUnavailable }
-func (headlessClient) OpenText(string) error            { return core.ErrUnavailable }
-func (headlessClient) CopyImage(string) error           { return core.ErrUnavailable }
-func (headlessClient) CopyFile(string) error            { return core.ErrUnavailable }
-func (headlessClient) ChooseDirectory() (string, error) { return "", core.ErrUnavailable }
-func (headlessClient) Chime(string)                     {}
+func (headlessClient) Emit(string, any)                     {}
+func (headlessClient) Focused() bool                        { return false }
+func (headlessClient) Raise()                               {}
+func (headlessClient) SessionShown(string)                  {}
+func (headlessClient) Supports(core.Capability) bool        { return false }
+func (headlessClient) Reveal(string) error                  { return core.ErrUnavailable }
+func (headlessClient) OpenText(string) error                { return core.ErrUnavailable }
+func (headlessClient) CopyImage(string) error               { return core.ErrUnavailable }
+func (headlessClient) CopyFile(string) error                { return core.ErrUnavailable }
+func (headlessClient) ChooseDirectory(bool) (string, error) { return "", core.ErrUnavailable }
+func (headlessClient) Chime(string)                         {}
 
 // recordingRunner writes a runner that saves its environment once per launch.
 // The first launch waits for the supervisor to stop it; later ones exit.

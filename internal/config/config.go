@@ -405,6 +405,10 @@ func CachePath() string {
 	return filepath.Join(CacheDir(), cacheFileName)
 }
 
+func PullsCachePath() string {
+	return filepath.Join(CacheDir(), pullsCacheFileName)
+}
+
 // WebGLLogPath records the page's WebGL renderers coming and going, under QROUTON_INSPECT.
 func WebGLLogPath() string {
 	return filepath.Join(CacheDir(), webglLogFileName)
