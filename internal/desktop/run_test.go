@@ -145,15 +145,17 @@ type stubBoot struct {
 	probe   func(runnerID string, profile config.RunnerProfile) launch.SignIn
 	listed  []assembly.Runner
 
-	mu      sync.Mutex
-	sockets map[string]string
-	resumes map[string]bool
-	runners map[string]string
-	agents  int
+	mu       sync.Mutex
+	sockets  map[string]string
+	resumes  map[string]bool
+	runners  map[string]string
+	profiles map[string]string
+	agents   int
 }
 
 func newStubBoot(argv ...string) *stubBoot {
-	return &stubBoot{argv: argv, sockets: map[string]string{}, resumes: map[string]bool{}, runners: map[string]string{}}
+	return &stubBoot{argv: argv, sockets: map[string]string{}, resumes: map[string]bool{},
+		runners: map[string]string{}, profiles: map[string]string{}}
 }
 
 func (b *stubBoot) Agent(req core.AgentRequest) (core.AgentCommand, error) {
@@ -166,11 +168,12 @@ func (b *stubBoot) Agent(req core.AgentRequest) (core.AgentCommand, error) {
 	b.sockets[req.SessionRoot] = req.Socket
 	b.resumes[req.SessionRoot] = req.Resume
 	b.runners[req.SessionRoot] = req.RunnerID
+	b.profiles[req.SessionRoot] = req.ProfileID
 	resolved := req.RunnerID
 	if resolved == "" {
 		resolved = "codex"
 	}
-	return core.AgentCommand{Argv: b.argv, Env: os.Environ(), RunnerID: resolved}, nil
+	return core.AgentCommand{Argv: b.argv, Env: os.Environ(), RunnerID: resolved, ProfileID: req.ProfileID}, nil
 }
 
 func (b *stubBoot) Shell(sessionRoot string) []string {
@@ -370,6 +373,32 @@ func TestRunOpensOneConversationWindowAtTheFrontendRoot(t *testing.T) {
 	}
 	if len(r.opened) != 0 {
 		t.Fatalf("%d further windows opened; the workbench opens one", len(r.opened))
+	}
+}
+
+// Breaks if the session the command line opens on boots the workbench's default
+// account rather than its manifest's profile.
+func TestRunOpensTheLastSessionOnItsManifestsProfile(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	opts.Resume = true
+	if err := session.UpdateManifest(opts.SessionRoot, func(m session.Manifest) (session.Manifest, error) {
+		m.Runner, m.Profile = "claude", "work"
+		return m, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	kernel := testWorkbench(t, r, &opts)
+
+	startWorkbench(t, r, kernel, opts)
+
+	<-r.opened
+	shownSession(t, kernel.Sessions)
+	boot.mu.Lock()
+	runner, profile, resumed := boot.runners[opts.SessionRoot], boot.profiles[opts.SessionRoot], boot.resumes[opts.SessionRoot]
+	boot.mu.Unlock()
+	if runner != "claude" || profile != "work" || !resumed {
+		t.Fatalf("opened %q on profile %q, resuming %v; want claude on the manifest's work, resuming", runner, profile, resumed)
 	}
 }
 

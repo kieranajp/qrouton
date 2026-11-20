@@ -2548,6 +2548,32 @@ func TestRetiringTheLastActiveSessionStartsTheNextInactiveRailRow(t *testing.T) 
 	}
 }
 
+func TestRetirementSkipsAnInactiveRowThatWillNotBoot(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	for _, slug := range []string{"shown", "broken", "next"} {
+		sessionDir(t, root, slug)
+	}
+	if err := os.WriteFile(sessionpaths.Manifest(filepath.Join(root, "broken")), []byte("{\"runner\": "), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg.railOrder(polled("shown", "broken", "next"))
+	if err := reg.Show("shown"); err != nil {
+		t.Fatal(err)
+	}
+
+	reg.retire(reg.Current())
+
+	current := reg.Current()
+	if current == nil || current.Slug() != "next" {
+		t.Fatalf("the window moved to %v, want the first inactive rail row that boots", current)
+	}
+	if reg.BySlug("broken") != nil {
+		t.Fatal("a session whose manifest will not load was booted")
+	}
+}
+
 // Removing a session's files out from under a live supervisor would leave it
 // running on an unlinked directory, so everything it holds has to be released
 // before the directory goes.

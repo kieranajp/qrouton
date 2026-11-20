@@ -145,6 +145,7 @@ const (
 	pullRequestInterval  = 60 * time.Second
 	pullRequestTimeout   = 10 * time.Second
 	pullRequestLogFormat = "pull requests: %s: %v"
+	fallbackLogFormat    = "fallback: %s: %v"
 
 	// activityQuiet is how long the conversation PTY has to stay silent before
 	// the agent counts as idle. A runner redraws its spinner far faster.
