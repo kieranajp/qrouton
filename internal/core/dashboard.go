@@ -356,7 +356,7 @@ func (d *Dashboard) refresh(ctx context.Context) {
 }
 
 // fetch updates the rows in memory and answers what pulls.json should hold, or
-// false when the refresh failed as a whole.
+// false when GitHub answered for no repository.
 func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targets []github.BranchTarget, index map[string]int) (pullsCache, bool) {
 	_, token := d.api.credential(ctx)
 	if ctx.Err() != nil {
@@ -399,16 +399,17 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	next := map[string]map[string]map[string][]status.PullRequest{}
+	answered := false
 	for _, s := range sessions {
 		for _, repo := range s.repos {
 			result := results[index[repo.key()]]
 			var rows []status.PullRequest
 			switch {
 			case result.Err == nil:
-				rows = pullRequestRows(repo.id, result.PullRequests)
+				rows, answered = pullRequestRows(repo.id, result.PullRequests), true
 				delete(d.logged, repo.key())
 			case errors.Is(result.Err, github.ErrNotFound):
-				rows = []status.PullRequest{}
+				rows, answered = []status.PullRequest{}, true
 				delete(d.logged, repo.key())
 			default:
 				d.logOnceLocked(repo.key(), result.Err)
@@ -423,6 +424,10 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 			}
 			next[s.slug][repo.id] = map[string][]status.PullRequest{repo.target.Branch: rows}
 		}
+	}
+	if !answered {
+		d.failed = true
+		return pullsCache{}, false
 	}
 	d.pulls = next
 	d.viewer, d.checkedAt = viewer, d.now()

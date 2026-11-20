@@ -660,3 +660,87 @@ func TestDashboardWritesPullsJSONReadableOnlyByTheUser(t *testing.T) {
 	}
 }
 
+// Catches a refresh where GitHub answered no repository still reading as fresh.
+func TestDashboardWhereEveryAliasFailsKeepsItsTimeAndReadsFailed(t *testing.T) {
+	b := newTestBoard(t)
+	root := b.session(t, "pulls", editing("web", "feat/x"), editing("api", "feat/x"))
+	b.gh.say(boardAnswer{prs: map[string][]github.PullRequest{"web": {pr(1, "a")}, "api": {pr(3, "c")}}})
+	b.refresh(t.Context())
+	written, err := os.ReadFile(b.cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := b.Snapshot().CheckedAt
+
+	b.clock.advance(time.Minute)
+	broken := fmt.Errorf("github: %w: Something went wrong", github.ErrQuery)
+	b.gh.say(boardAnswer{errs: map[string]error{"web": broken, "api": broken}})
+	b.refresh(t.Context())
+
+	if s := b.Snapshot(); !s.Failed || s.Refreshing || !s.CheckedAt.Equal(checked) {
+		t.Fatalf("status after every alias failed = %+v", s)
+	}
+	if rows := titles(b.rows(root)); !reflect.DeepEqual(rows, []string{"acme/web#a", "acme/api#c"}) {
+		t.Fatalf("rows after every alias failed = %v", rows)
+	}
+	if now, _ := os.ReadFile(b.cachePath); !bytes.Equal(now, written) {
+		t.Fatalf("every alias failing rewrote pulls.json:\n%s", now)
+	}
+}
+
+// Catches an empty cache whose every alias failed reading as "No pull requests" rather than a failure.
+func TestDashboardWithNoCacheWhereEveryAliasFailsIsNeverChecked(t *testing.T) {
+	b := newTestBoard(t)
+	b.session(t, "pulls", editing("web", "feat/x"))
+	b.gh.say(boardAnswer{errs: map[string]error{"web": fmt.Errorf("github: %w: 502 Bad Gateway", github.ErrQuery)}})
+
+	b.refresh(t.Context())
+
+	if s := b.Snapshot(); !s.Failed || !s.CheckedAt.IsZero() || len(s.Sessions["pulls"].PullRequests) != 0 {
+		t.Fatalf("status after every alias failed on an empty cache = %+v", s)
+	}
+	if _, err := os.Stat(b.cachePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("every alias failing wrote pulls.json: %v", err)
+	}
+}
+
+// Catches one answered alias not counting: the branches GitHub answered must land and the time advance.
+func TestDashboardWhereSomeAliasesFailAdvancesItsTime(t *testing.T) {
+	b := newTestBoard(t)
+	root := b.session(t, "pulls", editing("web", "feat/x"), editing("api", "feat/x"))
+	b.gh.say(boardAnswer{prs: map[string][]github.PullRequest{"web": {pr(1, "a")}, "api": {pr(3, "c")}}})
+	b.refresh(t.Context())
+
+	b.clock.advance(time.Minute)
+	b.gh.say(boardAnswer{
+		prs:  map[string][]github.PullRequest{"api": {pr(4, "d")}},
+		errs: map[string]error{"web": fmt.Errorf("github: %w: Something went wrong", github.ErrQuery)},
+	})
+	b.refresh(t.Context())
+
+	if s := b.Snapshot(); s.Failed || !s.CheckedAt.Equal(b.clock.now()) {
+		t.Fatalf("status after a partial answer = %+v", s)
+	}
+	if rows := titles(b.rows(root)); !reflect.DeepEqual(rows, []string{"acme/web#a", "acme/api#d"}) {
+		t.Fatalf("rows after a partial answer = %v", rows)
+	}
+}
+
+// Catches a repository GitHub cannot find counting as a failure: NOT_FOUND is an answer, so it is fresh and empty.
+func TestDashboardWhereEveryAliasIsNotFoundIsAFreshEmptyAnswer(t *testing.T) {
+	b := newTestBoard(t)
+	root := b.session(t, "pulls", editing("web", "feat/x"))
+	b.gh.say(boardAnswer{prs: map[string][]github.PullRequest{"web": {pr(1, "a")}}})
+	b.refresh(t.Context())
+
+	b.clock.advance(time.Minute)
+	b.gh.say(boardAnswer{errs: map[string]error{"web": fmt.Errorf("github: %w: Could not resolve", github.ErrNotFound)}})
+	b.refresh(t.Context())
+
+	if s := b.Snapshot(); s.Failed || !s.CheckedAt.Equal(b.clock.now()) {
+		t.Fatalf("status after every alias was not found = %+v", s)
+	}
+	if rows := titles(b.rows(root)); len(rows) != 0 {
+		t.Fatalf("rows after every alias was not found = %v", rows)
+	}
+}
