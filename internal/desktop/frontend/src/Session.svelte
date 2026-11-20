@@ -7,6 +7,7 @@
   import CubeMark from "./lib/core/CubeMark.svelte";
   import { dismissible } from "./lib/core/dismiss.js";
   import Dashboard from "./lib/dashboard/Dashboard.svelte";
+  import { dashboard } from "./lib/dashboard.svelte.js";
   import OverviewPane from "./lib/overview/OverviewPane.svelte";
   import SessionSwitcher from "./lib/session/SessionSwitcher.svelte";
   import Rail from "./lib/session/Rail.svelte";
@@ -33,6 +34,7 @@
   import { MAX_SIDEBAR, MIN_HUMAN, MIN_SIDEBAR } from "./lib/layout.js";
 
   const view = shell();
+  const pulls = dashboard();
   let fields = $derived(view.fields);
 
   /** @type {HTMLDivElement} */
@@ -98,7 +100,11 @@
       label="Resize the sidebar" />
 
     {#if view.dashboard}
-      <Dashboard sessions={fields.sessions} onOpen={(slug) => rail?.openSession(slug)} />
+      <Dashboard
+        sessions={fields.sessions}
+        onOpen={(slug) => rail?.openSession(slug)}
+        store={pulls}
+        onSettings={view.openSettings} />
     {/if}
 
     <!-- Hidden rather than unmounted under the dashboard, so the agent terminals keep their scrollback. -->

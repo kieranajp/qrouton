@@ -87,3 +87,155 @@ test("a long title stops at two lines", async ({ page }) => {
   const lines = await title.evaluate((node) => node.getBoundingClientRect().height / parseFloat(getComputedStyle(node).lineHeight));
   expect(Math.round(lines)).toBe(2);
 });
+
+const NEVER = "0001-01-01T00:00:00Z";
+const freshness = (page) => page.locator(".freshness");
+const refresh = (page) => page.getByRole("button", { name: "Refresh" });
+const push = (page, extra) => page.evaluate((next) => window.pushDashboard(window.dashboardStatus(next)), extra);
+
+// The cache keeps every pull request on the branch; a card that skipped the author filter would claim a colleague's.
+test("another author's pull request on the same branch stays off the card", async ({ page }) => {
+  const billing = card(page, "billing");
+  await expect(billing.getByRole("link")).toHaveCount(2);
+  await expect(billing).not.toContainText("Their pull request");
+});
+
+// A review tag on the merged pull request, or the open one sorted below it, would misreport what needs doing.
+test("a block leads with its state, tags an open pull request and names repo, number and age", async ({ page }) => {
+  const [first, second] = await card(page, "billing").getByRole("link").all();
+  await expect(first.locator(".state")).toHaveText("Open");
+  await expect(first.locator(".chip")).toHaveText(["Changes requested", "Checks failing"]);
+  await expect(first.locator(".repo")).toHaveText("acme/web#41");
+  await expect(first.locator(".when")).toHaveText("41m");
+  await expect(second.locator(".state")).toHaveText("Merged");
+  await expect(second.locator(".chip")).toHaveCount(0);
+  expect(await second.locator(".state").evaluate((node) => getComputedStyle(node).color)).toBe("rgb(198, 160, 246)");
+  const lines = await first.locator(".headline").evaluate((node) => node.getBoundingClientRect().height / parseFloat(getComputedStyle(node).lineHeight));
+  expect(Math.round(lines)).toBe(2);
+});
+
+// Summing the reference checkout would credit the session with commits it never made.
+test("the git line sums the editing repositories and a session with none committed says so", async ({ page }) => {
+  await expect(card(page, "billing").locator(".git")).toHaveText("5 commits · +611 −204");
+  await expect(card(page, "session-3").locator(".git")).toHaveText("no commits");
+});
+
+// Expansion held in the card would fold back the moment the dashboard unmounts behind a session.
+test("four pull requests show, then Show 3 more expands in place and stays expanded after leaving", async ({ page }) => {
+  const busy = card(page, "session-3");
+  await expect(busy.getByRole("link")).toHaveCount(4);
+  await busy.getByRole("button", { name: "Show 3 more pull requests in Session 3" }).click();
+  await expect(busy.getByRole("link")).toHaveCount(7);
+  await expect(busy.getByRole("button", { name: /Show \d+ more/ })).toHaveCount(0);
+
+  await page.evaluate(() => window.dashboard.setShown(false));
+  await expect(page.locator("[data-card]")).toHaveCount(0);
+  await page.evaluate(() => window.dashboard.setShown(true));
+  await expect(card(page, "session-3").getByRole("link")).toHaveCount(7);
+});
+
+// Focus left on a button that vanished would drop a keyboard user back at the top of the page.
+test("expanding moves focus to the first pull request it revealed", async ({ page }) => {
+  const busy = card(page, "session-3");
+  await busy.getByRole("button", { name: /Show 3 more/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect(busy.getByRole("link").nth(4)).toBeFocused();
+});
+
+// Re-estimating an expanded card would reflow every card after it into other columns.
+test("expanding a card leaves every other card in its column", async ({ page }) => {
+  const before = await columns(page);
+  await card(page, "session-3").getByRole("button", { name: /Show 3 more/ }).click();
+  await expect(card(page, "session-3").getByRole("link")).toHaveCount(7);
+  expect(await columns(page)).toEqual(before);
+});
+
+// A link nested in the head, or a head that swallowed the link's click, would open the wrong thing.
+test("a block's link and the card head are separate targets", async ({ page }) => {
+  const billing = card(page, "billing");
+  await expect(billing.locator("button a, a button")).toHaveCount(0);
+  await billing.getByRole("link").first().click();
+  expect(await page.evaluate(() => window.openedURL)).toBe("https://github.com/acme/web/pull/41");
+  expect(await page.evaluate(() => window.dashboardBridge.opened)).toEqual([]);
+  await billing.locator(".head").click();
+  expect(await page.evaluate(() => window.dashboardBridge.opened)).toEqual(["billing"]);
+});
+
+// Waiting on a cache GitHub cannot fill would leave every card checking for good.
+test("an empty cache checks GitHub on each card, until the header says why it cannot", async ({ page }) => {
+  await push(page, { checkedAt: NEVER, viewer: "", sessions: {} });
+  await expect(card(page, "billing").locator(".note")).toHaveText("Checking GitHub…");
+  // The rail row lists editing repositories only, so a reference-only session arrives with none.
+  await expect(card(page, "session-2").locator(".note")).toHaveText("No pull requests");
+  await push(page, { checkedAt: NEVER, viewer: "", sessions: {}, signedOut: true });
+  await expect(card(page, "billing").locator(".note")).toHaveCount(0);
+  await push(page, { sessions: {} });
+  await expect(card(page, "billing").locator(".note")).toHaveText("No pull requests");
+});
+
+// A Refresh that stayed live mid-refresh would queue repeat requests and give no sign anything was happening.
+test("Refresh asks Go to refresh, then spins and disables while it runs", async ({ page }) => {
+  await refresh(page).click();
+  expect(await page.evaluate(() => window.dashboardBridge.calls().map((call) => call.method))).toEqual(["Refresh"]);
+  await push(page, { refreshing: true });
+  await expect(refresh(page)).toBeDisabled();
+  await expect(refresh(page)).toHaveAttribute("aria-busy", "true");
+  expect(await refresh(page).locator(".icon").evaluate((node) => getComputedStyle(node).animationName)).not.toBe("none");
+  await push(page, {});
+  await expect(refresh(page)).toBeEnabled();
+});
+
+test.describe("the header line", () => {
+  // Noon in a zone half an hour off UTC, so the expected times below are fixed and a UTC clock cannot match them.
+  const NOON = Date.parse("2026-11-20T06:30:00Z");
+  test.use({ timezoneId: "Asia/Kolkata" });
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: NOON });
+    await page.reload();
+    await page.waitForFunction(() => Boolean(window.dashboard));
+  });
+
+  // A header that said "just now" for any age, or dropped the day of an overnight cache, would pass old rows off as fresh.
+  test("the header says when the rows are from, with the date when it is not today", async ({ page }) => {
+    await push(page, { checkedAt: "2026-11-20T06:20:00Z" });
+    await expect(freshness(page)).toHaveText("As of 11:50");
+    await push(page, { checkedAt: "2026-11-18T12:00:00Z" });
+    await expect(freshness(page)).toHaveText("As of 18 Nov 17:30");
+    await push(page, { checkedAt: "2026-11-20T06:30:00Z" });
+    await expect(freshness(page)).toHaveText("Updated just now");
+  });
+
+  // A header computed only when an event arrives would say "just now" all morning.
+  test("the header ages on its own as time passes", async ({ page }) => {
+    await push(page, { checkedAt: "2026-11-20T06:30:00Z" });
+    await expect(freshness(page)).toHaveText("Updated just now");
+    await page.clock.fastForward("02:00");
+    await expect(freshness(page)).toHaveText("As of 12:00");
+  });
+
+  // A failure drawn like freshness would pass old rows off as current.
+  test("a failed refresh reads in the warning colour, with the last good time when there is one", async ({ page }) => {
+    await push(page, { failed: true, checkedAt: "2026-11-20T06:20:00Z" });
+    await expect(freshness(page)).toHaveText("Couldn't reach GitHub · showing 11:50");
+    expect(await freshness(page).evaluate((node) => getComputedStyle(node).color)).toBe("rgb(245, 169, 127)");
+    await push(page, { failed: true, checkedAt: NEVER });
+    await expect(freshness(page)).toHaveText("Couldn't reach GitHub");
+  });
+
+  // An enabled Refresh during a limit would spend requests GitHub has said it will refuse.
+  test("a rate limit names the next try and disables Refresh until then", async ({ page }) => {
+    await expect(refresh(page)).toBeEnabled();
+    await push(page, { pausedUntil: "2026-11-20T06:42:00Z" });
+    await expect(freshness(page)).toHaveText("GitHub rate limit · next try 12:12");
+    await expect(refresh(page)).toBeDisabled();
+  });
+
+  // A failure line in its place, or no way to the settings, would hide the one fix the user can make.
+  test("signed out, the header offers the GitHub settings tab and outranks a failure", async ({ page }) => {
+    await push(page, { signedOut: true, failed: true });
+    await expect(freshness(page)).toContainText("GitHub is not signed in");
+    await expect(card(page, "billing").getByRole("link")).toHaveCount(2);
+    await freshness(page).getByRole("button", { name: "GitHub settings" }).click();
+    expect(await page.evaluate(() => window.dashboardBridge.settings)).toEqual(["github"]);
+  });
+});

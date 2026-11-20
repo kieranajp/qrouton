@@ -1,15 +1,49 @@
+<script module>
+  import { SvelteSet } from "svelte/reactivity";
+
+  const expanded = new SvelteSet();
+</script>
+
 <script>
+  import Button from "../core/Button.svelte";
   import { uiScale } from "../scale.svelte.js";
   import SessionCard from "./SessionCard.svelte";
-  import { COLUMN_GAP, DASHBOARD_TITLE, columnCount, estimatedHeight, masonry } from "./dashboard.js";
+  import {
+    COLUMN_GAP,
+    DASHBOARD_TITLE,
+    GITHUB_SETTINGS,
+    REFRESH,
+    columnCount,
+    cardHeight,
+    freshness,
+    gitLine,
+    masonry,
+    pullSection,
+    refreshDisabled,
+  } from "./dashboard.js";
 
-  /** @type {{sessions: any[], onOpen: (slug: string) => void}} */
-  let { sessions = [], onOpen } = $props();
+  const TICK = 15000;
+
+  /** @type {{sessions: any[], onOpen: (slug: string) => void, store: {status: import("./dashboard.js").DashboardStatus, refresh: () => void}, onSettings: (tab: "github") => void}} */
+  let { sessions = [], onOpen, store, onSettings } = $props();
+
+  let now = $state(Date.now());
+  $effect(() => {
+    const timer = setInterval(() => (now = Date.now()), TICK);
+    return () => clearInterval(timer);
+  });
+
+  let status = $derived(store.status);
+  let header = $derived(freshness(status, now));
+  let disabled = $derived(refreshDisabled(status, now));
+  let sections = $derived(
+    sessions.map((row) => pullSection(status, row.slug, now, { repos: Boolean(row.repos?.length), expanded: expanded.has(row.slug) })),
+  );
 
   let width = $state(0);
   let columns = $derived(
     masonry(
-      sessions.map(() => estimatedHeight()),
+      sections.map(cardHeight),
       columnCount(width, uiScale() / 100),
     ),
   );
@@ -19,15 +53,33 @@
   <!-- Measured here rather than on the grid, whose height changes with the count it is measured for. -->
   <header bind:clientWidth={width}>
     <div></div>
-    <h1 id="dashboard-title">{DASHBOARD_TITLE}</h1>
-    <div class="actions"></div>
+    <div class="heading">
+      <h1 id="dashboard-title">{DASHBOARD_TITLE}</h1>
+      {#if header.text}
+        <p class="freshness" class:warn={header.warn}>
+          <span>{header.text}</span>{#if header.settings}<Button variant="ghost" size="sm" onclick={() => onSettings("github")}
+              >{GITHUB_SETTINGS}</Button
+            >{/if}
+        </p>
+      {/if}
+    </div>
+    <div class="actions" class:spinning={status.refreshing}>
+      <Button variant="secondary" icon="refresh" {disabled} aria-busy={status.refreshing} onclick={() => store.refresh()}>{REFRESH}</Button>
+    </div>
   </header>
 
   <div class="grid" style:--gap="{COLUMN_GAP}px">
     {#each columns as column, c (c)}
       <div class="column">
         {#each column as index (sessions[index].slug)}
-          <SessionCard row={sessions[index]} position={index} {onOpen} />
+          <SessionCard
+            row={sessions[index]}
+            position={index}
+            {onOpen}
+            section={sections[index]}
+            git={gitLine(status.sessions?.[sessions[index].slug]?.repos)}
+            {now}
+            onExpand={(slug) => expanded.add(slug)} />
         {/each}
       </div>
     {/each}
@@ -53,7 +105,15 @@
   header {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
+    align-items: start;
+  }
+
+  .heading {
+    display: flex;
+    flex-direction: column;
     align-items: center;
+    gap: calc(6px * var(--ui-scale));
+    text-align: center;
   }
 
   h1 {
@@ -63,8 +123,37 @@
     color: var(--text-primary);
   }
 
+  .freshness {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: calc(8px * var(--ui-scale));
+    font: var(--machine-xs);
+    color: var(--text-muted);
+  }
+
+  .freshness.warn {
+    color: var(--state-waiting);
+  }
+
   .actions {
     justify-self: end;
+  }
+
+  .spinning :global(.icon) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spinning :global(.icon) {
+      animation: none;
+    }
   }
 
   .grid {

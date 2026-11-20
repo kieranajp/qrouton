@@ -41,3 +41,22 @@ export const ICONS = Object.freeze({
 });
 
 /** @typedef {keyof typeof ICONS} IconName */
+
+/** @type {Partial<Record<IconName, string>>} */
+export const ICON_COLOURS = Object.freeze({
+  new: "var(--accent-label)",
+  agent: "var(--accent-action)",
+  shell: "var(--accent-action)",
+  pending: "var(--text-faint)",
+  excluded: "var(--text-muted)",
+  succeeded: "var(--state-success)",
+  failed: "var(--state-failed)",
+  running: "var(--state-running)",
+  waiting: "var(--state-waiting)",
+  editing: "var(--role-editing)",
+  reference: "var(--role-reference)",
+  "pull-open": "var(--pr-open)",
+  "pull-draft": "var(--pr-draft)",
+  "pull-merged": "var(--pr-merged)",
+  "pull-closed": "var(--pr-closed)",
+});

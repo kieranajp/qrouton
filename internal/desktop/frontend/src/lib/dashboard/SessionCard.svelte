@@ -1,17 +1,28 @@
 <script>
+  import { tick } from "svelte";
   import { MODE_LABELS } from "../bridge/generated.js";
   import { age } from "../relative.js";
   import { shortcut } from "../shortcuts.js";
-  import { guided, repoList } from "./dashboard.js";
+  import { SHOWN_PULLS, guided, repoList, showMore, showMoreLabel } from "./dashboard.js";
+  import PullBlock from "./PullBlock.svelte";
 
-  /** @type {{row: {slug: string, name: string, mode?: string, repos?: {name: string}[], opened: string}, position: number, onOpen: (slug: string) => void}} */
-  let { row, position, onOpen } = $props();
+  /** @type {{row: {slug: string, name: string, mode?: string, repos?: {name: string}[], opened: string}, position: number, onOpen: (slug: string) => void, section: {shown: import("./dashboard.js").PullRequest[], more: number, note: string}, git: string, now: number, onExpand: (slug: string) => void}} */
+  let { row, position, onOpen, section, git, now, onExpand } = $props();
 
   let repos = $derived(repoList(row.repos));
   let hint = $derived(shortcut(position));
+
+  /** @type {HTMLElement} */
+  let card;
+
+  async function expand() {
+    onExpand(row.slug);
+    await tick();
+    card.querySelectorAll("a")[SHOWN_PULLS]?.focus();
+  }
 </script>
 
-<article class="card" data-card={row.slug}>
+<article class="card" data-card={row.slug} bind:this={card}>
   <button type="button" class="head" onclick={() => onOpen(row.slug)}>
     <span class="top">
       <span class="title">{row.name}</span>
@@ -20,9 +31,22 @@
     <span class="meta">
       <span class="repos" title={repos}>{repos}</span>
       {#if guided(row)}<span class="tag">{MODE_LABELS.RPI}</span>{/if}
-      <span class="age">{age(row.opened)}</span>
+    </span>
+    <span class="meta">
+      <span class="git">{git}</span>
+      <span class="age">{age(row.opened, now)}</span>
     </span>
   </button>
+  {#each section.shown as pr (`${pr.repo}#${pr.number}`)}
+    <PullBlock {pr} {now} />
+  {/each}
+  {#if section.more}
+    <button type="button" class="more" aria-label={showMoreLabel(section.more, row.name)} onclick={expand}
+      >{showMore(section.more)}</button>
+  {/if}
+  {#if section.note}
+    <p class="note">{section.note}</p>
+  {/if}
 </article>
 
 <style>
@@ -109,9 +133,44 @@
     color: var(--state-guided);
   }
 
+  .git {
+    min-width: 0;
+    color: var(--text-muted);
+  }
+
   .age {
     flex: none;
     margin-left: auto;
+    color: var(--text-faint);
+  }
+
+  .more {
+    width: 100%;
+    padding: calc(8px * var(--ui-scale)) calc(14px * var(--ui-scale));
+    border: 0;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--surface-chrome);
+    font: var(--machine-xs);
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .more:hover {
+    background: var(--wash-selected);
+    color: var(--text-primary);
+  }
+
+  .more:focus-visible {
+    outline: 2px solid var(--accent-action);
+    outline-offset: -2px;
+  }
+
+  .note {
+    margin: 0;
+    padding: calc(9px * var(--ui-scale)) calc(14px * var(--ui-scale));
+    border-top: 1px solid var(--border-subtle);
+    font: var(--machine-xs);
     color: var(--text-faint);
   }
 </style>
