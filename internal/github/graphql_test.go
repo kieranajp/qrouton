@@ -237,7 +237,27 @@ func TestWithoutRequestIDMakesTwoReportsOfOneFailureEqual(t *testing.T) {
 	if first != second || !strings.HasPrefix(first, "Something went wrong") {
 		t.Fatalf("normalised to %q and %q", first, second)
 	}
-	if got := WithoutRequestID("502 Bad Gateway"); got != "502 Bad Gateway" {
-		t.Fatalf("a message with no id became %q", got)
+	for _, plain := range []string{"502 Bad Gateway", "dial tcp [2001:db8:85a3:0:0:8a2e:370:7334]:443: refused"} {
+		if got := WithoutRequestID(plain); got != plain {
+			t.Fatalf("a message with no request id became %q", got)
+		}
 	}
+}
+
+// A revoked token on a spent budget must still read as signed out, the one cause the user can fix.
+func TestGraphQLA401ThatSpendsTheLastPointIsATokenRejectionAndAPause(t *testing.T) {
+	client := graphQLServer(t, answer(http.StatusUnauthorized, map[string]string{"x-ratelimit-remaining": "0"}, `{"message":"Bad credentials"}`))
+	_, err := GraphQL(context.Background(), client, "token", "q", nil, nil)
+	rateLimitUntil(t, err)
+	if !errors.Is(err, ErrTokenRejected) {
+		t.Fatalf("err = %v, want a token rejection beside the pause", err)
+	}
+}
+
+// Undecodable data on the last point is a failure, but dropping the pause would keep spending a spent budget.
+func TestGraphQLUndecodableDataOnTheLastPointKeepsThePause(t *testing.T) {
+	client := graphQLServer(t, answer(http.StatusOK, map[string]string{"x-ratelimit-remaining": "0"}, `{"data":[1]}`))
+	var out map[string]json.RawMessage
+	_, err := GraphQL(context.Background(), client, "token", "q", nil, &out)
+	rateLimitUntil(t, err)
 }

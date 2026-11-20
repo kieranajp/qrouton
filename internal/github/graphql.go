@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -66,24 +67,32 @@ func GraphQL(ctx context.Context, client *http.Client, token, query string, vars
 		return nil, limited
 	}
 	switch {
-	case spent != nil && (decodeErr != nil || resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices):
-		return nil, spent
 	case resp.StatusCode == http.StatusUnauthorized:
-		return nil, fmt.Errorf("%w: %s", ErrTokenRejected, resp.Status)
+		return nil, withPause(fmt.Errorf("%w: %s", ErrTokenRejected, resp.Status), spent)
+	case spent != nil && (resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices):
+		return nil, spent
 	case resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices:
 		return nil, fmt.Errorf("%w: %s", ErrUnexpectedStatus, resp.Status)
 	case decodeErr != nil:
-		return nil, decodeErr
+		return nil, withPause(decodeErr, spent)
 	}
 	if out != nil && len(body.Data) > 0 {
 		if err := json.Unmarshal(body.Data, out); err != nil {
-			return nil, err
+			return nil, withPause(err, spent)
 		}
 	}
 	if spent != nil {
 		return body.Errors, spent
 	}
 	return body.Errors, nil
+}
+
+// withPause keeps a spent budget beside another failure, so the caller still waits for the reset.
+func withPause(err error, spent *RateLimitError) error {
+	if spent == nil {
+		return err
+	}
+	return errors.Join(err, spent)
 }
 
 // refusedForLimit is a response whose body says GitHub refused it for a rate limit.
@@ -99,7 +108,6 @@ func refusedForLimit(status int, header http.Header, body graphQLResponse) *Rate
 	return nil
 }
 
-// lastPointSpent is a response that left no budget for the next request.
 func lastPointSpent(header http.Header) *RateLimitError {
 	if remaining, err := strconv.Atoi(strings.TrimSpace(header.Get(rateLimitRemainingHeader))); err == nil && remaining == 0 {
 		return &RateLimitError{Until: resetAt(clock(), header)}
@@ -141,7 +149,7 @@ func retryAfter(now time.Time, header http.Header) time.Time {
 
 var requestID = regexp.MustCompile(requestIDPattern)
 
-// WithoutRequestID is message less GitHub's per-request id, so two reports of one failure compare equal.
+// WithoutRequestID drops the request id GitHub quotes in a generic error, so two reports of one failure compare equal.
 func WithoutRequestID(message string) string {
 	return requestID.ReplaceAllString(message, "")
 }

@@ -28,8 +28,8 @@ const (
 	secondaryLimitPhrase     = "secondary rate limit"
 	rateLimitFallback        = time.Minute
 	rateLimitedFormat        = "%v until %s"
-	// requestIDPattern is the id GitHub puts in a generic error, such as C0A1:2B3C:4D5E6F:7A8B9C:65A1B2C3.
-	requestIDPattern = `\b[0-9A-Fa-f]+(?::[0-9A-Fa-f]+){3,}\b`
+	// requestIDPattern is the quoted id in GitHub's generic error, such as `C0A1:2B3C:4D5E6F:7A8B9C:65A1B2C3`.
+	requestIDPattern = "`[0-9A-Fa-f]+(?::[0-9A-Fa-f]+){3,}`"
 
 	notFoundType = "NOT_FOUND"
 

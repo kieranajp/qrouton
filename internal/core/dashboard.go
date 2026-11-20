@@ -386,6 +386,7 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 		d.mu.Unlock()
 		return pullsCache{}, false
 	case limited != nil && results == nil:
+		d.logOnce("", err)
 		return pullsCache{}, false
 	case err != nil && limited == nil:
 		d.mu.Lock()

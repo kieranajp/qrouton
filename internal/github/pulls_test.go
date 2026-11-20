@@ -135,8 +135,12 @@ func TestBranchPullRequestsErrorWithNoAliasPathFailsTheWholeCall(t *testing.T) {
 
 func TestBranchPullRequestsPassesRateLimitsAndTokenRejectionsThrough(t *testing.T) {
 	client := graphQLServer(t, answer(http.StatusOK, map[string]string{"x-ratelimit-remaining": "0"}, `{"data":null}`))
-	_, _, err := BranchPullRequests(context.Background(), client, "token", []BranchTarget{{Owner: "acme", Name: "web", Branch: "feat"}})
+	// Results here would hold an empty list per target and wipe every cached row.
+	viewer, results, err := BranchPullRequests(context.Background(), client, "token", []BranchTarget{{Owner: "acme", Name: "web", Branch: "feat"}})
 	rateLimitUntil(t, err)
+	if viewer != "" || results != nil {
+		t.Fatalf("a spent budget with no data answered viewer %q, results %#v", viewer, results)
+	}
 
 	client = graphQLServer(t, answer(http.StatusUnauthorized, nil, `{}`))
 	if _, _, err := BranchPullRequests(context.Background(), client, "token", []BranchTarget{{Owner: "acme", Name: "web", Branch: "feat"}}); !errors.Is(err, ErrTokenRejected) {
