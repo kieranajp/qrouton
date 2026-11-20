@@ -309,8 +309,8 @@ func (d *Dashboard) publish() {
 	}
 }
 
-// refresh asks GitHub for every session's pull requests at once. A session
-// that cannot be answered keeps what it had.
+// refresh asks GitHub for every session's pull requests at once. A branch
+// that cannot be answered keeps its rows unless GitHub names another viewer.
 func (d *Dashboard) refresh(ctx context.Context) {
 	sessions := d.scan()
 	var targets []github.BranchTarget
@@ -356,7 +356,8 @@ func (d *Dashboard) refresh(ctx context.Context) {
 }
 
 // fetch updates the rows in memory and answers what pulls.json should hold, or
-// false when GitHub answered for no repository.
+// false when pulls.json keeps what it has. Rows outlive a failed alias only for
+// the viewer who fetched them.
 func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targets []github.BranchTarget, index map[string]int) (pullsCache, bool) {
 	_, token := d.api.credential(ctx)
 	if ctx.Err() != nil {
@@ -398,6 +399,7 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	reuse := viewer == "" || d.viewer == "" || viewer == d.viewer
 	next := map[string]map[string]map[string][]status.PullRequest{}
 	answered := false
 	for _, s := range sessions {
@@ -414,7 +416,7 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 			default:
 				d.logOnceLocked(repo.key(), result.Err)
 				previous, kept := d.pulls[s.slug][repo.id][repo.target.Branch]
-				if !kept {
+				if !reuse || !kept {
 					continue
 				}
 				rows = previous
@@ -427,7 +429,11 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 	}
 	if !answered {
 		d.failed = true
-		return pullsCache{}, false
+		if reuse {
+			return pullsCache{}, false
+		}
+		d.pulls, d.viewer, d.checkedAt, d.signedOut = next, viewer, time.Time{}, false
+		return pullsCache{SchemaVersion: pullsCacheSchemaVersion, Viewer: viewer, Sessions: next}, true
 	}
 	d.pulls = next
 	d.viewer, d.checkedAt = viewer, d.now()

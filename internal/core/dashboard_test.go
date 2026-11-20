@@ -21,13 +21,15 @@ import (
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
-// boardAnswer is what the fake GitHub says: rows and errors per repository
-// name, or one error for the whole request. spent rides beside the rows.
+// boardAnswer is what the fake GitHub says: the viewer (kieran unless set or anonymous), rows
+// and errors per repository name, or one error for the whole request. spent rides beside the rows.
 type boardAnswer struct {
-	prs   map[string][]github.PullRequest
-	errs  map[string]error
-	err   error
-	spent error
+	viewer    string
+	anonymous bool
+	prs       map[string][]github.PullRequest
+	errs      map[string]error
+	err       error
+	spent     error
 }
 
 type fakeBoardGitHub struct {
@@ -75,7 +77,11 @@ func (g *fakeBoardGitHub) pulls(_ context.Context, _ string, targets []github.Br
 		}
 		results[i].PullRequests = append([]github.PullRequest{}, g.answer.prs[target.Name]...)
 	}
-	return "kieran", results, g.answer.spent
+	viewer := g.answer.viewer
+	if viewer == "" && !g.answer.anonymous {
+		viewer = "kieran"
+	}
+	return viewer, results, g.answer.spent
 }
 
 type testBoard struct {
@@ -742,5 +748,75 @@ func TestDashboardWhereEveryAliasIsNotFoundIsAFreshEmptyAnswer(t *testing.T) {
 	}
 	if rows := titles(b.rows(root)); len(rows) != 0 {
 		t.Fatalf("rows after every alias was not found = %v", rows)
+	}
+}
+
+// Catches a failed alias keeping rows another account fetched, after gh auth switch.
+func TestDashboardDropsAnotherViewersRowsForAFailedAlias(t *testing.T) {
+	b := newTestBoard(t)
+	shared := b.session(t, "shared", editing("web", "feat/x"))
+	private := b.session(t, "private", editing("api", "feat/x"))
+	b.gh.say(boardAnswer{prs: map[string][]github.PullRequest{"web": {pr(1, "a")}, "api": {pr(3, "secret")}}})
+	b.refresh(t.Context())
+
+	b.gh.say(boardAnswer{
+		viewer: "other",
+		prs:    map[string][]github.PullRequest{"web": {pr(2, "b")}},
+		errs:   map[string]error{"api": fmt.Errorf("github: %w: Could not access", github.ErrQuery)},
+	})
+	b.refresh(t.Context())
+
+	if rows := titles(b.rows(private)); len(rows) != 0 {
+		t.Fatalf("the private session kept the previous viewer's rows: %v", rows)
+	}
+	if rows := titles(b.rows(shared)); !reflect.DeepEqual(rows, []string{"acme/web#b"}) {
+		t.Fatalf("the shared session's rows = %v", rows)
+	}
+	if s := b.Snapshot(); s.Viewer != "other" || len(s.Sessions["private"].PullRequests) != 0 {
+		t.Fatalf("snapshot after the viewer changed = %+v", s)
+	}
+	if c := b.cached(t); c.Viewer != "other" || c.Sessions["private"] != nil {
+		t.Fatalf("pulls.json kept the previous viewer's rows: %+v", c)
+	}
+}
+
+// Catches a refresh that names a new viewer but answers no alias leaving the old viewer's rows on screen and on disk, or the header signed out.
+func TestDashboardDropsAnotherViewersRowsWhenEveryAliasFails(t *testing.T) {
+	b := newTestBoard(t)
+	root := b.session(t, "pulls", editing("web", "feat/x"), editing("api", "feat/x"))
+	b.gh.say(boardAnswer{prs: map[string][]github.PullRequest{"web": {pr(1, "a")}, "api": {pr(3, "c")}}})
+	b.refresh(t.Context())
+	b.gh.token = ""
+	b.refresh(t.Context())
+	b.gh.token = "t"
+
+	b.clock.advance(time.Minute)
+	broken := fmt.Errorf("github: %w: Could not access", github.ErrQuery)
+	b.gh.say(boardAnswer{viewer: "other", errs: map[string]error{"web": broken, "api": broken}})
+	b.refresh(t.Context())
+
+	if rows := titles(b.rows(root)); len(rows) != 0 {
+		t.Fatalf("rows after another viewer answered nothing = %v", rows)
+	}
+	if s := b.Snapshot(); s.Viewer != "other" || !s.Failed || s.SignedOut || !s.CheckedAt.IsZero() {
+		t.Fatalf("status after another viewer answered nothing = %+v", s)
+	}
+	if c := b.cached(t); c.Viewer != "other" || len(c.Sessions) != 0 || !c.CheckedAt.IsZero() {
+		t.Fatalf("pulls.json after another viewer answered nothing = %+v", c)
+	}
+}
+
+// Catches an answer that names no viewer dropping a failed alias's rows: only a named, different viewer proves the account changed.
+func TestDashboardAnswerNamingNoViewerKeepsAFailedAliasRows(t *testing.T) {
+	b := newTestBoard(t)
+	root := b.session(t, "pulls", editing("web", "feat/x"), editing("api", "feat/x"))
+	b.gh.say(boardAnswer{prs: map[string][]github.PullRequest{"web": {pr(1, "a")}, "api": {pr(3, "c")}}})
+	b.refresh(t.Context())
+
+	broken := fmt.Errorf("github: %w: Something went wrong", github.ErrQuery)
+	b.gh.say(boardAnswer{anonymous: true, prs: map[string][]github.PullRequest{"api": {pr(4, "d")}}, errs: map[string]error{"web": broken}})
+	b.refresh(t.Context())
+	if rows := titles(b.rows(root)); !reflect.DeepEqual(rows, []string{"acme/web#a", "acme/api#d"}) {
+		t.Fatalf("rows after an answer naming no viewer = %v", rows)
 	}
 }
