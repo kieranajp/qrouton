@@ -17,6 +17,7 @@ export const TODO = [
   "## Before merge",
   "",
   "- [x] Merge acme/api#12 — live as v2.94.0",
+  "  - Where: https://github.com/acme/api/pull/12",
   "- [ ] Apply the migration",
   "  - Where: enclave · production",
   "  - Check: `select count(*) from tenants`",
@@ -28,6 +29,7 @@ export const TODO = [
   "## Ship",
   "",
   "- [ ] Announce in the channel",
+  "  - Where: acme/web#7",
   "  - Check: the post has a link",
   "",
 ].join("\n");

@@ -20,7 +20,7 @@ test("the tally counts open and done items, leaving out the ones not needed", as
   await expect(page.locator("[data-blocking]")).toHaveText("1 blocking");
 });
 
-test("an item shows its fields, prose and tracked pull request", async ({ page }) => {
+test("an item shows its fields and prose", async ({ page }) => {
   await open(page);
   const apply = item(page, "Apply the migration");
   await expect(apply.locator("[data-where]")).toHaveText("Where enclave · production");
@@ -29,7 +29,6 @@ test("an item shows its fields, prose and tracked pull request", async ({ page }
   await expect(apply).toContainText("This can run alongside the items above.");
   await expect(item(page, "Announce in the channel").locator("[data-check]")).toHaveText("the post has a link");
   await expect(item(page, "Announce in the channel").locator("[data-check] code")).toHaveCount(0);
-  await expect(item(page, "Merge acme/api#12").locator("[data-pull]")).toContainText("Merged · acme/api#12");
 });
 
 test("a tick saves the item's line with its box checked", async ({ page }) => {
@@ -131,4 +130,29 @@ test("items fit the pane without scrolling sideways", async ({ page }) => {
   await open(page);
   const overflow = await page.locator(".sheet").evaluate((el) => el.scrollWidth - el.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+// Catches a PR shown twice, a state word beside the icon, or an icon on a PR the dashboard does not track.
+test("each pull request is one chip linking to GitHub, with a state icon only when tracked", async ({ page }) => {
+  await open(page);
+  const merge = item(page, "Merge acme/api#12");
+  const tracked = merge.locator("[data-pull]");
+  await expect(tracked).toHaveCount(1);
+  await expect(tracked).toHaveText("acme/api#12");
+  await expect(tracked).toHaveAttribute("href", "https://github.com/acme/api/pull/12");
+  await expect(tracked.getByRole("img", { name: "Merged" })).toHaveCount(1);
+  await expect(merge.locator("[data-where]")).toHaveCount(0);
+  await tracked.click();
+  await expect.poll(() => page.evaluate(() => window.openedURL)).toBe("https://github.com/acme/api/pull/12");
+
+  const announce = item(page, "Announce in the channel");
+  const untracked = announce.locator("[data-pull]");
+  await expect(untracked).toHaveCount(1);
+  await expect(untracked).toHaveText("acme/web#7");
+  await expect(untracked.getByRole("img")).toHaveCount(0);
+  await expect(announce.locator("[data-where]")).toHaveCount(0);
+  await untracked.click();
+  await expect.poll(() => page.evaluate(() => window.openedURL)).toBe("https://github.com/acme/web/pull/7");
+  await expect(item(page, "Apply the migration").locator("[data-where]")).toHaveText("Where enclave · production");
+  expect(await saves(page)).toHaveLength(0);
 });

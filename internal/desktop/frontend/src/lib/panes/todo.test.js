@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseTodo, pullFor, reapply, runCommand, setState, spliceDraft, todoKey } from "./todo.js";
+import { parseTodo, pullRefs, reapply, runCommand, setState, spliceDraft, todoKey } from "./todo.js";
 
 const doc = (...lines) => lines.join("\n");
 
@@ -93,16 +93,18 @@ test("a key names the section as well as the text", () => {
   assert.notEqual(todoKey({ section: "A", text: "Ship", nth: 0 }), todoKey({ section: "B", text: "Ship", nth: 0 }));
 });
 
-test("a pull request is found by URL or by org/repo#n, never by a bare number", () => {
-  const pulls = [
-    { repo: "acme/api", number: 12, title: "API" },
-    { repo: "acme/web", number: 7, title: "Web" },
-  ];
-  assert.equal(pullFor({ where: "https://github.com/acme/api/pull/12", text: "Merge" }, pulls)?.title, "API");
-  assert.equal(pullFor({ where: "", text: "Merge Acme/Web#7 first" }, pulls)?.title, "Web");
-  assert.equal(pullFor({ where: "", text: "Merge #12" }, pulls), null);
-  assert.equal(pullFor({ where: "", text: "Merge acme/api#13" }, pulls), null);
-  assert.equal(pullFor({ where: "", text: "Merge acme/api#12" }, null), null);
+// Catches a PR shown twice, a bare #n linked to a guessed repository, or a tracked PR missing its state.
+test("each pull request an item names is one GitHub link, tracked or not, and Where keeps only the rest", () => {
+  const pulls = [{ repo: "acme/api", number: 12, title: "API" }];
+  const api = { repo: "acme/api", number: 12, url: "https://github.com/acme/api/pull/12", pull: pulls[0] };
+  const web = { repo: "acme/web", number: 7, url: "https://github.com/acme/web/pull/7", pull: null };
+  assert.deepEqual(pullRefs({ where: "https://github.com/acme/api/pull/12", text: "Merge acme/api#12 then acme/web#7" }, pulls), {
+    refs: [api, web],
+    where: "",
+  });
+  assert.deepEqual(pullRefs({ where: "acme/web#7 (staging)", text: "Merge #12" }, pulls), { refs: [web], where: "(staging)" });
+  assert.deepEqual(pullRefs({ where: "Phase 3 (acme/web#7)", text: "Merge" }, pulls), { refs: [web], where: "Phase 3" });
+  assert.deepEqual(pullRefs({ where: "enclave · production", text: "Merge" }, null), { refs: [], where: "enclave · production" });
 });
 
 test("a run command loses one pair of backticks and nothing else", () => {

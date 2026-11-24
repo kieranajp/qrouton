@@ -121,18 +121,27 @@ export function reapply(parsed, pending) {
 const PULL_URL = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/gi;
 const PULL_REF = /(?<![\w./-])([\w.-]+\/[\w.-]+)#(\d+)\b/g;
 
-/** The tracked pull request an item names by URL or by org/repo#n. A bare #n names no repository.
+/** @template P @typedef {{repo: string, number: number, url: string, pull: P | null}} PullRef */
+
+/** Each pull request an item names by URL or org/repo#n, once, and what Where says besides them. A bare #n names no repository.
  * @template {{repo: string, number: number}} P
- * @param {{where: string, text: string}} item @param {P[] | null | undefined} pulls @returns {P | null} */
-export function pullFor(item, pulls) {
+ * @param {{where: string, text: string}} item @param {P[] | null | undefined} pulls @returns {{refs: PullRef<P>[], where: string}} */
+export function pullRefs(item, pulls) {
+  /** @type {PullRef<P>[]} */
+  const refs = [];
+  let where = item.where;
   for (const value of [item.where, item.text]) {
     const named = [...value.matchAll(PULL_URL), ...value.matchAll(PULL_REF)].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-    for (const [, repo, number] of named) {
-      const pull = (pulls ?? []).find((pr) => pr.repo.toLowerCase() === repo.toLowerCase() && pr.number === Number(number));
-      if (pull) return pull;
+    for (const match of named) {
+      if (value === item.where) where = where.replace(match[0], " ");
+      const repo = match[1];
+      const number = Number(match[2]);
+      if (refs.some((ref) => ref.repo.toLowerCase() === repo.toLowerCase() && ref.number === number)) continue;
+      const pull = (pulls ?? []).find((pr) => pr.repo.toLowerCase() === repo.toLowerCase() && pr.number === number) ?? null;
+      refs.push({ repo, number, url: `https://github.com/${repo}/pull/${number}`, pull });
     }
   }
-  return null;
+  return { refs, where: /[\p{L}\p{N}]/u.test(where) ? where.replace(/\(\s*\)/g, " ").replace(/\s+/g, " ").trim() : "" };
 }
 
 /** @param {string} value */

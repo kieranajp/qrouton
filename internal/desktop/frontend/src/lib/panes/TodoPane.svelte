@@ -21,7 +21,7 @@
   import { reader, scrolls } from "./reader.svelte.js";
   import { dealt } from "./sections.js";
   import { sendTodoUpdate } from "./spec-calls.js";
-  import { parseTodo, pullFor, reapply, runCommand, spliceDraft, todoKey } from "./todo.js";
+  import { parseTodo, pullRefs, reapply, runCommand, spliceDraft, todoKey } from "./todo.js";
   import "./markdown.css";
 
   /** @type {{doc: {text: string, hash?: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
@@ -198,7 +198,7 @@
                   {#each group.rows as row (row.item.line)}
                     {@const item = row.item}
                     {@const save = saves.get(row.key)}
-                    {@const pull = pullFor(item, tracked)}
+                    {@const named = pullRefs(item, tracked)}
                     <li
                       class="item"
                       class:next={row.key === next}
@@ -218,22 +218,29 @@
                         </Checkbox>
                         <span class="save" data-save={save?.state ?? ""}>{save ? (STATES[save.state] ?? "") : ""}</span>
                       </div>
-                      {#if row.key === next || (row.state === "open" && item.blocks) || item.where || pull}
+                      {#if row.key === next || (row.state === "open" && item.blocks) || named.where || named.refs.length > 0}
                         <div class="chips">
                           {#if row.key === next}<Chip tone="running" selected data-next>Next</Chip>{/if}
                           {#if row.state === "open" && item.blocks}<Chip tone="waiting" data-blocks>Blocks {item.blocks}</Chip>{/if}
-                          {#if item.where}<Chip data-where>Where {item.where}</Chip>{/if}
-                          {#if pull}
+                          {#if named.where}<Chip data-where>Where {named.where}</Chip>{/if}
+                          {#each named.refs as ref (ref.url)}
                             <a
                               class="pull"
-                              href={pull.url}
-                              title={pull.title}
-                              data-pull
-                              onclick={(event) => (event.preventDefault(), openURL(pull.url))}>
-                              <span class="pull-state" style:color={ICON_COLOURS[ICONS[pull.state]]}><Icon name={ICONS[pull.state]} inherit /></span>
-                              {STATE_WORDS[pull.state]} · {pull.repo}#{pull.number}
+                              href={ref.url}
+                              title={ref.pull?.title ?? null}
+                              data-pull={ref.pull?.state ?? ""}
+                              onclick={(event) => (event.preventDefault(), openURL(ref.url))}>
+                              {#if ref.pull}
+                                <span
+                                  class="pull-state"
+                                  role="img"
+                                  aria-label={STATE_WORDS[ref.pull.state]}
+                                  title={STATE_WORDS[ref.pull.state]}
+                                  style:color={ICON_COLOURS[ICONS[ref.pull.state]]}><Icon name={ICONS[ref.pull.state]} inherit /></span>
+                              {/if}
+                              {ref.pull?.repo ?? ref.repo}#{ref.number}
                             </a>
-                          {/if}
+                          {/each}
                         </div>
                       {/if}
                       {#if item.run || item.check}
