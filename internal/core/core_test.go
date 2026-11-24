@@ -620,7 +620,7 @@ func TestALeadBadgePathOpensItsDocument(t *testing.T) {
 // that window rather than stack a second copy beside it.
 func TestTheDocumentChipSelectsTheWindowTheAgentOpened(t *testing.T) {
 	w, _ := testWindows(t)
-	w.newDocument = func(string) (string, error) {
+	w.newDocument = func(*SessionState, string) (string, error) {
 		t.Fatal("the chip opened a second window on a document already up")
 		return "", nil
 	}
@@ -753,7 +753,7 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 
 	reg := testRegistry(t, dir)
 	state := reg.Current()
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, railFacts{}, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -774,7 +774,7 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 func welcomingFor(t *testing.T, reg *Sessions, root string, cfg *config.Config) bool {
 	t.Helper()
 	r := newFakeClient()
-	pushChrome(reg, root, cfg, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, cfg, nil, nil, railFacts{}, r.Emit)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	fields, ok := r.events[chromeEvent].(status.Fields)
@@ -852,7 +852,7 @@ func TestChromeNamesTheTerminalOfEveryBootedSessionAndTheSlugOnScreen(t *testing
 	}
 
 	reg := testRegistry(t, filepath.Join(root, "octopus"))
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, railFacts{}, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -899,7 +899,7 @@ func TestAttentionOnABackgroundSessionsListenerMarksOnlyItsRow(t *testing.T) {
 	if err := handle.Attention(context.Background(), status.ActivityWaiting, 1); err != nil {
 		t.Fatal(err)
 	}
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, railFacts{}, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -935,7 +935,7 @@ func TestOnlyTheSessionOnScreenCarriesMeasuredRepos(t *testing.T) {
 	}
 
 	measured := status.RepoStat{Name: "lifesum/svc", Role: "editing", Commits: 3, Measured: true}
-	pushChrome(testRegistry(t, shown), root, nil, map[string][]status.RepoStat{shown: {measured}}, nil, nil, r.Emit)
+	pushChrome(testRegistry(t, shown), root, nil, map[string][]status.RepoStat{shown: {measured}}, nil, railFacts{}, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -1008,13 +1008,13 @@ func TestSwitchingSessionsDropsThePreviousSessionsRepos(t *testing.T) {
 	}
 
 	reg := testRegistry(t, first)
-	pushChrome(reg, root, nil, measured, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, measured, nil, railFacts{}, r.Emit)
 	if repos := pushedChrome(t, r).Repos; len(repos) != 1 || repos[0].Name != "lifesum/svc" {
 		t.Fatalf("chrome repos = %+v, want what was measured for the session on screen", repos)
 	}
 
 	reg.reveal(reg.add(second, []string{"/bin/cat"}, os.Environ()))
-	pushChrome(reg, root, nil, measured, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, measured, nil, railFacts{}, r.Emit)
 	if repos := pushedChrome(t, r).Repos; len(repos) != 0 {
 		t.Fatalf("chrome repos = %+v after the switch, want none of the previous session's", repos)
 	}
@@ -1026,7 +1026,7 @@ func TestSwitchingSessionsDropsThePreviousSessionsRepos(t *testing.T) {
 func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.T) {
 	root := t.TempDir()
 	reg := testRegistry(t, sessionDir(t, root, "octopus"))
-	var pushes, all, arrivals atomic.Int64
+	var pushes, all, arrivals, todos atomic.Int64
 	emit := func(event string, _ any) {
 		if event == chromeEvent {
 			pushes.Add(1)
@@ -1040,6 +1040,10 @@ func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.
 		in: func(string) (int, bool) {
 			arrivals.Add(1)
 			return 0, true
+		},
+		todos: func(string) map[string]status.TodoRollup {
+			todos.Add(1)
+			return map[string]status.TodoRollup{}
 		},
 	}
 
@@ -1058,11 +1062,17 @@ func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.
 	if got := arrivals.Load(); got != 0 {
 		t.Fatalf("the fast ticker recounted an arrival %d times", got)
 	}
+	if got := todos.Load(); got != 1 {
+		t.Fatalf("every session's todos were read %d times over %d pushes, want the one before the loop", got, pushes.Load())
+	}
 
 	reg.reveal(reg.add(sessionDir(t, root, "kraken"), []string{"/bin/cat"}, os.Environ()))
 	waitFor(t, "the arrival to be recounted", func() bool { return arrivals.Load() == 1 })
 	if got := all.Load(); got != 1 {
 		t.Fatalf("switching recounted every session's unseen documents, %d counts in all", got)
+	}
+	if got := todos.Load(); got != 1 {
+		t.Fatalf("switching reread every session's todos, %d reads in all", got)
 	}
 }
 
@@ -1225,7 +1235,7 @@ func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
 	}
 	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
 
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, railFacts{}, r.Emit)
 	crashed := pushedChrome(t, r)
 	if crashed.Terminal != "" {
 		t.Fatalf("the session on screen still names terminal %q after its supervisor died", crashed.Terminal)
@@ -1250,7 +1260,7 @@ func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
 	if tabs := windows.surfaces(dead).Tabs; len(tabs) != 0 {
 		t.Fatalf("the reboot left the dead session's tabs open: %+v", tabs)
 	}
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, railFacts{}, r.Emit)
 	if got := rowTerminal(t, pushedChrome(t, r), "octopus"); got != booted.terminal {
 		t.Fatalf("the row names terminal %q, want the session just booted %q", got, booted.terminal)
 	}
@@ -1387,7 +1397,7 @@ func TestUnloadStopsOwnedResourcesAndRetainsAResumableRow(t *testing.T) {
 	if content, err := os.ReadFile(marker); err != nil || string(content) != "retained" {
 		t.Fatalf("Unload changed session files: %q, %v", content, err)
 	}
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, railFacts{}, r.Emit)
 	fields := pushedChrome(t, r)
 	if len(fields.Sessions) != 1 || fields.Slug != "" || fields.Terminal != "" ||
 		rowTerminal(t, fields, "octopus") != "" || fields.Sessions[0].Activity != "" {
@@ -2772,8 +2782,9 @@ func TestUncommittedAnswersAClickAndNeverATicker(t *testing.T) {
 		}
 	}
 	counts := unseenCounts{
-		all: func(string) map[string]int { return map[string]int{} },
-		in:  func(string) (int, bool) { return 0, true },
+		all:   func(string) map[string]int { return map[string]int{} },
+		in:    func(string) (int, bool) { return 0, true },
+		todos: func(string) map[string]status.TodoRollup { return map[string]status.TodoRollup{} },
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -2934,7 +2945,7 @@ func TestCleanupRefusesADirectoryHoldingAnotherSessionsManifest(t *testing.T) {
 // does not race the background poller's own tick.
 func polledRail(t *testing.T, r *fakeClient, reg *Sessions, root string) []string {
 	t.Helper()
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, railFacts{}, r.Emit)
 	var slugs []string
 	for _, row := range lastChrome(t, r).Sessions {
 		slugs = append(slugs, row.Slug)

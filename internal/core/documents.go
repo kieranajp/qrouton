@@ -35,6 +35,7 @@ type Document struct {
 	Assets        []documentAsset `json:"assets,omitempty"`
 	CurrentIndex  int             `json:"currentIndex,omitempty"`
 	Revision      uint64          `json:"revision,omitempty"`
+	Focus         uint64          `json:"focus,omitempty"`
 }
 
 type documentAsset struct {
@@ -131,6 +132,9 @@ func documentFor(window *agentWindow) Document {
 		Line:          first,
 		To:            last,
 		ViewportEpoch: viewportEpoch,
+	}
+	if rendered, ok := window.document(); ok {
+		doc.Focus = rendered.focus
 	}
 	if kind == kinds.Audit.Label() {
 		doc.Tells = status.AuditTells(window.opts.Content)

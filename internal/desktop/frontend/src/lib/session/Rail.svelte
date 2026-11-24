@@ -177,12 +177,15 @@
     };
   });
 
+  /** @returns {Promise<boolean>} whether the session showed; a refusal is reported on its row. */
   export async function openSession(slug) {
     try {
       await show(slug);
+      return true;
     } catch (err) {
       const reason = String(err?.message ?? "").trim();
       showRowNotice(slug, reason ? `${SESSION_SHOW_FAILED}: ${reason}` : SESSION_SHOW_FAILED, true);
+      return false;
     }
   }
 
@@ -376,6 +379,7 @@
         onPointerUp={finishPointer}
         onPointerCancel={cancelPointer}
         unseen={row.unseen}
+        todos={row.todos}
         stickerId={row.sticker}
         {stickers}
         stickerBusy={(pendingStickers[row.slug] ?? 0) > 0}

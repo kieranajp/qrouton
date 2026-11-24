@@ -3,9 +3,9 @@
   import StageSquare from "../overview/StageSquare.svelte";
   import { stageTone } from "../workflow.js";
   import { repositoryLine, summaryFacts } from "./rail.js";
-  let { initials = "", shortcut = "", name = "", repos = [], summary = {}, unseen = 0, idle = "", selected = false, context = "" } = $props();
+  let { initials = "", shortcut = "", name = "", repos = [], summary = {}, unseen = 0, todos = {}, idle = "", selected = false, context = "" } = $props();
   let repository = $derived(repositoryLine(repos));
-  let facts = $derived(summaryFacts(summary, unseen, idle));
+  let facts = $derived(summaryFacts(summary, unseen, idle, todos));
 </script>
 <div class="identity" class:selected class:running={Boolean(summary.running)}>
     <div class="avatar" class:keyed={shortcut}>
@@ -142,6 +142,10 @@
 
   .fact.unseen {
     color: var(--state-guided);
+  }
+
+  .fact.todos {
+    color: var(--artifact-todo);
   }
 
 </style>

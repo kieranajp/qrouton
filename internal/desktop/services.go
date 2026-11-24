@@ -72,6 +72,10 @@ func (w *Windows) OpenShell() (string, error) { return w.windows.OpenShell() }
 
 func (w *Windows) OpenDocument(name string) (string, error) { return w.windows.OpenDocument(name) }
 
+func (w *Windows) OpenDocumentAt(slug, name string, line int) (string, error) {
+	return w.windows.OpenDocumentAt(slug, name, line)
+}
+
 func (w *Windows) Select(slug, id string) error { return w.windows.Select(slug, id) }
 
 func (w *Windows) Reorder(slug, id string, to int) error { return w.windows.Reorder(slug, id, to) }

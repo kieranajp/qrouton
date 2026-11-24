@@ -156,3 +156,21 @@ test("each pull request is one chip linking to GitHub, with a state icon only wh
   await expect(item(page, "Apply the migration").locator("[data-where]")).toHaveText("Where enclave · production");
   expect(await saves(page)).toHaveLength(0);
 });
+
+// Catches a second open at the same item leaving the pane where the user scrolled, since only a reload re-scrolled it.
+test("each open at a line scrolls the pane back to that item, even at the same line", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 360 });
+  await open(page);
+  const announce = item(page, "Announce in the channel");
+  const line = Number(await announce.getAttribute("data-line"));
+  await expect(announce).not.toBeInViewport();
+
+  await page.evaluate((at) => window.focusLine(at, 1), line);
+  await expect(announce).toHaveClass(/marked/);
+  await expect(announce).toBeInViewport();
+
+  await page.evaluate(() => document.querySelectorAll("*").forEach((el) => (el.scrollTop = 0)));
+  await expect(announce).not.toBeInViewport();
+  await page.evaluate((at) => window.focusLine(at, 2), line);
+  await expect(announce).toBeInViewport();
+});

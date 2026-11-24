@@ -5,18 +5,15 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import Checkbox from "../core/Checkbox.svelte";
   import Chip from "../core/Chip.svelte";
-  import Icon from "../core/Icon.svelte";
-  import { ICON_COLOURS } from "../core/icons.js";
   import { dashboard } from "../dashboard.svelte.js";
-  import { STATE_WORDS } from "../dashboard/dashboard.js";
-  import { ICONS } from "../overview/pulls.js";
-  import { copyText, openURL } from "../wails.js";
+  import { copyText } from "../wails.js";
   import ArtifactPane from "./ArtifactPane.svelte";
   import CopyCode from "./CopyCode.svelte";
   import { links, viewport } from "./actions.js";
   import { answerable } from "./answerable.svelte.js";
   import { clampedSpan, holding } from "./deck.js";
   import MarkdownPane from "./MarkdownPane.svelte";
+  import PullChip from "./PullChip.svelte";
   import { render } from "./markdown.js";
   import { reader, scrolls } from "./reader.svelte.js";
   import { dealt } from "./sections.js";
@@ -24,7 +21,7 @@
   import { parseTodo, pullRefs, reapply, runCommand, spliceDraft, todoKey } from "./todo.js";
   import "./markdown.css";
 
-  /** @type {{doc: {text: string, hash?: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
+  /** @type {{doc: {text: string, hash?: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number, focus?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, slug = "", active = false, scrollRoot, onScroller } = $props();
 
   /** @typedef {import("./todo.js").Draft} Draft */
@@ -169,7 +166,7 @@
           bind:this={sheet}
           data-document-source={doc.source}
           use:links={doc.source}
-          use:port={{ id, active, scrollRoot, request: answers.epoch }}>
+          use:port={{ id, active, scrollRoot, request: `${answers.epoch}:${doc.focus ?? 0}` }}>
           <section class="hero" data-overview>
             <CapsLabel>To do · {todo.items.length} {todo.items.length === 1 ? "item" : "items"}</CapsLabel>
             <h1 class="display-lg">{heading}</h1>
@@ -224,22 +221,7 @@
                           {#if row.state === "open" && item.blocks}<Chip tone="waiting" data-blocks>Blocks {item.blocks}</Chip>{/if}
                           {#if named.where}<Chip data-where>Where {named.where}</Chip>{/if}
                           {#each named.refs as ref (ref.url)}
-                            <a
-                              class="pull"
-                              href={ref.url}
-                              title={ref.pull?.title ?? null}
-                              data-pull={ref.pull?.state ?? ""}
-                              onclick={(event) => (event.preventDefault(), openURL(ref.url))}>
-                              {#if ref.pull}
-                                <span
-                                  class="pull-state"
-                                  role="img"
-                                  aria-label={STATE_WORDS[ref.pull.state]}
-                                  title={STATE_WORDS[ref.pull.state]}
-                                  style:color={ICON_COLOURS[ICONS[ref.pull.state]]}><Icon name={ICONS[ref.pull.state]} inherit /></span>
-                              {/if}
-                              {ref.pull?.repo ?? ref.repo}#{ref.number}
-                            </a>
+                            <PullChip {ref} />
                           {/each}
                         </div>
                       {/if}
@@ -473,32 +455,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: calc(6px * var(--ui-scale));
-  }
-
-  .pull {
-    display: inline-flex;
-    align-items: center;
-    gap: calc(6px * var(--ui-scale));
-    padding: 2px calc(7px * var(--ui-scale));
-    border: 1px solid var(--border-subtle);
-    background: var(--surface-chrome);
-    font: var(--machine-sm);
-    font-size: calc(11px * var(--ui-scale));
-    color: var(--text-secondary);
-    text-decoration: none;
-  }
-
-  .pull:hover {
-    background: var(--wash-selected);
-  }
-
-  .pull-state {
-    display: inline-flex;
-  }
-
-  .pull-state :global(.icon) {
-    width: calc(13px * var(--ui-scale));
-    height: calc(13px * var(--ui-scale));
   }
 
   .fields {

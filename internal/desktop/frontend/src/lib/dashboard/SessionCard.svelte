@@ -2,14 +2,16 @@
   import { tick } from "svelte";
   import { age } from "../relative.js";
   import { shortcut } from "../shortcuts.js";
-  import { SHOWN_PULLS, repoList, showMore, showMoreLabel } from "./dashboard.js";
+  import { SHOWN_PULLS, repoList, showMore, showMoreLabel, todoItems, todoLine } from "./dashboard.js";
   import PullBlock from "./PullBlock.svelte";
 
-  /** @type {{row: {slug: string, name: string, repos?: {name: string}[], opened: string}, position: number, onOpen: (slug: string) => void, section: {shown: import("./dashboard.js").PullRequest[], more: number, note: string}, git: string, now: number, onExpand: (slug: string) => void}} */
-  let { row, position, onOpen, section, git, now, onExpand } = $props();
+  /** @type {{row: {slug: string, name: string, repos?: {name: string}[], opened: string, todos?: import("./dashboard.js").TodoRollup}, position: number, onOpen: (slug: string) => void, onOpenTodo: (slug: string, path: string, line: number) => void, section: {shown: import("./dashboard.js").PullRequest[], more: number, note: string}, git: string, now: number, onExpand: (slug: string) => void}} */
+  let { row, position, onOpen, onOpenTodo, section, git, now, onExpand } = $props();
 
   let repos = $derived(repoList(row.repos));
   let hint = $derived(shortcut(position));
+  let todos = $derived(todoLine(row.todos));
+  let items = $derived(todoItems(row.todos));
 
   /** @type {HTMLElement} */
   let card;
@@ -35,6 +37,21 @@
       <span class="age">{age(row.opened, now)}</span>
     </span>
   </button>
+  {#if todos}
+    <div class="todos">
+      <p class="tally">{todos}</p>
+      {#each items as item (`${item.path}:${item.line}`)}
+        <button
+          type="button"
+          class="todo"
+          title={item.text}
+          onclick={() => onOpenTodo(row.slug, item.path, item.line)}>
+          <span class="text">{item.text}</span>
+          {#if item.blocks}<span class="blocks">Blocking</span>{/if}
+        </button>
+      {/each}
+    </div>
+  {/if}
   {#each section.shown as pr (`${pr.repo}#${pr.number}`)}
     <PullBlock {pr} {now} />
   {/each}
@@ -136,6 +153,58 @@
     flex: none;
     margin-left: auto;
     color: var(--text-faint);
+  }
+
+  .todos {
+    display: flex;
+    flex-direction: column;
+    padding: calc(8px * var(--ui-scale)) 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .tally {
+    margin: 0;
+    padding: 0 calc(14px * var(--ui-scale)) calc(4px * var(--ui-scale));
+    font: var(--machine-xs);
+    color: var(--text-muted);
+  }
+
+  .todo {
+    display: flex;
+    align-items: baseline;
+    gap: calc(8px * var(--ui-scale));
+    width: 100%;
+    min-width: 0;
+    padding: calc(4px * var(--ui-scale)) calc(14px * var(--ui-scale));
+    border: 0;
+    background: transparent;
+    font: var(--machine-xs);
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .todo:hover {
+    background: var(--wash-selected);
+    color: var(--text-primary);
+  }
+
+  .todo:focus-visible {
+    outline: 2px solid var(--accent-action);
+    outline-offset: -2px;
+  }
+
+  .todo .text {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .blocks {
+    flex: none;
+    color: var(--state-waiting);
   }
 
   .more {

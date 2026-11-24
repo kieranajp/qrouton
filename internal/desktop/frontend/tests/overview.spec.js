@@ -430,3 +430,48 @@ test("the orchestrator names its profile beside the runner, and the default prof
   await open(page);
   await expect(page.locator(".orchestrator .provider")).toHaveText("Claude Code");
 });
+
+// Catches an empty For you tier drawn for a session with nothing open.
+test("a session with no open todos has no For you tier", async ({ page }) => {
+  await open(page);
+  await expect(page.locator(".todos")).toHaveCount(0);
+  await expect(page.locator(".tier .label")).toHaveText(["Orchestrator", "Leads", "This session"]);
+});
+
+// Catches the tier sitting anywhere but under the summary, or blocking items left in document order behind open ones.
+test("For you sits under the summary with blocking items first, each naming its section and Where", async ({ page }) => {
+  await open(page, "?todos=rows&pulls=rows");
+  await expect(page.locator(".tier .label")).toHaveText(["For you", "Pull requests", "Orchestrator", "Leads", "This session"]);
+  expect(await page.locator(".summary").evaluate((el) => el.nextElementSibling?.classList.contains("todos"))).toBe(true);
+  await expect(page.locator(".todos .text")).toHaveText(["Apply the migration", "Rotate the key", "Review the copy", "Announce in the channel"]);
+  const migration = page.locator('.todos [data-todo="Apply the migration"]');
+  await expect(migration.locator(".section")).toHaveText("Before merge");
+  await expect(migration.locator(".where")).toHaveText("Where enclave · production");
+  await expect(migration.locator(".blocks")).toHaveText("Blocks Phase 3");
+});
+
+// Catches the Overview opening the document without its session, path or line, so the pane would not scroll to the item.
+test("a For you row opens its document at its line in this session", async ({ page }) => {
+  await open(page, "?todos=rows");
+  await page.getByRole("button", { name: /Rotate the key/ }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.calls.filter((call) => call.method === "OpenDocumentAt").map((call) => call.args)))
+    .toEqual([["fixture", "thoughts/shared/todos/T2-keys.md", 9]]);
+});
+
+// Catches the Overview drawing PRs unlike the Todo pane: a Where label on a bare PR, a link inside the row's button, or a state the dashboard does not track.
+test("a PR an item names is one link chip beside the row, with a state icon only when tracked", async ({ page }) => {
+  await open(page, "?todos=rows");
+  const review = page.locator('.todos [data-todo="Review the copy"]');
+  await expect(review.locator(".where")).toHaveCount(0);
+  await expect(review.locator("a.pull")).toHaveText("acme/web#41");
+  await expect(review.locator('a.pull [role="img"]')).toHaveAttribute("aria-label", "Merged");
+  const announce = page.locator('.todos [data-todo="Announce in the channel"]');
+  await expect(announce.locator("a.pull")).toHaveText("acme/api#12");
+  await expect(announce.locator('a.pull [role="img"]')).toHaveCount(0);
+  await expect(page.locator(".todos button a")).toHaveCount(0);
+
+  await review.locator("a.pull").click();
+  await expect.poll(() => page.evaluate(() => window.openedURL)).toBe("https://github.com/acme/web/pull/41");
+  expect(await page.evaluate(() => window.calls.some((call) => call.method === "OpenDocumentAt"))).toBe(false);
+});

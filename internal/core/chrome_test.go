@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -36,7 +37,7 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	shown.agents.begin(agentProviderCodex, 2)
 
 	renderer := newFakeClient()
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{"background": 3}, renderer.Emit)
+	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, railFacts{unseen: map[string]int{"background": 3}}, renderer.Emit)
 	fields := pushedChrome(t, renderer)
 	rows := map[string]status.SessionRow{}
 	for _, row := range fields.Sessions {
@@ -74,14 +75,14 @@ func TestSelectedRepoStatsFollowTheSelectedSlug(t *testing.T) {
 	reference := status.RepoStat{Name: "lifesum/contracts", Role: "reference"}
 
 	reg.reveal(alpha)
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{alphaRoot: {reference}}, nil, nil, renderer.Emit)
+	pushChrome(reg, root, nil, map[string][]status.RepoStat{alphaRoot: {reference}}, nil, railFacts{}, renderer.Emit)
 	fields := pushedChrome(t, renderer)
 	if len(fields.Repos) != 1 || fields.Repos[0] != reference {
 		t.Fatalf("selected reference stats = %+v", fields.Repos)
 	}
 
 	reg.reveal(beta)
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, nil, renderer.Emit)
+	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, railFacts{}, renderer.Emit)
 	if fields = pushedChrome(t, renderer); len(fields.Repos) != 0 {
 		t.Fatalf("beta inherited alpha's stats: %+v", fields.Repos)
 	}
@@ -134,19 +135,19 @@ func TestCachedPullRequestsReachOnlyTheShownSession(t *testing.T) {
 	pulls.set(alphaRoot, row)
 
 	reg.reveal(alpha)
-	pushChrome(reg, root, nil, nil, pulls, nil, renderer.Emit)
+	pushChrome(reg, root, nil, nil, pulls, railFacts{}, renderer.Emit)
 	if got := pushedChrome(t, renderer).PullRequests; len(got.Items) != 1 || got.Items[0] != row {
 		t.Fatalf("alpha pull requests = %+v", got)
 	}
 
 	reg.reveal(beta)
-	pushChrome(reg, root, nil, nil, pulls, nil, renderer.Emit)
+	pushChrome(reg, root, nil, nil, pulls, railFacts{}, renderer.Emit)
 	if got := pushedChrome(t, renderer).PullRequests; got.Items == nil || len(got.Items) != 0 || got.SignedOut {
 		t.Fatalf("beta inherited alpha's pull requests: %+v", got)
 	}
 
 	reg.reveal(nil)
-	pushChrome(reg, root, nil, nil, pulls, nil, renderer.Emit)
+	pushChrome(reg, root, nil, nil, pulls, railFacts{}, renderer.Emit)
 	if got := pushedChrome(t, renderer).PullRequests; got.Items == nil || len(got.Items) != 0 {
 		t.Fatalf("the dashboard carried pull requests: %+v", got)
 	}
@@ -175,8 +176,9 @@ func pullWatch(t *testing.T, field time.Duration) (reg *Sessions, alpha, beta *S
 		}
 		pushed <- payload.(status.Fields)
 	}, field, time.Hour, unseenCounts{
-		all: func(string) map[string]int { return map[string]int{} },
-		in:  func(string) (int, bool) { return 0, false },
+		all:   func(string) map[string]int { return map[string]int{} },
+		in:    func(string) (int, bool) { return 0, false },
+		todos: func(string) map[string]status.TodoRollup { return map[string]status.TodoRollup{} },
 	}, pulls)
 	return reg, alpha, beta, pulls, pushed
 }
@@ -289,7 +291,7 @@ func TestChromePublishesDefaultAndCustomStickersAndRefreshedRows(t *testing.T) {
 	reg := testRegistry(t, dir)
 	renderer := newFakeClient()
 
-	pushChrome(reg, root, nil, nil, nil, nil, renderer.Emit)
+	pushChrome(reg, root, nil, nil, nil, railFacts{}, renderer.Emit)
 	got := pushedChrome(t, renderer).Stickers
 	if len(got) != 4 || got[0] != (status.Sticker{ID: "star", Colour: "blue", Symbol: "star", Label: "Important"}) ||
 		got[3] != (status.Sticker{ID: "exclamation", Colour: "red", Symbol: "exclamation", Label: "Has bugs"}) {
@@ -302,7 +304,7 @@ func TestChromePublishesDefaultAndCustomStickersAndRefreshedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	custom := []config.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}
-	pushChrome(reg, root, &config.Config{Stickers: &custom}, nil, nil, nil, renderer.Emit)
+	pushChrome(reg, root, &config.Config{Stickers: &custom}, nil, nil, railFacts{}, renderer.Emit)
 	fields := pushedChrome(t, renderer)
 	if want := []status.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}; !reflect.DeepEqual(fields.Stickers, want) {
 		t.Fatalf("custom stickers = %#v", fields.Stickers)
@@ -333,7 +335,7 @@ func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
 	}()
 	close(start)
 	for range 1000 {
-		pushChrome(newSessions(), root, cfg, nil, nil, nil, func(_ string, payload any) {
+		pushChrome(newSessions(), root, cfg, nil, nil, railFacts{}, func(_ string, payload any) {
 			fields := payload.(status.Fields)
 			switch fields.Stickers[0].Label {
 			case "first":
@@ -405,8 +407,9 @@ func TestRepositoryChangeImmediatelyReplacesCachedMeasurementsWithManifestRows(t
 			updates <- payload.(status.Fields)
 		}
 	}, time.Hour, time.Hour, unseenCounts{
-		all: func(string) map[string]int { return map[string]int{} },
-		in:  func(string) (int, bool) { return 0, false },
+		all:   func(string) map[string]int { return map[string]int{} },
+		in:    func(string) (int, bool) { return 0, false },
+		todos: func(string) map[string]status.TodoRollup { return map[string]status.TodoRollup{} },
 	}, newFakePulls())
 
 	for pushes := 0; pushes < 2; pushes++ {
@@ -491,7 +494,7 @@ func TestRailRowAndAgentTreeAgreeOnOneSessionsActivity(t *testing.T) {
 	} {
 		step.poke()
 		renderer := newFakeClient()
-		pushChrome(reg, root, nil, nil, nil, nil, renderer.Emit)
+		pushChrome(reg, root, nil, nil, nil, railFacts{}, renderer.Emit)
 		fields := pushedChrome(t, renderer)
 		if fields.Activity != step.rail {
 			t.Fatalf("%s: chrome activity = %q, want %q", step.name, fields.Activity, step.rail)
@@ -526,7 +529,7 @@ func TestChromeStagesLiveFollowsTheResearchLead(t *testing.T) {
 	reg.reveal(shown)
 	live := func() status.Stages {
 		renderer := newFakeClient()
-		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, renderer.Emit)
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, railFacts{unseen: map[string]int{}}, renderer.Emit)
 		return pushedChrome(t, renderer).StagesLive
 	}
 	lead := func(hook string) workbench.AgentEventRequest {
@@ -567,7 +570,7 @@ func TestChromeRowStageFollowsABackgroundSessionsLead(t *testing.T) {
 	reg.reveal(shown)
 	stage := func() string {
 		renderer := newFakeClient()
-		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, renderer.Emit)
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, railFacts{unseen: map[string]int{}}, renderer.Emit)
 		for _, r := range pushedChrome(t, renderer).Sessions {
 			if r.Slug == "background" {
 				return r.Summary.Stage
@@ -603,7 +606,7 @@ func TestAgentSummaryCarriesABackgroundSessionsHeadline(t *testing.T) {
 	reg.reveal(shown)
 	row := func() status.AgentSummary {
 		renderer := newFakeClient()
-		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, renderer.Emit)
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, railFacts{unseen: map[string]int{}}, renderer.Emit)
 		for _, r := range pushedChrome(t, renderer).Sessions {
 			if r.Slug == "background" {
 				return r.Summary
@@ -637,11 +640,11 @@ func TestWelcomingHidesThePlacementOverlay(t *testing.T) {
 	reg := newSessions()
 	reg.SetPlacing(true)
 	var fields status.Fields
-	pushChrome(reg, root, &config.Config{Root: root}, nil, nil, nil, func(_ string, payload any) { fields = payload.(status.Fields) })
+	pushChrome(reg, root, &config.Config{Root: root}, nil, nil, railFacts{}, func(_ string, payload any) { fields = payload.(status.Fields) })
 	if !fields.Welcoming || fields.Placing {
 		t.Fatalf("welcoming %v, placing %v", fields.Welcoming, fields.Placing)
 	}
-	pushChrome(reg, root, &config.Config{Root: root, Welcomed: true}, nil, nil, nil, func(_ string, payload any) { fields = payload.(status.Fields) })
+	pushChrome(reg, root, &config.Config{Root: root, Welcomed: true}, nil, nil, railFacts{}, func(_ string, payload any) { fields = payload.(status.Fields) })
 	if fields.Welcoming || !fields.Placing {
 		t.Fatalf("welcoming %v, placing %v", fields.Welcoming, fields.Placing)
 	}
@@ -657,9 +660,61 @@ func TestChromeListsOnlySwitchableRunnersProfiles(t *testing.T) {
 		"claude": {{ID: "work", Label: "Work", Dir: "/w"}, {ID: "home", Label: "Home", Dir: "/h"}},
 		"codex":  {{ID: "alt", Label: "Alt", Dir: "/a"}},
 	}}
-	pushChrome(reg, root, cfg, nil, nil, nil, renderer.Emit)
+	pushChrome(reg, root, cfg, nil, nil, railFacts{}, renderer.Emit)
 	want := []status.RunnerProfiles{{Runner: "claude", Profiles: []status.Profile{{ID: "work", Label: "Work"}, {ID: "home", Label: "Home"}}}}
 	if got := pushedChrome(t, renderer).Profiles; !reflect.DeepEqual(got, want) {
 		t.Fatalf("profiles = %#v, want %#v", got, want)
+	}
+}
+
+func writeTodo(t *testing.T, sessionRoot, name string, lines ...string) {
+	t.Helper()
+	path := filepath.Join(sessionRoot, "thoughts", "shared", "todos", name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Catches the shown row reading the slow roll-up, so the rail and the Overview
+// disagree, or a row going stale once the user leaves the session.
+func TestTheShownRowTakesItsTodosFromTheFileReadAndOthersFromTheSlowTick(t *testing.T) {
+	root := t.TempDir()
+	shownRoot := sessionDir(t, root, "onscreen")
+	sessionDir(t, root, "background")
+	writeTodo(t, shownRoot, "T1-rollout.md",
+		"## Ship",
+		"",
+		"- [ ] Apply the migration",
+		"  - Blocks: Phase 3",
+		"- [ ] Announce it",
+	)
+	reg := testRegistry(t, shownRoot)
+	background := status.TodoRollup{Open: 2, Items: []status.TodoItem{{Text: "Merge", Path: "thoughts/shared/todos/T1-x.md", Line: 3}}}
+	rail := railFacts{todos: map[string]status.TodoRollup{
+		"background": background,
+		"onscreen":   {Open: 9, Items: []status.TodoItem{}},
+	}}
+
+	renderer := newFakeClient()
+	pushChrome(reg, root, nil, nil, nil, rail, renderer.Emit)
+	fields := pushedChrome(t, renderer)
+	rows := map[string]status.SessionRow{}
+	for _, row := range fields.Sessions {
+		rows[row.Slug] = row
+	}
+	if len(fields.Todos) != 2 {
+		t.Fatalf("shown todos = %+v, want both open items", fields.Todos)
+	}
+	if got := rows["onscreen"].Todos; got.Open != 2 || got.Blocking != 1 || len(got.Items) != 1 || got.Items[0].Text != "Apply the migration" {
+		t.Fatalf("shown row todos = %+v, want the file's 2 open and 1 blocking", got)
+	}
+	if got := rows["background"].Todos; !reflect.DeepEqual(got, background) {
+		t.Fatalf("background row todos = %+v, want the slow tick's %+v", got, background)
+	}
+	if got := rail.todos["onscreen"]; got.Open != 2 {
+		t.Fatalf("the slow roll-up still holds %+v for the shown session", got)
 	}
 }

@@ -216,8 +216,8 @@ func (c *Core) wire() {
 	})
 
 	windows.newShell = func() (string, error) { return shell.another(reg.Current()) }
-	windows.newDocument = func(name string) (string, error) {
-		return openDocument(windows, reg.Current(), launcher, name)
+	windows.newDocument = func(owner *SessionState, name string) (string, error) {
+		return openDocument(windows, owner, launcher, name)
 	}
 }
 

@@ -66,6 +66,8 @@ type Fields struct {
 	// read never sets it.
 	PullRequests  PullRequestList `json:"pullRequests"`
 	SessionDigest SessionDigest   `json:"sessionDigest"`
+	// Todos are the shown session's open todo items in document order.
+	Todos []TodoItem `json:"todos"`
 }
 
 // SessionSummary is the manifest's summary as the page reads it. At is RFC 3339,
@@ -116,6 +118,7 @@ func EmptyFields() Fields {
 		Stickers:            []Sticker{},
 		Profiles:            []RunnerProfiles{},
 		PullRequests:        PullRequestList{Items: []PullRequest{}},
+		Todos:               []TodoItem{},
 	}
 }
 
@@ -132,6 +135,7 @@ type SessionRow struct {
 	Activity string        `json:"activity"`
 	Summary  AgentSummary  `json:"summary"`
 	Unseen   int           `json:"unseen"`
+	Todos    TodoRollup    `json:"todos"`
 	Opened   time.Time     `json:"opened"`
 	Sticker  string        `json:"sticker"`
 	Runner   string        `json:"runner"`
@@ -285,6 +289,7 @@ func Read(root string) Fields {
 	fields.Root = root
 	fields.SessionSummary = sessionSummary(m.Summary)
 	fields.SessionDigest = sessionDigest(m.Digest)
+	fields.Todos = TodosIn(root)
 	return fields
 }
 
@@ -361,6 +366,7 @@ func Sessions(root string) []SessionRow {
 			Repos: sessionRepos(m), Opened: opened,
 			Sticker: string(m.Sticker), Runner: m.Runner, Profile: m.Profile,
 			Summary: AgentSummary{Attention: AgentAttentionNone, Coverage: AgentCoverageNone},
+			Todos:   TodoRollup{Items: []TodoItem{}},
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool {

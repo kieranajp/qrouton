@@ -78,6 +78,7 @@ export const WINDOWS_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Wind
 export const WINDOWS_CONTENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.Content";
 export const WINDOWS_FOCUS_ASSET = "github.com/kieranajp/qrouton/internal/desktop.Windows.FocusAsset";
 export const WINDOWS_OPEN_DOCUMENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocument";
+export const WINDOWS_OPEN_DOCUMENT_AT = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocumentAt";
 export const WINDOWS_OPEN_SHELL = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenShell";
 export const WINDOWS_RENDER_DIAGRAMS = "github.com/kieranajp/qrouton/internal/desktop.Windows.RenderDiagrams";
 export const WINDOWS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.Windows.Reorder";
@@ -417,7 +418,7 @@ export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green
 /** @type {readonly StickerSymbol[]} */
 export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, pickerID: string, welcoming: boolean, placing: boolean, stickers: any[], profiles: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, pickerID: string, welcoming: boolean, placing: boolean, stickers: any[], profiles: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}, todos: any[]}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -462,4 +463,5 @@ export const CHROME_DEFAULTS = {
     text: "",
     at: "",
   },
+  todos: [],
 };

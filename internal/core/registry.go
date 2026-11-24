@@ -59,6 +59,8 @@ type documentContent struct {
 	assets        []workbench.AssetRef
 	currentAsset  int
 	assetRevision uint64
+	// focus counts the times the user asked for a line, so asking again for the same one still scrolls.
+	focus uint64
 	// read is the file as the window last saw it, so a rescan can tell a
 	// rewritten document from an untouched one.
 	read struct {

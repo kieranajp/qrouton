@@ -8,17 +8,19 @@
   import SessionPullRequests from "./SessionPullRequests.svelte";
   import SessionRepos from "./SessionRepos.svelte";
   import SessionSummary from "./SessionSummary.svelte";
+  import SessionTodos from "./SessionTodos.svelte";
   import Tier from "./Tier.svelte";
   import { elapsed, nowLine, overview, rootWords } from "./tree.js";
 
   /** @typedef {import("./pulls.js").PullRequestList} PullRequestList */
   /** @typedef {import("./digest.js").SessionDigest} Digest */
+  /** @typedef {import("./todos.js").TodoItem} TodoItem */
 
-  /** The session's Overview: its summary, its pull requests, its digest, the
+  /** The session's Overview: its summary, its open todos, its pull requests, its digest, the
    * orchestrator, its leads in stage order, and the session's repositories.
    * @type {{slug: string, active?: boolean, root?: string, summary?: import("./summary.js").SessionSummary,
-   * pullRequests?: PullRequestList, digest?: Digest, repos?: any[], onAddRepos?: () => void}} */
-  let { slug, active = false, root = "", summary, pullRequests, digest, repos = [], onAddRepos } = $props();
+   * pullRequests?: PullRequestList, digest?: Digest, todos?: TodoItem[], repos?: any[], onAddRepos?: () => void}} */
+  let { slug, active = false, root = "", summary, pullRequests, digest, todos = [], repos = [], onAddRepos } = $props();
 
   /** @type {import("./tree.js").AgentTree | undefined} */
   let tree = $state();
@@ -59,6 +61,7 @@
 
 <div class="overview" style:display={active ? "flex" : "none"}>
   <SessionSummary {summary} {now} />
+  <SessionTodos {slug} {todos} />
   <SessionPullRequests {pullRequests} />
   <SessionDigest {digest} {now} />
   <Tier label="Orchestrator" name="orchestrator">

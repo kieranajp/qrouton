@@ -471,6 +471,14 @@ func windowsRows() []adapterRow {
 				t.Fatalf("OpenDocument with no editor = %v", err)
 			}
 		}},
+		{"Windows.OpenDocumentAt", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			id := a.document(t, "thoughts/shared/todos/T1-x.md", "- [ ] Merge")
+			got, err := (&Windows{windows: a.kernel.Windows}).OpenDocumentAt(a.slug(), "thoughts/shared/todos/T1-x.md", 1)
+			if err != nil || got != id {
+				t.Fatalf("OpenDocumentAt = %q, %v; want the open tab %q", got, err, id)
+			}
+		}},
 		{"Windows.Select", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			first := a.document(t, "one.md", "# one")

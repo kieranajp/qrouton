@@ -1,6 +1,6 @@
 import "../src/tokens/index.css";
 import { mount } from "svelte";
-import { DASHBOARD_EVENT, DASHBOARD_SNAPSHOT } from "../src/lib/bridge/generated.js";
+import { DASHBOARD_EVENT, DASHBOARD_SNAPSHOT, SESSIONS_SHOW } from "../src/lib/bridge/generated.js";
 import { emitWailsEvent } from "./wails-runtime.js";
 import DashboardFixture from "./DashboardFixture.svelte";
 
@@ -55,13 +55,19 @@ const calls = [];
 const opened = [];
 const settings = [];
 
-window.dashboardBridge = { calls: () => [...calls], opened, settings };
+let refuseShow = false;
+
+window.dashboardBridge = { calls: () => [...calls], opened, settings, refuseNextShow: () => (refuseShow = true) };
 window.dashboardStatus = status;
 window.pushDashboard = (next) => emitWailsEvent(DASHBOARD_EVENT, next);
 
 window.wailsCall = async (name, ...args) => {
   if (name === DASHBOARD_SNAPSHOT) return status();
   calls.push({ method: name.split(".").at(-1), args });
+  if (name === SESSIONS_SHOW && refuseShow) {
+    refuseShow = false;
+    throw new Error("session is not loaded");
+  }
 };
 
 mount(DashboardFixture, { target: document.querySelector("#fixture") });

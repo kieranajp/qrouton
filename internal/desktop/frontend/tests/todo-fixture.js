@@ -3,7 +3,9 @@ import "../src/tokens/typography.css";
 import "../src/tokens/spacing.css";
 import "../src/tokens/effects.css";
 import { mount } from "svelte";
+import { WINDOW_CONTENT_EVENT } from "../src/lib/bridge/generated.js";
 import TodoFixture from "./TodoFixture.svelte";
+import { emitWailsEvent } from "./wails-runtime.js";
 
 export const TODO = [
   "---",
@@ -97,5 +99,7 @@ window.holdSaves = () => {
 window.saves = () => window.calls.filter((call) => call.name.endsWith(".SaveAnswers")).map((call) => call.args);
 window.sends = () => window.calls.filter((call) => call.name.endsWith(".SendTodoUpdate")).map((call) => call.args);
 window.TODO = TODO;
+// What the workbench pushes when an item elsewhere is opened at its line.
+window.focusLine = (line, focus) => emitWailsEvent(WINDOW_CONTENT_EVENT + "w1", { ...document_(), line, to: 0, focus });
 
 mount(TodoFixture, { target: document.querySelector("#fixture") });

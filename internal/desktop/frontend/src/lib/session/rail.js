@@ -4,6 +4,7 @@ import { stateWords } from "../overview/tree.js";
 /** @typedef {{attention?: string, active?: number, coverage?: string, running?: boolean, tools?: boolean,
  * state?: string, reason?: string, tool?: string, stage?: string}} Summary */
 /** @typedef {{kind: string, label: string, active?: boolean, stage?: string, title?: string}} Fact */
+/** @typedef {{open?: number, blocking?: number}} Todos */
 
 /** @type {string[]} */
 const BUSY = [AGENT_STATES.WORKING, AGENT_STATES.WAITING_AGENTS];
@@ -11,9 +12,9 @@ const BUSY = [AGENT_STATES.WORKING, AGENT_STATES.WAITING_AGENTS];
 /** @param {string} words */
 const capital = (words) => words.charAt(0).toUpperCase() + words.slice(1);
 
-/** A row's headline: root state, live agents, unseen documents.
- * @param {Summary} summary @param {number} unseen @param {string} [idleAge] @returns {Fact[]} */
-export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
+/** A row's headline: root state, live agents, unseen documents, open todos.
+ * @param {Summary} summary @param {number} unseen @param {string} [idleAge] @param {Todos} [todos] @returns {Fact[]} */
+export function summaryFacts(summary = {}, unseen = 0, idleAge = "", todos = {}) {
   /** @type {Fact[]} */
   const facts = [];
   const state = summary.running ? (summary.state ?? "") : "";
@@ -52,6 +53,11 @@ export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
   }
 
   if (unseen > 0) facts.push({ kind: "unseen", label: `${unseen} new ${unseen === 1 ? "doc" : "docs"}` });
+  const open = todos.open ?? 0;
+  if (open > 0) {
+    const blocking = todos.blocking ?? 0;
+    facts.push({ kind: "todos", label: `${open} ${open === 1 ? "todo" : "todos"}${blocking > 0 ? ` · ${blocking} blocking` : ""}` });
+  }
   return facts;
 }
 
