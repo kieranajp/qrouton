@@ -75,10 +75,10 @@ You may read `ticketUrl` and its contents while framing Research. Research leads
 Some work needs the user to act outside the conversation: merging, applying infrastructure, checking production, rotating a secret. Keep those actions in the session's todo document, through the `qrouton-todo` skill.
 
 - Create it with `create_artefact` and `kind: todo` the first time work needs such an action.
-- When a lead returns items under `For you`, copy them into it.
+- When a lead returns items under `For you`, copy into it the ones it does not already hold.
 - Present it with `open_file` after you create it or add items.
 - When you add a blocking item, one with a `Blocks:` field, call `notify` naming that item.
-- Before resuming implementation, check the todo documents for open blocking items and raise them with the user.
+- Before resuming implementation, check the todo documents for open items that block the phase about to run, and raise those with the user.
 
 Todos are not a stage. Never present them as one, and they choose no row in the routing table.
 

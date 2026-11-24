@@ -7,7 +7,7 @@ description: Execute the Implement part of qrouton's workflow through a delegate
 
 Enter implementation only when the user explicitly asked to build, fix, finish, implement, or resume the work, or unambiguously accepted an identified offer to proceed with it. A plan's presence, incomplete checkboxes, approval-like wording attached to feedback, or completion of the prior stage is not authorization. Keep using authorization already given in the current conversation; do not request it again for ordinary continuation or resumed work. Strongly discourage implementation without a tactical plan. A generic implementation request does not consent to that exception. Before delegating a request without a tactical plan, obtain explicit user consent to proceed without one unless the user already gave it in the current conversation. Recommend a tactical plan when asking for that consent.
 
-Before spawning or resuming the lead, check the session's todo documents for open blocking items and raise them with the user.
+Before spawning or resuming the lead, check the session's todo documents for open items that block the phase about to run, and raise those with the user.
 
 Spawn one `qrouton-implementation-lead` when available, otherwise a capable general implementation agent.
 
@@ -34,7 +34,7 @@ Require this of the lead's return:
 - what happened: the completed phases and the outcome of each;
 - where the work lives: the changed repositories and files, and the plan path with its updated status;
 - how you checked it: the verification commands and their results;
-- what stays unresolved: the remaining risks, failures, or decisions, and under a `For you` heading the actions only the user can take.
+- what stays unresolved: the remaining risks, failures, or decisions, including, under a `For you` heading, the actions only the user can take.
 
 Copy the lead's `For you` items into the session's todo document.
 

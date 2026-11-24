@@ -49,8 +49,8 @@ touches. Operational chores, such as moving files, promotion steps and cleanup,
 go in the closing checklist, not in a phase of their own. The closing checklist
 holds only chores an agent can verify. Human-only rollout steps, such as merging,
 applying infrastructure or checking production, go in the session's
-todo document instead. A phase that ends where the user must act names that action
-in the lead's `For you` return as a blocking todo item, with `Blocks: Phase <n>`.
+todo document instead. When a phase ends where the user must act, the planning lead returns that action
+under `For you` as a blocking todo item, with `Blocks: Phase <n>`.
 
 To add work mid-flight, insert a suffixed phase such as `Phase 5b`. Never
 renumber existing phases.

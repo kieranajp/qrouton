@@ -20,4 +20,4 @@ Draw the shape when the shape is the point: a call sequence, a data path, a stat
 - what happened: the phase outline, or the decisions the design artifact settles;
 - where the work lives: the artifact path;
 - how you checked it: the live code you inspected, and the verification each phase carries;
-- what stays unresolved: the blockers you did not resolve; then, under a `For you` heading, each action only the human can take, with `Where:`, `Check:`, `Run:` and `Blocks:` when known.
+- what stays unresolved: the blockers you did not resolve, including, under a `For you` heading, each action only the human can take, with `Where:`, `Check:`, `Run:` and `Blocks:` when known.

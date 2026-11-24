@@ -1053,7 +1053,7 @@ func TestFixStagePromptsCarryPrevention(t *testing.T) {
 }
 
 // Catches a human rollout step sent back to a plan's closing checklist, a lead
-// that stops returning human actions, or todos turning into a routed stage.
+// that stops returning human actions, or a lost todo duty of the orchestrator.
 func TestHumanStepsGoToTheTodoDocument(t *testing.T) {
 	loader := NewEmbeddedLoader()
 	load := func(id ID) (string, []PromptFile) {
@@ -1066,8 +1066,13 @@ func TestHumanStepsGoToTheTodoDocument(t *testing.T) {
 	}
 
 	orchestrator, _ := load(Orchestrator)
-	if !strings.Contains(orchestrator, "`kind: todo`") || !strings.Contains(orchestrator, "`notify`") {
-		t.Error("the orchestrator does not say how to create the todo document or nudge on a blocking item")
+	for _, phrase := range []string{"`kind: todo`", "call `notify` naming that item", "open items that block the phase about to run", "`qrouton-todo`, phase letters"} {
+		if !strings.Contains(orchestrator, phrase) {
+			t.Errorf("the orchestrator lost %q", phrase)
+		}
+	}
+	if implement, _ := load(ID(skillIDPrefix + "qrouton-implement")); !strings.Contains(implement, "open items that block the phase about to run") {
+		t.Error("the implement skill no longer checks blocking todos before spawning the lead")
 	}
 	for _, row := range strings.Split(orchestrator, "\n") {
 		if strings.HasPrefix(row, "|") && strings.Contains(strings.ToLower(row), "todo") {
