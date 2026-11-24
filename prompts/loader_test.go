@@ -74,6 +74,7 @@ var embeddedPromptIDs = []string{
 	"skills/qrouton-review",
 	"skills/qrouton-slides",
 	"skills/qrouton-spec",
+	"skills/qrouton-todo",
 }
 
 func TestQroutonSkillsAreNarrowSoloEntrypoints(t *testing.T) {
@@ -957,9 +958,10 @@ func TestTheResearchTemplateReadsAsAFramedDocument(t *testing.T) {
 }
 
 func TestSkillsSendAgentsToCreateArtefactAndNameNoHandBuiltPath(t *testing.T) {
-	handBuilt := regexp.MustCompile(`[RSPA]<n>-`)
+	handBuilt := regexp.MustCompile(`[RSPAT]<n>-`)
 	for skill, kind := range map[string]string{
 		"qrouton-questions": "research", "qrouton-spec": "spec", "qrouton-plan": "plan", "qrouton-audit": "audit",
+		"qrouton-todo": "todo",
 	} {
 		prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+skill))
 		if err != nil {

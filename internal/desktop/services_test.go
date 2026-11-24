@@ -613,6 +613,15 @@ func windowsRows() []adapterRow {
 				t.Fatalf("sending audit triage from a spec = %v, want ErrWrongSend", err)
 			}
 		}},
+		{"Windows.SendTodoUpdate", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			for _, source := range []string{"thoughts/shared/specs/S1-x.md", "thoughts/shared/audits/A1-x.md"} {
+				id := a.document(t, source, "# x")
+				if err := (&Windows{windows: a.kernel.Windows}).SendTodoUpdate(id); !errors.Is(err, core.ErrWrongSend) {
+					t.Fatalf("sending a todo update from %s = %v, want ErrWrongSend", source, err)
+				}
+			}
+		}},
 	}
 }
 

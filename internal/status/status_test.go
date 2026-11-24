@@ -170,6 +170,8 @@ func TestDocumentsAreClassifiedByArtifactTaxonomyThenFilenamePrefix(t *testing.T
 		{"explainers/onboarding.md", "EXPLAINER"},
 		{"explainers/E1-billing-flow.md", "EXPLAINER"},
 		{"E2-webhook-retries.md", "EXPLAINER"},
+		{"todos/notes.md", "TODO"},
+		{"T1-rollout.md", "TODO"},
 		{"escalation-notes.md", "NOTE"},
 	}
 	base := time.Now().Add(-time.Hour)

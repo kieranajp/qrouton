@@ -218,6 +218,21 @@ func TestCreateFilesAnAuditUnderAudits(t *testing.T) {
 	}
 }
 
+func TestCreateFilesATodoUnderTodos(t *testing.T) {
+	fixedAuthor(t, "Kieran")
+	root := newSession(t)
+	rel, err := Create(root, "todo", "Rollout", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join("thoughts", "shared", "todos", "T1-2026-10-12-rollout.md"); rel != want {
+		t.Fatalf("path = %q, want %q", rel, want)
+	}
+	if fm, _ := frontmatterOf(t, root, rel); fm["kind"] != "todo" {
+		t.Errorf("kind = %v", fm["kind"])
+	}
+}
+
 func TestCreateRejectsAnUnknownKindNamingTheValidOnes(t *testing.T) {
 	root := newSession(t)
 	_, err := Create(root, "notes", "x", now)

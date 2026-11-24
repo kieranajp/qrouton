@@ -15,6 +15,7 @@ import (
 const (
 	specSource  = "thoughts/shared/specs/S1-retry.md"
 	auditSource = "thoughts/shared/audits/A1-tells.md"
+	todoSource  = "thoughts/shared/todos/T1-rollout.md"
 )
 
 type specFixture struct {
@@ -241,5 +242,48 @@ func TestSendAuditTriagePastesItsOwnLineAndEachSendKeepsToItsKind(t *testing.T) 
 		t.Fatal(err)
 	}
 	line := fmt.Sprintf(auditTriageInFormat, auditSource)
+	waitFor(t, "the typed line", func() bool { return strings.Contains(rec.output(), line) })
+}
+
+// Guards the todo pane's tick: a todo must be writable through the hash-checked save.
+func TestSaveAnswersWritesATodosTick(t *testing.T) {
+	const before, after = "## Ship\n- [ ] merge\n", "## Ship\n- [x] merge\n"
+	f := openSpec(t, todoSource, before, 0o644)
+	if _, err := f.w.SaveAnswers(f.id, contentHash(before), after); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(f.path); string(got) != after {
+		t.Fatalf("file = %q", got)
+	}
+}
+
+func TestSendTodoUpdatePastesItsOwnLineAndRefusesOtherKinds(t *testing.T) {
+	rec := &recorder{}
+	reg, term, w := testKernel(t, rec.emit)
+	state := reg.add(t.TempDir(), []string{"/bin/cat"}, WithTerminalEnv(os.Environ()))
+	reg.reveal(state)
+	open := func(label, source string) string {
+		id, err := w.openWindow(state, workbench.WindowOptions{
+			Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Label: label, Source: source, Content: "# x\n",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	todo, spec := open("T1", todoSource), open("S1", specSource)
+	if err := term.Start(state.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SendTodoUpdate(spec); !errors.Is(err, ErrWrongSend) {
+		t.Fatalf("SendTodoUpdate on a spec returned %v, want ErrWrongSend", err)
+	}
+	if err := w.SendAuditTriage(todo); !errors.Is(err, ErrWrongSend) {
+		t.Fatalf("SendAuditTriage on a todo returned %v, want ErrWrongSend", err)
+	}
+	if err := w.SendTodoUpdate(todo); err != nil {
+		t.Fatal(err)
+	}
+	line := fmt.Sprintf(todoUpdatedFormat, todoSource)
 	waitFor(t, "the typed line", func() bool { return strings.Contains(rec.output(), line) })
 }

@@ -1,5 +1,5 @@
-// Package artefact creates the research, spec and plan documents a session
-// keeps under thoughts/shared, naming and stamping them so agents do not.
+// Package artefact creates the research, spec, plan, audit and todo documents a
+// session keeps under thoughts/shared, naming and stamping them so agents do not.
 package artefact
 
 import (

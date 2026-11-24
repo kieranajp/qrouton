@@ -108,6 +108,8 @@ func (w *Windows) SendSpecAnswers(id string) error { return w.windows.SendSpecAn
 
 func (w *Windows) SendAuditTriage(id string) error { return w.windows.SendAuditTriage(id) }
 
+func (w *Windows) SendTodoUpdate(id string) error { return w.windows.SendTodoUpdate(id) }
+
 type BugReports struct{ reports *core.BugReports }
 
 func (b *BugReports) Load(slug, requestID string) (core.BugReportPreview, error) {
