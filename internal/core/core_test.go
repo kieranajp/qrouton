@@ -21,6 +21,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -224,9 +225,10 @@ type workbenchOptions struct {
 }
 
 // testOptions is a session the core can open on, under a sessions root it can
-// boot others from, on an address of its own.
+// boot others from, on an address of its own, with a cache of its own.
 func testOptions(t *testing.T) (workbenchOptions, *stubBoot) {
 	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +237,7 @@ func testOptions(t *testing.T) (workbenchOptions, *stubBoot) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
 	return workbenchOptions{
-		Options:     Options{Root: root, Launcher: boot},
+		Options:     Options{Root: root, Launcher: boot, GitHubCredential: signedOut},
 		SessionRoot: sessionDir(t, root, "octopus"),
 		Socket:      socket,
 	}, boot
@@ -251,6 +253,9 @@ func testWorkbench(t *testing.T, r *fakeClient, opts workbenchOptions) *Core {
 	t.Cleanup(c.Shutdown)
 	return c
 }
+
+// signedOut keeps a test's dashboard off GitHub when a session it writes has a branch.
+func signedOut(context.Context) (github.Credential, string) { return github.CredentialSignedOut, "" }
 
 // startWorkbench starts the core on its process socket and opens it on the
 // session the options name, as a client does once its window is up.
@@ -369,8 +374,8 @@ func deadPID(t *testing.T) int {
 	return cmd.Process.Pid
 }
 
-// A supervisor exiting ends its own session and not the app: the window falls
-// back to another active session, then starts the next inactive one.
+// A supervisor exiting ends its own session and not the app: the window lands on
+// the dashboard, and the sessions behind it keep running untouched.
 func TestACleanSupervisorExitRetiresOnlyItsSession(t *testing.T) {
 	r := newFakeClient()
 	opts, boot := testOptions(t)
@@ -394,26 +399,18 @@ func TestACleanSupervisorExitRetiresOnlyItsSession(t *testing.T) {
 
 	endConversation(t, term, second)
 
-	waitFor(t, "the window to fall back to the session shown before it", func() bool {
-		return reg.Current() == first
+	waitFor(t, "the window to land on the dashboard", func() bool {
+		_, live := reg.ByTerminal(second.terminal)
+		return reg.Current() == nil && !live
 	})
-	if _, live := reg.ByTerminal(second.terminal); live {
-		t.Fatalf("the retired session %q is still registered", second.Slug())
-	}
 	if workbench.Answered(socket) {
 		t.Fatalf("the retired session still answers on %q", socket)
 	}
-
-	endConversation(t, term, first)
-	waitFor(t, "the next inactive session to start", func() bool {
-		current := reg.Current()
-		return current != nil && current != second && current.Slug() == second.Slug()
-	})
-	if !boot.resumed(t, second.Root()) {
-		t.Fatal("the inactive session was restarted without resuming its conversation")
+	if reg.BySlug(first.Slug()) != first || !first.alive() {
+		t.Fatal("retiring the shown session took the one behind it down")
 	}
 	if shutDown(opts) {
-		t.Fatal("the last supervisor exiting took the workbench with it")
+		t.Fatal("a supervisor exiting took the workbench with it")
 	}
 }
 
@@ -788,21 +785,27 @@ func welcomingFor(t *testing.T, reg *Sessions, root string, cfg *config.Config) 
 }
 
 // Asking over a live conversation would put two answers between the user and the
-// agent they were talking to, and answering with a changed root would take that
-// session's workbench down with it.
-func TestChromeAsksTheFirstRunQuestionsOnlyOnAWindowWithNoSession(t *testing.T) {
+// agent they were talking to, and an install with sessions on disk was set up
+// already, so every cold start landing on the dashboard must not ask again.
+func TestChromeWelcomesOnlyAnInstallWithNoSessions(t *testing.T) {
+	empty := t.TempDir()
+	if !welcomingFor(t, newSessions(), empty, &config.Config{Root: empty}) {
+		t.Fatal("an install with no sessions and no marker does not ask")
+	}
+
 	root := t.TempDir()
 	dir := sessionDir(t, root, "octopus")
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "octopus", Name: "Octopus"}); err != nil {
 		t.Fatal(err)
 	}
-
-	if !welcomingFor(t, newSessions(), root, &config.Config{Root: root}) {
-		t.Fatal("a window with no session and no marker does not ask")
+	if welcomingFor(t, newSessions(), root, &config.Config{Root: root}) {
+		t.Fatal("an install with sessions on disk and no marker asks on the dashboard")
 	}
+	// The shown session lives outside the scanned root, so only the slug check
+	// keeps the questions off its conversation.
 	for _, marked := range []bool{false, true} {
-		cfg := &config.Config{Root: root, Welcomed: marked}
-		if welcomingFor(t, testRegistry(t, dir), root, cfg) {
+		cfg := &config.Config{Root: empty, Welcomed: marked}
+		if welcomingFor(t, testRegistry(t, dir), empty, cfg) {
 			t.Fatalf("a window holding a session asks anyway (welcomed %v)", marked)
 		}
 	}
@@ -830,7 +833,7 @@ func TestWatchChromeStopsWithItsContext(t *testing.T) {
 	cancel()
 	done := make(chan struct{})
 	go func() {
-		watchChrome(ctx, testRegistry(t, t.TempDir()), t.TempDir(), nil, func(string, any) {})
+		watchChrome(ctx, testRegistry(t, t.TempDir()), t.TempDir(), nil, func(string, any) {}, newFakePulls())
 		close(done)
 	}()
 	<-done
@@ -1045,7 +1048,7 @@ func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.
 	<-reg.touched
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, time.Hour, time.Hour, counts, noPulls)
+	go watch(ctx, reg, root, nil, emit, time.Millisecond, time.Hour, counts, newFakePulls())
 
 	waitFor(t, "the fast ticker to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := all.Load(); got != 1 {
@@ -1515,58 +1518,89 @@ func TestRepeatedSessionTeardownRefusesLateAdmissionsWithoutRetainingOwners(t *t
 	}
 }
 
-func TestSessionRemovalSkipsDeadAndObsoleteHistoryFallbacks(t *testing.T) {
-	for _, action := range []string{"unload", "reload-failure", "retire"} {
-		for _, loadedFallback := range []bool{false, true} {
-			t.Run(action+"/"+strconv.FormatBool(loadedFallback), func(t *testing.T) {
-				root := t.TempDir()
-				reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
-				for _, slug := range []string{"live", "dead", "obsolete", "shown"} {
-					sessionDir(t, root, slug)
-				}
-				if loadedFallback {
-					if err := reg.Show("live"); err != nil {
-						t.Fatal(err)
-					}
-				}
-				if err := reg.Show("dead"); err != nil {
+// A reboot that fails hands the window back to the live session shown before,
+// skipping a dead one and one no longer registered.
+func TestAFailedReloadSkipsDeadAndObsoleteHistoryFallbacks(t *testing.T) {
+	for _, loadedFallback := range []bool{false, true} {
+		t.Run(strconv.FormatBool(loadedFallback), func(t *testing.T) {
+			root := t.TempDir()
+			reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+			for _, slug := range []string{"live", "dead", "obsolete", "shown"} {
+				sessionDir(t, root, slug)
+			}
+			if loadedFallback {
+				if err := reg.Show("live"); err != nil {
 					t.Fatal(err)
 				}
-				dead := reg.Current()
-				finished := exitedPTY(t)
-				dead.mu.Lock()
-				dead.process = finished
-				dead.mu.Unlock()
-				if err := reg.Show("obsolete"); err != nil {
+			}
+			if err := reg.Show("dead"); err != nil {
+				t.Fatal(err)
+			}
+			dead := reg.Current()
+			finished := exitedPTY(t)
+			dead.mu.Lock()
+			dead.process = finished
+			dead.mu.Unlock()
+			if err := reg.Show("obsolete"); err != nil {
+				t.Fatal(err)
+			}
+			obsolete := reg.Current()
+			t.Cleanup(obsolete.stop)
+			reg.mu.Lock()
+			delete(reg.slugs, obsolete.Slug())
+			delete(reg.terms, obsolete.terminal)
+			reg.mu.Unlock()
+			if err := reg.Show("shown"); err != nil {
+				t.Fatal(err)
+			}
+			reg.boot.agent = func(AgentRequest) (AgentCommand, error) { return AgentCommand{}, errNoAgent }
+			if err := reg.Reload("shown"); !errors.Is(err, errNoAgent) {
+				t.Fatalf("reload failure = %v", err)
+			}
+			if reg.Current() != reg.BySlug("live") {
+				t.Fatalf("a failed reload selected %q, want the alive registered fallback or none", reg.Current().Slug())
+			}
+		})
+	}
+}
+
+// Removing the shown session lands on the dashboard even with another session
+// live behind it, and boots nothing in its place.
+func TestUnloadAndRetirementLandOnTheDashboardOverAHistoryFallback(t *testing.T) {
+	for _, action := range []string{"unload", "retire"} {
+		t.Run(action, func(t *testing.T) {
+			root := t.TempDir()
+			boot := newStubBoot("/bin/cat")
+			reg, _, _ := testSessions(t, root, boot)
+			for _, slug := range []string{"live", "shown", "inactive"} {
+				sessionDir(t, root, slug)
+			}
+			for _, slug := range []string{"live", "shown"} {
+				if err := reg.Show(slug); err != nil {
 					t.Fatal(err)
 				}
-				obsolete := reg.Current()
-				t.Cleanup(obsolete.stop)
-				reg.mu.Lock()
-				delete(reg.slugs, obsolete.Slug())
-				delete(reg.terms, obsolete.terminal)
-				reg.mu.Unlock()
-				if err := reg.Show("shown"); err != nil {
+			}
+			live := reg.BySlug("live")
+			reg.railOrder(polled("shown", "inactive", "live"))
+			agents, serves := boot.counts()
+			switch action {
+			case "unload":
+				if err := reg.Unload("shown"); err != nil {
 					t.Fatal(err)
 				}
-				switch action {
-				case "unload":
-					if err := reg.Unload("shown"); err != nil {
-						t.Fatal(err)
-					}
-				case "reload-failure":
-					reg.boot.agent = func(AgentRequest) (AgentCommand, error) { return AgentCommand{}, errNoAgent }
-					if err := reg.Reload("shown"); !errors.Is(err, errNoAgent) {
-						t.Fatalf("reload failure = %v", err)
-					}
-				case "retire":
-					reg.retire(reg.Current())
-				}
-				if reg.Current() != reg.BySlug("live") {
-					t.Fatalf("%s selected %q, want the alive registered fallback or none", action, reg.Current().Slug())
-				}
-			})
-		}
+			case "retire":
+				reg.retire(reg.Current())
+			}
+			if state := reg.Current(); state != nil {
+				t.Fatalf("%s moved the window to %q, want the dashboard", action, state.Slug())
+			}
+			if reg.BySlug("live") != live || !live.alive() {
+				t.Fatalf("%s took the live session behind it down", action)
+			}
+			if afterAgents, afterServes := boot.counts(); afterAgents != agents || afterServes != serves {
+				t.Fatalf("%s booted a session in its place", action)
+			}
+		})
 	}
 }
 
@@ -1587,51 +1621,46 @@ func TestUnloadBackgroundPreservesSelectionAndHistory(t *testing.T) {
 	if reg.Current() != shown || !reflect.DeepEqual(reg.history, []*SessionState{previous, shown}) {
 		t.Fatal("unloading a background session changed selection or remaining history")
 	}
-	if err := reg.Unload("webhook"); err != nil {
-		t.Fatal(err)
-	}
-	if reg.Current() != previous {
-		t.Fatal("Unload did not return to the most recently shown loaded session")
-	}
 }
 
-func TestUnloadSkipsDeadFallbacksAndNeverBootsInactiveRows(t *testing.T) {
-	for _, loadedFallback := range []bool{false, true} {
-		t.Run(strconv.FormatBool(loadedFallback), func(t *testing.T) {
-			root := t.TempDir()
-			boot := newStubBoot("/bin/sh", "-c", "exit 3")
-			reg, _, r := testSessions(t, root, boot)
-			for _, slug := range []string{"live", "dead", "shown", "inactive"} {
-				sessionDir(t, root, slug)
-			}
-			if loadedFallback {
-				if err := reg.Show("live"); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if err := reg.Show("dead"); err != nil {
-				t.Fatal(err)
-			}
-			dead := reg.Current()
-			if err := newTerm(reg, r.Emit).Start(dead.terminal, 80, 24); err != nil {
-				t.Fatal(err)
-			}
-			waitFor(t, "the fallback supervisor to fail", func() bool { return !dead.alive() })
-			if err := reg.Show("shown"); err != nil {
-				t.Fatal(err)
-			}
-			reg.railOrder(polled("shown", "inactive", "dead", "live"))
-			agents, serves := boot.counts()
-			if err := reg.Unload("shown"); err != nil {
-				t.Fatal(err)
-			}
-			if reg.Current() != reg.BySlug("live") {
-				t.Fatalf("Unload selected %q, want the alive loaded fallback or none", reg.Current().Slug())
-			}
-			if afterAgents, afterServes := boot.counts(); afterAgents != agents || afterServes != serves {
-				t.Fatal("Unload booted a fallback")
-			}
-		})
+// The dashboard only empties the window: an agent stopped or rebooted behind it
+// would lose its conversation's place and its terminal's scrollback.
+func TestShowDashboardEmptiesTheWindowAndKeepsAgentsAlive(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	for _, slug := range []string{"octopus", "kraken"} {
+		sessionDir(t, root, slug)
+		if err := reg.Show(slug); err != nil {
+			t.Fatal(err)
+		}
+	}
+	kraken := reg.Current()
+	for len(reg.touched) > 0 {
+		<-reg.touched
+	}
+
+	reg.ShowDashboard()
+
+	if state := reg.Current(); state != nil {
+		t.Fatalf("the dashboard left %q on screen", state.Slug())
+	}
+	if len(reg.touched) == 0 {
+		t.Fatal("showing the dashboard did not wake the chrome poller")
+	}
+	for _, slug := range []string{"octopus", "kraken"} {
+		if !reg.BySlug(slug).alive() {
+			t.Fatalf("showing the dashboard stopped %q", slug)
+		}
+	}
+	if err := reg.Show("kraken"); err != nil {
+		t.Fatal(err)
+	}
+	if reg.Current() != kraken {
+		t.Fatal("returning from the dashboard did not reveal the same running session")
+	}
+	if agents, serves := boot.counts(); agents != 2 || serves != 2 {
+		t.Fatal("showing the dashboard or returning from it booted a session")
 	}
 }
 
@@ -2522,7 +2551,9 @@ func TestConcurrentRailPollingAndReorderingPreserveEveryEntry(t *testing.T) {
 	}
 }
 
-func TestRetiringTheLastActiveSessionStartsTheNextInactiveRailRow(t *testing.T) {
+// The last live session retiring leaves the dashboard rather than spending an
+// agent process on a session the user did not pick.
+func TestRetiringTheLastActiveSessionBootsNoInactiveRailRow(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
 	reg, _, _ := testSessions(t, root, boot)
@@ -2536,41 +2567,11 @@ func TestRetiringTheLastActiveSessionStartsTheNextInactiveRailRow(t *testing.T) 
 
 	reg.retire(reg.Current())
 
-	current := reg.Current()
-	if current == nil || current.Slug() != "next" {
-		t.Fatalf("the window moved to %v, want the next inactive rail row", current)
+	if current := reg.Current(); current != nil {
+		t.Fatalf("the window moved to %q, want the dashboard", current.Slug())
 	}
-	if reg.BySlug("later") != nil {
-		t.Fatal("retirement skipped the next inactive rail row")
-	}
-	if !boot.resumed(t, filepath.Join(root, "next")) {
-		t.Fatal("the next inactive session did not resume its conversation")
-	}
-}
-
-func TestRetirementSkipsAnInactiveRowThatWillNotBoot(t *testing.T) {
-	root := t.TempDir()
-	boot := newStubBoot("/bin/cat")
-	reg, _, _ := testSessions(t, root, boot)
-	for _, slug := range []string{"shown", "broken", "next"} {
-		sessionDir(t, root, slug)
-	}
-	if err := os.WriteFile(sessionpaths.Manifest(filepath.Join(root, "broken")), []byte("{\"runner\": "), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	reg.railOrder(polled("shown", "broken", "next"))
-	if err := reg.Show("shown"); err != nil {
-		t.Fatal(err)
-	}
-
-	reg.retire(reg.Current())
-
-	current := reg.Current()
-	if current == nil || current.Slug() != "next" {
-		t.Fatalf("the window moved to %v, want the first inactive rail row that boots", current)
-	}
-	if reg.BySlug("broken") != nil {
-		t.Fatal("a session whose manifest will not load was booted")
+	if agents, serves := boot.counts(); agents != 1 || serves != 1 {
+		t.Fatal("retirement booted an inactive rail row")
 	}
 }
 
@@ -2634,8 +2635,8 @@ func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
 }
 
 // Cleaning up the session you are looking at is allowed, and it ends the same way
-// a supervisor exiting does: the window falls back rather than closing.
-func TestCleanupFallsTheWindowBackAsARetirementDoes(t *testing.T) {
+// a supervisor exiting does: the window lands on the dashboard.
+func TestCleanupOfTheShownSessionLandsOnTheDashboardAsARetirementDoes(t *testing.T) {
 	root := t.TempDir()
 	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
 	reg.boot.cleanup = func(sessionRoot string) error { return os.RemoveAll(sessionRoot) }
@@ -2655,14 +2656,11 @@ func TestCleanupFallsTheWindowBackAsARetirementDoes(t *testing.T) {
 	if err := reg.Cleanup("webhook"); err != nil {
 		t.Fatal(err)
 	}
-	if state := reg.Current(); state == nil || state.Slug() != "kraken" {
-		t.Fatalf("the window fell back to %v, want the session shown before it", state)
-	}
-	if err := reg.Cleanup("kraken"); err != nil {
-		t.Fatal(err)
-	}
 	if state := reg.Current(); state != nil {
-		t.Fatalf("cleaning up the last session left %q on screen", state.Slug())
+		t.Fatalf("the window fell back to %q, want the dashboard", state.Slug())
+	}
+	if reg.BySlug("kraken") == nil {
+		t.Fatal("cleaning up the shown session unloaded the one behind it")
 	}
 }
 
@@ -2779,7 +2777,7 @@ func TestUncommittedAnswersAClickAndNeverATicker(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, 2*time.Millisecond, time.Hour, counts, noPulls)
+	go watch(ctx, reg, root, nil, emit, time.Millisecond, 2*time.Millisecond, counts, newFakePulls())
 	waitFor(t, "both tickers to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := checks.Load(); got != 0 {
 		t.Fatalf("the dirty check ran %d times over %d pushes, want none of them", got, pushes.Load())

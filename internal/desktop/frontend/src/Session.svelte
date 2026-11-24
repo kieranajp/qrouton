@@ -6,6 +6,9 @@
   import Icon from "./lib/core/Icon.svelte";
   import CubeMark from "./lib/core/CubeMark.svelte";
   import { dismissible } from "./lib/core/dismiss.js";
+  import Dashboard from "./lib/dashboard/Dashboard.svelte";
+  import { DASHBOARD_TITLE } from "./lib/dashboard/dashboard.js";
+  import { dashboard } from "./lib/dashboard.svelte.js";
   import OverviewPane from "./lib/overview/OverviewPane.svelte";
   import SessionSwitcher from "./lib/session/SessionSwitcher.svelte";
   import Rail from "./lib/session/Rail.svelte";
@@ -32,29 +35,45 @@
   import { MAX_SIDEBAR, MIN_HUMAN, MIN_SIDEBAR } from "./lib/layout.js";
 
   const view = shell();
+  const pulls = dashboard();
   let fields = $derived(view.fields);
+
+  /** @type {HTMLDivElement} */
+  let work;
+  /** @type {Rail | undefined} */
+  let rail = $state();
+  // WebKit leaves focus on a hidden terminal after a click elsewhere, so keys typed on the dashboard would reach it.
+  $effect(() => {
+    if (view.dashboard && document.activeElement instanceof HTMLElement && work?.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+  });
 </script>
 
 <div class="session">
   <div class="titlebar" inert={view.switcher.visible}>
     <div class="identity">
       <CubeMark size={20} />
-      <div class="anchored" use:dismissible={() => (view.identityOpen = false)}>
-        <button
-          class="name"
-          aria-expanded={view.identityOpen}
-          onclick={() => (view.identityOpen = !view.identityOpen)}>
-          <span class="said">{fields.identity}</span>
-          <span class="caret"><Icon name="menu" /></span>
-        </button>
-        {#if view.identityOpen}
-          <Menu
-            items={view.identityMenu}
-            width={280}
-            offsetY={34}
-            onSelect={(item) => view.chose(item)} />
-        {/if}
-      </div>
+      {#if view.dashboard}
+        <span class="said">{DASHBOARD_TITLE}</span>
+      {:else}
+        <div class="anchored" use:dismissible={() => (view.identityOpen = false)}>
+          <button
+            class="name"
+            aria-expanded={view.identityOpen}
+            onclick={() => (view.identityOpen = !view.identityOpen)}>
+            <span class="said">{fields.identity}</span>
+            <span class="caret"><Icon name="menu" /></span>
+          </button>
+          {#if view.identityOpen}
+            <Menu
+              items={view.identityMenu}
+              width={280}
+              offsetY={34}
+              onSelect={(item) => view.chose(item)} />
+          {/if}
+        </div>
+      {/if}
     </div>
     <span class="tools">
       <UpdateButton />
@@ -64,6 +83,7 @@
 
   <div class="panels" inert={view.switcher.visible} bind:clientWidth={view.panels}>
     <Rail
+      bind:this={rail}
       sessions={fields.sessions}
       slug={fields.slug}
       stickers={fields.stickers}
@@ -84,99 +104,110 @@
       onReset={view.resetSidebar}
       label="Resize the sidebar" />
 
-    <div class="agent" class:kept={!view.human}>
-      <PaneHeader>
-        {#snippet lead()}
-          {#if fields.mode === MODE_LABELS.ASSISTANT}
-            <span class="assistant-mode">Assistant</span>
-            <Button
-              variant="cube"
-              size="sm"
-              disabled={view.escalating}
-              onclick={view.escalate}>Escalate</Button>
-          {:else}
-            <StageMarks stages={fields.stages} live={fields.stagesLive} />
-          {/if}
-        {/snippet}
-        <span class="agent-label"><Icon name="agent" /><CapsLabel tone="dim">Agent</CapsLabel></span>
-        {#snippet actions()}
-          <DocumentIndex
-            count={fields.documents.length}
-            open={view.listing}
-            onToggle={view.hasDocuments ? () => (view.listing = !view.listing) : undefined}>
-            <Menu
-              label="Written this session"
-              items={view.documentMenu}
-              align="right"
-              width={320}
-              onSelect={(item) => item.path && view.read(item.path)} />
-          </DocumentIndex>
-        {/snippet}
-      </PaneHeader>
-      {#if fields.bugReportID}
-        <div class="report-action">
-          <Button variant="secondary" size="sm" onclick={view.reviewBugReport}>{fields.bugReportLabel}</Button>
-        </div>
-      {/if}
-      {#each view.conversations as row (row.terminal)}
-        <Terminal
-          id={row.terminal}
-          pty={conversationPTY}
-          active={row.terminal === fields.terminal}
-          focus={view.focusOf(row.terminal)}
-          focusEligible={view.focusEligible}
-          focusPending={view.focusPendingOf(row.terminal)}
-          onFocused={(generation) => view.focused(row.terminal, generation)} />
-      {/each}
-    </div>
+    {#if view.dashboard}
+      <Dashboard
+        sessions={fields.sessions}
+        onOpen={(slug) => rail?.openSession(slug)}
+        store={pulls}
+        onSettings={view.openSettings} />
+    {/if}
 
-    <Splitter
-      size={view.human || view.measured}
-      min={MIN_HUMAN}
-      max={view.room}
-      onResize={view.resize}
-      onCommit={view.commit}
-      onReset={view.reset}
-      label="Resize the shell pane" />
-
-    <div
-      class="human"
-      class:dragged={view.human}
-      style:width={view.human ? view.human + "px" : null}
-      bind:clientWidth={view.measured}>
-      <TabStrip
-        tabs={view.tabs}
-        selected={view.selected}
-        onSelect={(i) => view.select(view.tabs[i])}
-        onClose={(i) => view.close(view.tabs[i])}
-        onReorder={view.reorder}
-        onNew={view.newShell}
-        newLabel="Shell" />
-      {#each view.tabs as tab, i (tab.id)}
-        <!-- Only a terminal may be Started; a document tab has no process behind it. -->
-        {#if tab.kind === WINDOW_KINDS.TERMINAL}
-          <Terminal
-            id={tab.id}
-            pty={tabPTY}
-            active={i === view.selected}
-            focus={view.focusOf(tab.id)}
-            focusEligible={view.focusEligible}
-          focusPending={view.focusPendingOf(tab.id)}
-            onFocused={(generation) => view.focused(tab.id, generation)} />
-        {:else if tab.kind === WINDOW_KINDS.OVERVIEW}
-          <OverviewPane
-            slug={fields.slug}
-            active={i === view.selected}
-            root={fields.root}
-            summary={fields.sessionSummary}
-            pullRequests={fields.pullRequests}
-            digest={fields.sessionDigest}
-            repos={fields.repos}
-            onAddRepos={() => (view.added = fields.slug)} />
-        {:else}
-          <DockedDocument slug={fields.slug} id={tab.id} active={i === view.selected} />
+    <!-- Hidden rather than unmounted under the dashboard, so the agent terminals keep their scrollback. -->
+    <div class="work" class:hidden={view.dashboard} bind:this={work}>
+      <div class="agent" class:kept={!view.human}>
+        <PaneHeader>
+          {#snippet lead()}
+            {#if fields.mode === MODE_LABELS.ASSISTANT}
+              <span class="assistant-mode">Assistant</span>
+              <Button
+                variant="cube"
+                size="sm"
+                disabled={view.escalating}
+                onclick={view.escalate}>Escalate</Button>
+            {:else}
+              <StageMarks stages={fields.stages} live={fields.stagesLive} />
+            {/if}
+          {/snippet}
+          <span class="agent-label"><Icon name="agent" /><CapsLabel tone="dim">Agent</CapsLabel></span>
+          {#snippet actions()}
+            <DocumentIndex
+              count={fields.documents.length}
+              open={view.listing}
+              onToggle={view.hasDocuments ? () => (view.listing = !view.listing) : undefined}>
+              <Menu
+                label="Written this session"
+                items={view.documentMenu}
+                align="right"
+                width={320}
+                onSelect={(item) => item.path && view.read(item.path)} />
+            </DocumentIndex>
+          {/snippet}
+        </PaneHeader>
+        {#if fields.bugReportID}
+          <div class="report-action">
+            <Button variant="secondary" size="sm" onclick={view.reviewBugReport}>{fields.bugReportLabel}</Button>
+          </div>
         {/if}
-      {/each}
+        {#each view.conversations as row (row.terminal)}
+          <Terminal
+            id={row.terminal}
+            pty={conversationPTY}
+            active={row.terminal === fields.terminal}
+            focus={view.focusOf(row.terminal)}
+            focusEligible={view.focusEligible}
+            focusPending={view.focusPendingOf(row.terminal)}
+            onFocused={(generation) => view.focused(row.terminal, generation)} />
+        {/each}
+      </div>
+
+      <Splitter
+        size={view.human || view.measured}
+        min={MIN_HUMAN}
+        max={view.room}
+        onResize={view.resize}
+        onCommit={view.commit}
+        onReset={view.reset}
+        label="Resize the shell pane" />
+
+      <div
+        class="human"
+        class:dragged={view.human}
+        style:width={view.human ? view.human + "px" : null}
+        bind:clientWidth={view.measured}>
+        <TabStrip
+          tabs={view.tabs}
+          selected={view.selected}
+          onSelect={(i) => view.select(view.tabs[i])}
+          onClose={(i) => view.close(view.tabs[i])}
+          onReorder={view.reorder}
+          onNew={view.newShell}
+          newLabel="Shell" />
+        {#each view.tabs as tab, i (tab.id)}
+          <!-- Only a terminal may be Started; a document tab has no process behind it. -->
+          {#if tab.kind === WINDOW_KINDS.TERMINAL}
+            <Terminal
+              id={tab.id}
+              pty={tabPTY}
+              active={i === view.selected}
+              focus={view.focusOf(tab.id)}
+              focusEligible={view.focusEligible}
+            focusPending={view.focusPendingOf(tab.id)}
+              onFocused={(generation) => view.focused(tab.id, generation)} />
+          {:else if tab.kind === WINDOW_KINDS.OVERVIEW}
+            <OverviewPane
+              slug={fields.slug}
+              active={i === view.selected}
+              root={fields.root}
+              summary={fields.sessionSummary}
+              pullRequests={fields.pullRequests}
+              digest={fields.sessionDigest}
+              repos={fields.repos}
+              onAddRepos={() => (view.added = fields.slug)} />
+          {:else}
+            <DockedDocument slug={fields.slug} id={tab.id} active={i === view.selected} />
+          {/if}
+        {/each}
+      </div>
     </div>
   </div>
 
@@ -197,7 +228,7 @@
     <PlacementOverlay />
   {:else if view.assembling}
     <Overlay
-      gated={!fields.slug}
+      gated={view.gated}
       settingsOpen={view.settingsOpen}
       onSettings={view.openSettings}
       onClose={() => (view.requested = false)} />
@@ -319,6 +350,14 @@
     flex: 1;
     min-height: 0;
     display: flex;
+  }
+
+  .work {
+    display: contents;
+  }
+
+  .work.hidden {
+    display: none;
   }
 
   /* Bordered on both sides, so the pane header terminates against the rail and

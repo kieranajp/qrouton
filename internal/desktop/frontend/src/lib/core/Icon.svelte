@@ -1,23 +1,5 @@
 <script>
-  import { ICONS } from "./icons.js";
-
-  const COLOURS = {
-    new: "var(--accent-label)",
-    agent: "var(--accent-action)",
-    shell: "var(--accent-action)",
-    pending: "var(--text-faint)",
-    excluded: "var(--text-muted)",
-    succeeded: "var(--state-success)",
-    failed: "var(--state-failed)",
-    running: "var(--state-running)",
-    waiting: "var(--state-waiting)",
-    editing: "var(--role-editing)",
-    reference: "var(--role-reference)",
-    "pull-open": "var(--pr-open)",
-    "pull-draft": "var(--pr-draft)",
-    "pull-merged": "var(--pr-merged)",
-    "pull-closed": "var(--pr-closed)",
-  };
+  import { ICON_COLOURS, ICONS } from "./icons.js";
 
   const FILLS = { tree: "var(--ctp-teal)" };
 
@@ -37,7 +19,7 @@
   viewBox="0 0 16 16"
   data-icon={name}
   aria-hidden="true"
-  style:color={inherit ? undefined : COLOURS[name]}>
+  style:color={inherit ? undefined : ICON_COLOURS[name]}>
   {#each strokes as d, i}
     <path
       {d}

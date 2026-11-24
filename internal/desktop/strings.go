@@ -23,6 +23,7 @@ const (
 
 	sessionUnloadLabel   = "Unload"
 	sessionUnloadFailed  = "Session could not be unloaded"
+	sessionShowFailed    = "Session could not be opened"
 	sessionReorderFailed = "Session could not be moved"
 
 	sessionSwitchProfileLabel        = "Switch profile"

@@ -36,7 +36,7 @@ func CreateIssue(ctx context.Context, client *http.Client, token, title, body st
 	}
 	req.Header.Set(authorizationHeader, bearerPrefix+token)
 	req.Header.Set(acceptHeader, acceptGitHubJSON)
-	req.Header.Set(issueContentTypeHeader, issueJSONType)
+	req.Header.Set(contentTypeHeader, jsonContentType)
 	writer := *client
 	writer.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := writer.Do(req)

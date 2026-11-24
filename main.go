@@ -17,7 +17,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/desktop"
 	"github.com/kieranajp/qrouton/internal/launch"
-	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -50,8 +49,8 @@ func main() {
 	}
 }
 
-// open is the default action: the workbench, on the session last shown or on no
-// session at all. Assembling one is the window's own job.
+// open is the default action: the workbench, on the dashboard. Assembling a
+// session is the window's own job.
 func open(c *cli.Context) error {
 	if spec := c.String(workbenchSpecFlag); spec != "" {
 		return workbenchProcess(spec)
@@ -110,8 +109,8 @@ func openLocked(c *cli.Context, offered, prompt string) error {
 			Ticket: offered, TicketPrompt: prompt,
 		}, os.Environ())
 	}
-	// There is one workbench, and it opens on a session: two of them would each
-	// believe they were the only one holding that session's supervisor.
+	// There is one workbench: two of them would each believe they were the only
+	// one holding a session's supervisor.
 	if discovery.Socket != "" || discovery.Legacy {
 		return errWorkbenchRunning
 	}
@@ -120,22 +119,11 @@ func openLocked(c *cli.Context, offered, prompt string) error {
 		return err
 	}
 	warnConfig(cfg)
-	sessions, err := session.Scan(cfg.Root)
-	if err != nil {
-		return err
-	}
-	if last, ok := session.Preferred(cfg.Root, sessions); ok {
-		runner, err := pickRunner(cfg, c.String(runnerFlag))
-		if err != nil {
-			return err
-		}
-		return launchRunner(cfg, filepath.Join(cfg.Root, last.Slug), runner, true)
-	}
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		return err
 	}
-	return detach(launch.WorkbenchSpec{
+	return detachProcess(launch.WorkbenchSpec{
 		Socket: socket,
 		Runner: c.String(runnerFlag),
 		Editor: editorFor(cfg),
@@ -152,17 +140,6 @@ func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
 		return launch.ByID(cfg, id)
 	}
 	return launch.FirstInstalled(cfg)
-}
-
-func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {
-	socket, err := workbench.NewSocketPath()
-	if err != nil {
-		return err
-	}
-	return detachProcess(launch.WorkbenchSpec{
-		SessionRoot: dir, Socket: socket, Runner: r.ID, Resume: resume,
-		Editor: editorFor(cfg),
-	}, os.Environ())
 }
 
 // editorFor resolves the editor a session's windows open files with. Failing to

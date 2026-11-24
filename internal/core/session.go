@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -316,8 +315,8 @@ type Sessions struct {
 	slugs   map[string]*SessionState
 	terms   map[string]*SessionState
 	showing *SessionState
-	// history is the order sessions were shown in, most recent last, so a
-	// supervisor exiting can hand the window back to the one before it.
+	// history is the order sessions were shown in, most recent last, so a failed
+	// reboot can hand the window back to the one before it.
 	history []*SessionState
 	// rail retains user moves and missing slugs; new sessions prepend on polling.
 	rail []string
@@ -391,6 +390,13 @@ func (s *Sessions) Reload(slug string) error {
 	return s.replace(root, fallback, emptied)
 }
 
+// ShowDashboard empties the window. Agents of every session keep running behind it.
+func (s *Sessions) ShowDashboard() {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	s.reveal(nil)
+}
+
 func (s *Sessions) Unload(slug string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
@@ -406,10 +412,10 @@ func (s *Sessions) Unload(slug string) error {
 	if state == nil {
 		return nil
 	}
-	fallback, wasShown := s.recycle(state)
+	_, wasShown := s.recycle(state)
 	s.dropAgentActivity(slug)
 	if wasShown {
-		s.reveal(fallback)
+		s.reveal(nil)
 	} else {
 		s.Touch()
 	}
@@ -821,57 +827,11 @@ func (s *Sessions) retire(state *SessionState) {
 func (s *Sessions) retireLocked(state *SessionState) {
 	s.boot.teardown(state)
 	state.stop()
-	fallback, wasShown := s.forget(state)
-	if !wasShown {
-		s.Touch()
+	if _, wasShown := s.forget(state); wasShown {
+		s.reveal(nil)
 		return
 	}
-	if fallback == nil {
-		fallback = s.startNextInactive(state.Slug())
-	}
-	s.reveal(fallback)
-}
-
-// startNextInactive resumes the first inactive rail row after the given slug
-// that boots, so one broken session does not leave the window empty.
-func (s *Sessions) startNextInactive(after string) *SessionState {
-	for _, root := range s.inactiveRoots(after) {
-		booted, err := s.start(root, "", "", true)
-		if err == nil {
-			return booted
-		}
-		log.Printf(fallbackLogFormat, filepath.Base(root), err)
-	}
-	return nil
-}
-
-func (s *Sessions) inactiveRoots(after string) []string {
-	s.mu.Lock()
-	rail := append([]string(nil), s.rail...)
-	registered := make(map[string]bool, len(s.slugs))
-	for slug := range s.slugs {
-		registered[slug] = true
-	}
-	s.mu.Unlock()
-
-	start := 0
-	for i, slug := range rail {
-		if slug == after {
-			start = (i + 1) % len(rail)
-			break
-		}
-	}
-	var roots []string
-	for i := range rail {
-		slug := rail[(start+i)%len(rail)]
-		if slug == after || registered[slug] {
-			continue
-		}
-		if root := s.boot.root(slug); root != "" {
-			roots = append(roots, root)
-		}
-	}
-	return roots
+	s.Touch()
 }
 
 func (s *Sessions) stopAll() {
@@ -947,8 +907,8 @@ func (s *Sessions) forget(state *SessionState) (fallback *SessionState, wasShown
 	return nil, true
 }
 
-// reveal puts a session on screen. A nil session is the window with none, which
-// is what the landing path and the last retirement leave behind.
+// reveal puts a session on screen. A nil session is the window with none: the
+// dashboard.
 func (s *Sessions) reveal(state *SessionState) {
 	s.mu.Lock()
 	if s.showing != state {

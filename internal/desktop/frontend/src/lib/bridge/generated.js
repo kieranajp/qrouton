@@ -15,6 +15,8 @@ export const BUG_REPORTS_CONFIRM = "github.com/kieranajp/qrouton/internal/deskto
 export const BUG_REPORTS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.BugReports.Load";
 export const CHROME_AGENT_TREE = "github.com/kieranajp/qrouton/internal/desktop.Chrome.AgentTree";
 export const CHROME_SNAPSHOT = "github.com/kieranajp/qrouton/internal/desktop.Chrome.Snapshot";
+export const DASHBOARD_REFRESH = "github.com/kieranajp/qrouton/internal/desktop.Dashboard.Refresh";
+export const DASHBOARD_SNAPSHOT = "github.com/kieranajp/qrouton/internal/desktop.Dashboard.Snapshot";
 export const FIRST_RUN_CHOOSE_ROOT = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.ChooseRoot";
 export const FIRST_RUN_LOGIN = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.Login";
 export const FIRST_RUN_SAVE = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.Save";
@@ -56,6 +58,7 @@ export const SESSIONS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.S
 export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reveal";
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
+export const SESSIONS_SHOW_DASHBOARD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.ShowDashboard";
 export const SESSIONS_SWITCH_PROFILE = "github.com/kieranajp/qrouton/internal/desktop.Sessions.SwitchProfile";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
 export const SESSIONS_UNLOAD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Unload";
@@ -92,6 +95,7 @@ export const AGENT_TREE_EVENT = "agents:tree:";
 export const ASSEMBLY_PROGRESS_EVENT = "assembly:progress";
 export const ASSEMBLY_REQUESTED_EVENT = "assembly:requested";
 export const CHROME_EVENT = "chrome:update";
+export const DASHBOARD_EVENT = "dashboard:update";
 export const OLLAMA_EVENT = "ollama:status";
 export const ORGS_CHANGED_EVENT = "orgs:changed";
 export const PRESENTER_CLOSED_EVENT = "presenter:closed";
@@ -178,6 +182,14 @@ export const BUG_REPORT_STATUSES = Object.freeze({
   UNKNOWN: "unknown",
 });
 
+/** @typedef {"pending"|"answered"|"unavailable"|"none"} DashboardPullState */
+export const DASHBOARD_PULL_STATES = Object.freeze({
+  PENDING: "pending",
+  ANSWERED: "answered",
+  UNAVAILABLE: "unavailable",
+  NONE: "none",
+});
+
 /** @typedef {"diff"|"assets"|"markdown"} DocumentFormat */
 export const DOCUMENT_FORMATS = Object.freeze({
   DIFF: "diff",
@@ -256,6 +268,12 @@ export const PROGRESS_STATUSES = Object.freeze({
   COMPLETED: "completed",
   FAILED: "failed",
   ADVANCED: "advanced",
+});
+
+/** @typedef {"approved"|"changes-requested"} PullRequestReview */
+export const PULL_REQUEST_REVIEWS = Object.freeze({
+  APPROVED: "approved",
+  CHANGES_REQUESTED: "changes-requested",
 });
 
 /** @typedef {"open"|"draft"|"merged"|"closed"} PullRequestState */
@@ -342,6 +360,8 @@ export const STICKER_DUPLICATE = "another sticker already uses this colour and s
 export const SESSION_UNLOAD_LABEL = "Unload";
 
 export const SESSION_UNLOAD_FAILED = "Session could not be unloaded";
+
+export const SESSION_SHOW_FAILED = "Session could not be opened";
 
 export const SESSION_REORDER_FAILED = "Session could not be moved";
 

@@ -21,9 +21,9 @@
   let footer = $derived(
     wizard.status || (wizard.step === last ? destination(wizard.branch, picked) : ""),
   );
-  // Cancelling on step 0 of a gated overlay lands the user on a populated rail
-  // over an empty middle, so there is nothing to cancel to. Back on the later
-  // steps is unaffected: a user who can go back is not at a dead end.
+  // A gated overlay is all an install with no sessions has, so step 0 has nothing
+  // to cancel to. Back on the later steps is unaffected: a user who can go back is
+  // not at a dead end.
   let trapped = $derived(gated && wizard.step === 0);
   let owned = $state(false);
 

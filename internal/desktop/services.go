@@ -20,6 +20,12 @@ func (o *Ollama) Pull() { o.ollama.Pull() }
 
 func (o *Ollama) CancelPull() { o.ollama.CancelPull() }
 
+type Dashboard struct{ dashboard *core.Dashboard }
+
+func (d *Dashboard) Snapshot() core.DashboardStatus { return d.dashboard.Snapshot() }
+
+func (d *Dashboard) Refresh() { d.dashboard.Refresh() }
+
 type Sessions struct{ sessions *core.Sessions }
 
 func (s *Sessions) Show(slug string) error { return s.sessions.Show(slug) }
@@ -27,6 +33,8 @@ func (s *Sessions) Show(slug string) error { return s.sessions.Show(slug) }
 func (s *Sessions) Reload(slug string) error { return s.sessions.Reload(slug) }
 
 func (s *Sessions) Unload(slug string) error { return s.sessions.Unload(slug) }
+
+func (s *Sessions) ShowDashboard() { s.sessions.ShowDashboard() }
 
 func (s *Sessions) SwitchProfile(slug, profile string) error {
 	return s.sessions.SwitchProfile(slug, profile)

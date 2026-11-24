@@ -2,18 +2,21 @@
   import { onMount, onDestroy } from "svelte";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
+  import Icon from "../core/Icon.svelte";
   import { dismissible } from "../core/dismiss.js";
   import { flash } from "../flash.svelte.js";
   import Confirm from "../shell/Confirm.svelte";
   import Menu from "../shell/Menu.svelte";
   import RailItem from "./RailItem.svelte";
   import { fitMenu } from "../menu.js";
-  import { cleanup, cycleSticker, reload, reorder, reveal, show, switchProfile, uncommitted, unload } from "../sessions.js";
+  import { cleanup, cycleSticker, reload, reorder, reveal, show, showDashboard, switchProfile, uncommitted, unload } from "../sessions.js";
+  import { DASHBOARD_TITLE } from "../dashboard/dashboard.js";
   import {
     NO_CONVERSATION_REFUSAL,
     PROFILE_CURRENT_META,
     PROFILE_DEFAULT_LABEL,
     SESSION_REORDER_FAILED,
+    SESSION_SHOW_FAILED,
     SESSION_SWITCH_PROFILE_FAILED,
     SESSION_SWITCH_PROFILE_LABEL,
     SESSION_SWITCH_PROFILE_NEEDS_MESSAGE,
@@ -130,7 +133,7 @@
     const valid = sourceExists && target && sessions.some((row) => row.slug === target);
     clearDrag();
     if (!moved) {
-      if (sourceExists) show(source);
+      if (sourceExists) openSession(source);
       return;
     }
     if (!valid) return;
@@ -162,7 +165,7 @@
       const row = rowAt(sessions, event);
       if (!row) return;
       event.preventDefault();
-      show(row.slug);
+      openSession(row.slug);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("blur", clearDrag);
@@ -173,6 +176,15 @@
       clearDrag();
     };
   });
+
+  export async function openSession(slug) {
+    try {
+      await show(slug);
+    } catch (err) {
+      const reason = String(err?.message ?? "").trim();
+      showRowNotice(slug, reason ? `${SESSION_SHOW_FAILED}: ${reason}` : SESSION_SHOW_FAILED, true);
+    }
+  }
 
   function showRowNotice(slug, text, failed = false) {
     if (!mounted) return;
@@ -329,11 +341,21 @@
 </script>
 
 <div class="rail" style:width={size ? size + "px" : null} bind:clientWidth={width}>
-  <!-- A band the height of a pane header, so the first session row starts on the
-       same line as the transcript and the tab strip beside it. No bottom border:
-       the alignment is the point, and a rule would make it read as a header cell. -->
+  <!-- Outside the session list, so a drag can neither start here nor drop here. -->
+  <div class="home">
+    <button
+      type="button"
+      class="dashboard"
+      class:selected={!slug}
+      aria-current={!slug ? "page" : undefined}
+      onclick={() => showDashboard()}>
+      <span class="tile"><Icon name="dashboard" inherit /></span>
+      <span class="label">{DASHBOARD_TITLE}</span>
+    </button>
+  </div>
+
   <div class="band">
-    <CapsLabel tone="dim" centred>Sessions</CapsLabel>
+    <CapsLabel tone="dim">Sessions</CapsLabel>
   </div>
 
   <div class="session-list" aria-label="Sessions" bind:this={sessionList}>
@@ -358,7 +380,7 @@
         {stickers}
         stickerBusy={(pendingStickers[row.slug] ?? 0) > 0}
         feedback={rowNotice.value?.slug === row.slug ? rowNotice.value : null}
-        onSelect={() => show(row.slug)}
+        onSelect={() => openSession(row.slug)}
         onSticker={(event) => changeSticker(event, row)}
         onContextMenu={(event) => openMenu(event, row)} />
     {/each}
@@ -429,16 +451,71 @@
     overflow: hidden;
   }
 
-  /* Centred in the band, not sat on its floor: the tab labels are centred
-     in the pane header beside it, so this is where the two headings share a line. */
-  .band {
-    height: var(--h-pane-header);
+  .home {
+    flex: none;
+    display: flex;
+    padding: calc(14px * var(--ui-scale)) calc(12px * var(--ui-scale)) 0;
+  }
+
+  .dashboard {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: calc(10px * var(--ui-scale));
+    padding: calc(8px * var(--ui-scale));
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font: var(--machine-md);
+    font-size: calc(11px * var(--ui-scale));
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .dashboard:hover:not(.selected) {
+    border-color: var(--border-default);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+  }
+
+  .dashboard.selected {
+    border-color: var(--accent-action);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-focus);
+    font: var(--machine-bold);
+    font-size: calc(11px * var(--ui-scale));
+    color: var(--text-primary);
+  }
+
+  .dashboard:focus-visible {
+    outline: 2px solid var(--accent-action);
+    outline-offset: -2px;
+  }
+
+  .tile {
+    width: calc(26px * var(--ui-scale));
+    height: calc(26px * var(--ui-scale));
     box-sizing: border-box;
     flex: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 calc(12px * var(--ui-scale));
+    border: 1px solid var(--border-subtle);
+    color: var(--text-faint);
+  }
+
+  .dashboard.selected .tile {
+    background: var(--accent-action);
+    border-color: var(--accent-action);
+    color: var(--text-on-accent);
+  }
+
+  .band {
+    flex: none;
+    display: flex;
+    align-items: center;
+    padding: calc(16px * var(--ui-scale)) calc(21px * var(--ui-scale)) calc(6px * var(--ui-scale));
   }
 
   /* The session list scrolls; the footer below it stays put. */
@@ -448,7 +525,7 @@
     overflow: hidden auto;
     display: flex;
     flex-direction: column;
-    gap: calc(4px * var(--ui-scale));
+    gap: calc(2px * var(--ui-scale));
     padding: 0 calc(12px * var(--ui-scale));
   }
 

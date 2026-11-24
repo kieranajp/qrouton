@@ -7,6 +7,7 @@ import {
   SESSIONS_REVEAL,
   SESSIONS_REVEAL_PATH,
   SESSIONS_SHOW,
+  SESSIONS_SHOW_DASHBOARD,
   SESSIONS_SWITCH_PROFILE,
   SESSIONS_UNCOMMITTED,
   SESSIONS_UNLOAD,
@@ -14,6 +15,7 @@ import {
 import { Call } from "./wails.js";
 
 export const show = (slug) => Call.ByName(SESSIONS_SHOW, slug);
+export const showDashboard = () => Call.ByName(SESSIONS_SHOW_DASHBOARD);
 export const cycleSticker = (slug) => Call.ByName(SESSIONS_CYCLE_STICKER, slug);
 export const unload = (slug) => Call.ByName(SESSIONS_UNLOAD, slug);
 export const reorder = (slug, targetSlug) => Call.ByName(SESSIONS_REORDER, slug, targetSlug);

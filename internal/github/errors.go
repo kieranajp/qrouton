@@ -3,6 +3,7 @@ package github
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 var ErrNoToken = errors.New("no GitHub token: run `gh auth login` or set " + tokenEnvVar)
@@ -24,3 +25,18 @@ func unsupportedOwnerType(ownerType, owner string) error {
 }
 
 var ErrNotFound = errors.New("not found on GitHub")
+
+var ErrRateLimited = errors.New("GitHub rate limit reached")
+
+// RateLimitError carries when GitHub accepts requests again; errors.Is(err, ErrRateLimited) holds.
+type RateLimitError struct{ Until time.Time }
+
+func (e *RateLimitError) Error() string {
+	return fmt.Sprintf(rateLimitedFormat, ErrRateLimited, e.Until.Format(time.RFC3339))
+}
+
+func (e *RateLimitError) Unwrap() error { return ErrRateLimited }
+
+var ErrUnexpectedStatus = errors.New("GitHub answered with an unexpected status")
+
+var ErrQuery = errors.New("GitHub reported a query error")
