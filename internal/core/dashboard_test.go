@@ -973,3 +973,44 @@ func TestDashboardFailedBranchWithCachedRowsKeepsThemAndIsUnavailable(t *testing
 		t.Fatalf("rows after web failed = %v", rows)
 	}
 }
+
+// Catches pulls.json losing a failed branch's marker, so a restart reads its stale empty answer as "No pull requests".
+func TestDashboardFailedBranchStaysUnavailableAfterARestart(t *testing.T) {
+	b := newTestBoard(t)
+	b.session(t, "first", editing("web", "feat/x"))
+	b.session(t, "second", editing("api", "feat/x"))
+	b.refresh(t.Context())
+	b.clock.advance(time.Minute)
+	b.gh.say(boardAnswer{errs: map[string]error{"web": fmt.Errorf("github: %w: Something went wrong", github.ErrQuery)}})
+	b.refresh(t.Context())
+
+	restarted := newDashboard(b.root, func() bool { return false }, nil, dashboardAPI{}, b.clock.now, b.cachePath)
+
+	want := map[string]string{"first": dashboardPullsUnavailable, "second": dashboardPullsAnswered}
+	if got := pullStates(restarted.Snapshot()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("states after a restart = %v", got)
+	}
+}
+
+// Catches a pulls.json written before failed branches were recorded no longer loading.
+func TestDashboardLoadsAPullsCacheWithNoFailedBranches(t *testing.T) {
+	b := newTestBoard(t)
+	root := b.session(t, "pulls", editing("web", "feat/x"))
+	old := `{"schemaVersion": 1, "viewer": "kieran", "checkedAt": "2026-11-19T18:00:00Z",
+		"sessions": {"pulls": {"acme/web": {"feat/x": [{"repo": "acme/web", "number": 1, "title": "yesterday"}]}}}}`
+	if err := os.MkdirAll(filepath.Dir(b.cachePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(b.cachePath, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d := newDashboard(b.root, func() bool { return false }, nil, dashboardAPI{}, b.clock.now, b.cachePath)
+
+	if rows := titles(d.rows(root)); !reflect.DeepEqual(rows, []string{"acme/web#yesterday"}) {
+		t.Fatalf("rows from an old pulls.json = %v", rows)
+	}
+	if got := d.Snapshot().Sessions["pulls"].PullState; got != dashboardPullsAnswered {
+		t.Fatalf("state from an old pulls.json = %q", got)
+	}
+}

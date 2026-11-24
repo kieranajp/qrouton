@@ -62,12 +62,14 @@ func liveDashboardAPI() dashboardAPI {
 	}
 }
 
-// pullsCache is pulls.json: rows keyed by session slug, then repository, then branch.
+// pullsCache is pulls.json: rows keyed by session slug, then repository, then
+// branch, and the branches whose alias failed in the last answer, keyed the same way.
 type pullsCache struct {
 	SchemaVersion int                                                   `json:"schemaVersion"`
 	Viewer        string                                                `json:"viewer"`
 	CheckedAt     time.Time                                             `json:"checkedAt"`
 	Sessions      map[string]map[string]map[string][]status.PullRequest `json:"sessions"`
+	Unanswered    map[string]map[string]map[string]bool                 `json:"unanswered,omitempty"`
 }
 
 // Dashboard owns every session's pull requests, refreshed in one GitHub request,
@@ -95,8 +97,8 @@ type Dashboard struct {
 	pausedUntil time.Time
 	pulls       map[string]map[string]map[string][]status.PullRequest
 	stats       map[string][]status.RepoStat
-	// unanswered holds each session's branches whose alias failed in the last per-alias answer, by repo key.
-	unanswered map[string]map[string]bool
+	// unanswered holds each session's branches whose alias failed in the last per-alias answer, keyed like pulls.
+	unanswered map[string]map[string]map[string]bool
 	// logged is the last failure logged per alias, with the whole refresh under "".
 	logged map[string]string
 	cancel context.CancelFunc
@@ -118,7 +120,7 @@ func newDashboard(root string, showing func() bool, emit Emitter, api dashboardA
 		stats: map[string][]status.RepoStat{}, logged: map[string]string{},
 	}
 	if cached, ok := readPullsCache(cachePath); ok {
-		d.viewer, d.checkedAt = cached.Viewer, cached.CheckedAt
+		d.viewer, d.checkedAt, d.unanswered = cached.Viewer, cached.CheckedAt, cached.Unanswered
 		if cached.Sessions != nil {
 			d.pulls = cached.Sessions
 		}
@@ -305,7 +307,7 @@ func (d *Dashboard) pullStateLocked(s dashboardSession) string {
 	}
 	state := dashboardPullsAnswered
 	for _, repo := range s.repos {
-		if d.unanswered[s.slug][repo.key()] {
+		if d.unanswered[s.slug][repo.id][repo.target.Branch] {
 			return dashboardPullsUnavailable
 		}
 		if _, ok := d.pulls[s.slug][repo.id][repo.target.Branch]; !ok {
@@ -420,7 +422,7 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 	defer d.mu.Unlock()
 	reuse := viewer == "" || d.viewer == "" || viewer == d.viewer
 	next := map[string]map[string]map[string][]status.PullRequest{}
-	unanswered := map[string]map[string]bool{}
+	unanswered := map[string]map[string]map[string]bool{}
 	answered := false
 	for _, s := range sessions {
 		for _, repo := range s.repos {
@@ -436,9 +438,9 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 			default:
 				d.logOnceLocked(repo.key(), result.Err)
 				if unanswered[s.slug] == nil {
-					unanswered[s.slug] = map[string]bool{}
+					unanswered[s.slug] = map[string]map[string]bool{}
 				}
-				unanswered[s.slug][repo.key()] = true
+				unanswered[s.slug][repo.id] = map[string]bool{repo.target.Branch: true}
 				previous, kept := d.pulls[s.slug][repo.id][repo.target.Branch]
 				if !reuse || !kept {
 					continue
@@ -458,7 +460,7 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 			return pullsCache{}, false
 		}
 		d.pulls, d.viewer, d.checkedAt, d.signedOut = next, viewer, time.Time{}, false
-		return pullsCache{SchemaVersion: pullsCacheSchemaVersion, Viewer: viewer, Sessions: next}, true
+		return pullsCache{SchemaVersion: pullsCacheSchemaVersion, Viewer: viewer, Sessions: next, Unanswered: unanswered}, true
 	}
 	d.pulls = next
 	d.viewer, d.checkedAt = viewer, d.now()
@@ -467,7 +469,7 @@ func (d *Dashboard) fetch(ctx context.Context, sessions []dashboardSession, targ
 		d.pausedUntil = limited.Until
 	}
 	delete(d.logged, "")
-	return pullsCache{SchemaVersion: pullsCacheSchemaVersion, Viewer: d.viewer, CheckedAt: d.checkedAt, Sessions: next}, true
+	return pullsCache{SchemaVersion: pullsCacheSchemaVersion, Viewer: d.viewer, CheckedAt: d.checkedAt, Sessions: next, Unanswered: unanswered}, true
 }
 
 func writePullsCache(path string, cache pullsCache) error {
