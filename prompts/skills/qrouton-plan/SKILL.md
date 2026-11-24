@@ -36,7 +36,9 @@ Require this of the lead's return:
 - what happened: the phase outline;
 - where the work lives: the plan artifact path;
 - how you checked it: the verification each phase carries;
-- what stays unresolved: the blockers the lead could not resolve.
+- what stays unresolved: the blockers the lead could not resolve, and under a `For you` heading the actions only the user can take, such as the rollout steps.
+
+After the plan lands, copy the lead's `For you` items into the session's todo document.
 
 {{session-digest}}
 

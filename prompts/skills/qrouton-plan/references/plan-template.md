@@ -24,6 +24,6 @@ audit:
 
 ## Closing checklist
 
-- [ ] <an operational chore: move a file, promote, clean up>
+- [ ] <a chore an agent can verify: move a file, promote, clean up>
 
 ## Blockers

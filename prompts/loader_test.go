@@ -1051,3 +1051,49 @@ func TestFixStagePromptsCarryPrevention(t *testing.T) {
 		t.Error("test-verifier can no longer write the scratch copy")
 	}
 }
+
+// Catches a human rollout step sent back to a plan's closing checklist, a lead
+// that stops returning human actions, or todos turning into a routed stage.
+func TestHumanStepsGoToTheTodoDocument(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	load := func(id ID) (string, []PromptFile) {
+		t.Helper()
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(prompt.Content), prompt.Files
+	}
+
+	orchestrator, _ := load(Orchestrator)
+	if !strings.Contains(orchestrator, "`kind: todo`") || !strings.Contains(orchestrator, "`notify`") {
+		t.Error("the orchestrator does not say how to create the todo document or nudge on a blocking item")
+	}
+	for _, row := range strings.Split(orchestrator, "\n") {
+		if strings.HasPrefix(row, "|") && strings.Contains(strings.ToLower(row), "todo") {
+			t.Errorf("the routing table routes todos: %s", row)
+		}
+	}
+
+	_, files := load(ID(skillIDPrefix + "qrouton-plan"))
+	var shape string
+	for _, file := range files {
+		if file.Path == "references/plan-shape.md" {
+			shape = string(file.Content)
+		}
+	}
+	if !strings.Contains(shape, "todo document") || !strings.Contains(shape, "`Blocks: Phase <n>`") {
+		t.Error("the plan shape does not send human-only steps to the todo document")
+	}
+
+	for _, id := range []ID{
+		ID(agentIDPrefix + "qrouton-planning-lead"),
+		ID(agentIDPrefix + "qrouton-implementation-lead"),
+		ID(skillIDPrefix + "qrouton-implement"),
+		ID(skillIDPrefix + "qrouton-plan"),
+	} {
+		if text, _ := load(id); !strings.Contains(text, "`For you`") {
+			t.Errorf("%s does not carry the For you return", id)
+		}
+	}
+}

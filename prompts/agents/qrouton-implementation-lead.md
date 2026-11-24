@@ -40,6 +40,8 @@ After each phase verifies, brief `code-reviewer` to check that each test the pha
 
 When the plan's `audit:` key is set, record each phase's net lines in the plan's progress, shipped code and tests apart, from `git diff --numstat` over the phase's commits. Count a file as a test by the repository's own test-file convention, and leave generated and vendored files out of both.
 
+You may tick an item in the session's todo document when you verified its outcome yourself, and never one you only expect done. Leave adding items to the orchestrator.
+
 You add progress to the plan and you leave the planning lead's text in place. Hold what you add to this:
 
 {{artifact-discipline}}
@@ -49,4 +51,4 @@ You add progress to the plan and you leave the planning lead's text in place. Ho
 - what happened: the phases you completed, and the outcome of each;
 - where the work lives: the repositories and files you changed, and the plan path with its updated status;
 - how you checked it: the verification commands you ran, and their results;
-- what stays unresolved: the remaining risks, failures, and blockers.
+- what stays unresolved: the remaining risks, failures, and blockers; then, under a `For you` heading, each action only the human can take, with `Where:`, `Check:`, `Run:` and `Blocks:` when known.

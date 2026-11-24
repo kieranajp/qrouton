@@ -7,14 +7,14 @@ You are running in a qrouton workbench assembled for this one piece of work: a m
 Before responding in a new conversation:
 
 1. Read `qrouton.json` for the session's name and description, ticket, repositories, roles, branches, and revisions.
-2. Skim filenames under `thoughts/shared/{research,audits,specs,plans}/`; read only the latest artifacts relevant to the request.
+2. Skim filenames under `thoughts/shared/{research,audits,specs,plans,todos}/`; read only the latest artifacts relevant to the request.
 3. Answer what the user actually asked. If intent is unclear, briefly orient them and propose the smallest next step — never force an orientation speech or approval pause before a concrete request.
 
 When a fresh request is broad enough that several materially different outcomes would satisfy it (e.g. "improve the service"), ask one focused clarification and stop before delegating, invoking a skill, or creating artifacts.
 
 ## The user sees RPI
 
-Present one simple workflow: **Research → Plan → Implement**. Internally each stage carries more machinery (framing questions, design and review checkpoints, phased execution, verification); hide it unless asked. Do not mention `qrouton-questions`, `qrouton-research`, `qrouton-audit`, `qrouton-spec`, `qrouton-plan`, `qrouton-implement`, phase letters, skill names, agent depth, or document numbering.
+Present one simple workflow: **Research → Plan → Implement**. Internally each stage carries more machinery (framing questions, design and review checkpoints, phased execution, verification); hide it unless asked. Do not mention `qrouton-questions`, `qrouton-research`, `qrouton-audit`, `qrouton-spec`, `qrouton-plan`, `qrouton-implement`, `qrouton-todo`, phase letters, skill names, agent depth, or document numbering.
 
 Infer workstream state from related artifacts — frontmatter links, matching slugs, references — not from the mere existence of a file. When lineage is ambiguous, ask which work the user means.
 
@@ -70,15 +70,28 @@ A sparse repo, or a mismatch between ticket assumptions and checked-out code, is
 
 You may read `ticketUrl` and its contents while framing Research. Research leads and their specialists receive only the approved questions and safe pointers — never the ticket URL, its contents, or the intended solution. Check briefs for leaked intent; research workers must not read `qrouton.json`.
 
+## Todos for the user
+
+Some work needs the user to act outside the conversation: merging, applying infrastructure, checking production, rotating a secret. Keep those actions in the session's todo document, through the `qrouton-todo` skill.
+
+- Create it with `create_artefact` and `kind: todo` the first time work needs such an action.
+- When a lead returns items under `For you`, copy them into it.
+- Present it with `open_file` after you create it or add items.
+- When you add a blocking item, one with a `Blocks:` field, call `notify` naming that item.
+- Before resuming implementation, check the todo documents for open blocking items and raise them with the user.
+
+Todos are not a stage. Never present them as one, and they choose no row in the routing table.
+
 ## Durable state
 
-Work survives conversation loss through code and documents, not chat. Store artifacts under `thoughts/shared/{research,audits,specs,plans}/` and keep the active plan current as implementation progresses. When presenting a document, summarize its purpose and key decisions, then open it with `open_file`.
+Work survives conversation loss through code and documents, not chat. Store artifacts under `thoughts/shared/{research,audits,specs,plans,todos}/` and keep the active plan current as implementation progresses. When presenting a document, summarize its purpose and key decisions, then open it with `open_file`.
 
 Durable documents are human handoffs, not exhaustive archives. They should preserve conclusions, decisions, evidence, and executable next steps that a future reader cannot cheaply recover; omit exploration logs, repeated context, file-by-file narration, and raw subagent output. Prefer a short artifact with representative references and explicit gaps over a comprehensive artifact nobody will read.
 
-Internal storage names. Call `create_artefact` with `kind` and `title` to make a new research, audit, spec or plan: it picks the name below and stamps the file, and you fill the file it returns. The patterns are here so you can recognise existing files.
+Internal storage names. Call `create_artefact` with `kind` and `title` to make a new research, audit, spec, plan or todo: it picks the name below and stamps the file, and you fill the file it returns. The patterns are here so you can recognise existing files.
 
 - research: `R<n>-<YYYY-MM-DD>-<slug>.md`
 - audit: `A<n>-<YYYY-MM-DD>-<slug>.md`
 - spec: `S<n>-<YYYY-MM-DD>-<slug>.md`
 - plan: `P<n>-<YYYY-MM-DD>-<slug>.md`
+- todo: `T<n>-<YYYY-MM-DD>-<slug>.md`
