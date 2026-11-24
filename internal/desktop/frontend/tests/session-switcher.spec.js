@@ -275,3 +275,18 @@ test("the dashboard covers the panes without unmounting the conversation", async
   await expect(page.locator(".agent")).toBeVisible();
   expect((await page.evaluate(() => window.shell.started())).filter(([kind]) => kind === "Term")).toEqual([["Term", "term-1"]]);
 });
+
+// The dashboard unmounts the open session menu without closing it, which left ⌘K blocked and the menu waiting for the next session.
+test("leaving a session with its menu open closes the menu, so ⌘K opens and no menu comes back", async ({ page }) => {
+  await setup(page);
+  await page.locator(".titlebar").getByRole("button", { name: "Octopus" }).click();
+  await expect(page.locator(".titlebar .menu")).toBeVisible();
+  await page.evaluate(() => window.shell.snapshot({ slug: "", terminal: "" }));
+  await expect(page.getByRole("region", { name: "Dashboard" })).toBeVisible();
+  await page.keyboard.press("Control+k");
+  await expect(query(page)).toBeFocused();
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => window.shell.snapshot({ slug: "octopus", terminal: "term-1" }));
+  await expect(page.locator(".titlebar").getByRole("button", { name: "Octopus" })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".titlebar .menu")).toHaveCount(0);
+});

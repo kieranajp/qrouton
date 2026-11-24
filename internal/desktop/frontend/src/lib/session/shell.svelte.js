@@ -173,6 +173,14 @@ export function shell() {
     item?.act?.();
   }
 
+  // The menu belongs to the session it opened on, and the dashboard unmounts it without a dismissal.
+  let identityFor = "";
+  $effect(() => {
+    if (fields.slug === identityFor) return;
+    identityFor = fields.slug;
+    identityOpen = false;
+  });
+
   let requested = $state(false);
   let escalating = $state(false);
   let settingsOpen = $state(false);
