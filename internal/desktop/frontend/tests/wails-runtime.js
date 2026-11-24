@@ -1,6 +1,7 @@
 export const Browser = {
   OpenURL: async (url) => {
     window.openedURL = url;
+    window.openedURLs = [...(window.openedURLs ?? []), url];
   },
 };
 export const Clipboard = {

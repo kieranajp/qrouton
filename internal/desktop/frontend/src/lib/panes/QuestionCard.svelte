@@ -1,15 +1,13 @@
 <script>
   import NoteEditor from "./NoteEditor.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
-  import { render } from "./markdown.js";
+  import { fragment, inline, render } from "./markdown.js";
 
   /** @type {{question: import("./spec.js").Question, draft: {letter: string, note: string}, focused?: boolean, readonly?: boolean, state?: string, message?: string, onPick?: (letter: string) => void, onNote?: (text: string) => void, onCommit?: () => void, onFocus?: () => void}} */
   let { question, draft, focused = false, readonly = false, state = "", message = "", onPick, onNote, onCommit, onFocus } = $props();
 
   const STATES = { unsaved: "Not saved", saving: "Saving…", saved: "Saved", failed: "Not saved", reloaded: "Not saved" };
 
-  // Line numbers here would count from the card, not the file.
-  const unnumbered = (text) => render(text).body.replace(/ data-line(?:-end)?="\d+"/g, "");
   // A fence keeps its line in the file so the diagram renderer can find it.
   const anchored = (text, first) =>
     render(text).body.replace(/<(\w+)([^>]*)>/g, (tag, name, attrs) =>
@@ -17,7 +15,6 @@
         ? `<${name}${attrs.replace(/ data-line(-end)?="(\d+)"/g, (_, end, at) =>
             name === "pre" ? ` data-line${end ?? ""}="${Number(at) + first - 1}"` : "")}>`
         : tag);
-  const inline = (text) => unnumbered(text).replace(/^<p>|<\/p>\s*$/g, "");
   const isParagraph = (html) => /^<p>/.test(html) && html.indexOf("<p>", 1) === -1 && /<\/p>\s*$/.test(html);
 
   let context = $derived(question.context ? anchored(question.context, question.contextFrom) : "");
@@ -51,10 +48,10 @@
         onclick={() => onPick?.(option.letter)}>
         <span class="letter">{option.letter}</span>
         <span class="text">
-          {#if isParagraph(unnumbered(option.text))}
+          {#if isParagraph(fragment(option.text))}
             <span class="label">{@html inline(option.text)}</span>
           {:else}
-            <span class="label markdown blocks">{@html unnumbered(option.text)}</span>
+            <span class="label markdown blocks">{@html fragment(option.text)}</span>
           {/if}
           {#if option.recommended}
             <span class="recommended">

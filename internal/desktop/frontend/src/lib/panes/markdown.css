@@ -102,14 +102,16 @@
   margin: calc(22px * var(--ui-scale)) 0 calc(8px * var(--ui-scale));
 }
 
-.markdown a {
+.markdown a,
+.inline-markdown a {
   color: var(--accent-action);
   text-decoration: none;
   border-bottom: 1px solid var(--border-default);
   cursor: pointer;
 }
 
-.markdown strong {
+.markdown strong,
+.inline-markdown strong {
   color: var(--text-primary);
   font-weight: 700;
 }
@@ -180,7 +182,8 @@
   background: var(--state-success);
 }
 
-.markdown code {
+.markdown code,
+.inline-markdown code {
   font: var(--machine-sm);
   color: var(--accent-literal);
   background: var(--surface-terminal);

@@ -119,6 +119,20 @@ export function render(markdown) {
   return { title: typeof file.data.title === "string" ? file.data.title : "", body: String(file) };
 }
 
+const NUMBERS = / data-line(?:-end)?="\d+"/g;
+const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
+
+/** Markdown cut out of a document, without line numbers, which would count from the cut.
+ * @param {string} markdown */
+export const fragment = (markdown) => render(markdown).body.replace(NUMBERS, "");
+
+/** A single paragraph's contents, to sit inside a line. Anything else shows as its source.
+ * @param {string} markdown */
+export function inline(markdown) {
+  const one = /^<p>([\s\S]*)<\/p>$/.exec(fragment(markdown).trim());
+  return one && !one[1].includes("<p>") ? one[1] : markdown.replace(/[&<>"]/g, (c) => ESCAPES[c]);
+}
+
 /** A span between blocks marks nothing and scrolls to the following block.
  * @param {{line: number, end: number}[]} blocks In document order.
  * @param {{line: number, to: number}} span

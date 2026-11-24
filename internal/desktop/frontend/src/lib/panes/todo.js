@@ -12,11 +12,12 @@ const LEAD = /^\s*(?:[-*+]|\d+[.)])\s+/;
 const FIELD = /^(?:[-*+]\s+)?(Where|Check|Run|Blocks):[ \t]*(.*?)\s*$/;
 const NOTE = " — ";
 const BOXES = { open: " ", done: "x", skipped: "-" };
+const BLANK = /^\s*$/;
 const KEYS = { Where: "where", Check: "check", Run: "run", Blocks: "blocks" };
 const CONTAINERS = new Set(["list", "blockquote"]);
 
 /** @typedef {"open" | "done" | "skipped"} State */
-/** @typedef {{section: string, text: string, nth: number, note: string, state: State, line: number, to: number, where: string, check: string, run: string, blocks: string, prose: string[]}} Item */
+/** @typedef {{section: string, text: string, nth: number, note: string, state: State, line: number, to: number, where: string, check: string, run: string, blocks: string, prose: string}} Item */
 /** @typedef {{key: string, section: string, text: string, state: State, note?: string}} Draft */
 
 /** @param {string} box @returns {State} */
@@ -57,19 +58,24 @@ export function parseTodo(text) {
     visit(node, "listItem", (child) => {
       if (child !== node && lead(lines, child)) nested.push({ from: child.position.start.line, to: child.position.end.line });
     });
+    const code = [];
+    visit(node, "code", (block) => void code.push({ from: block.position.start.line, to: block.position.end.line }));
     const { text: said, note } = split(found[2]);
     const section = sectionOf(line);
     const nth = items.filter((earlier) => earlier.section === section && earlier.text === said).length;
     /** @type {Item} */
-    const item = { section, text: said, nth, note, state: stateOf(found[1]), line, to, where: "", check: "", run: "", blocks: "", prose: [] };
+    const item = { section, text: said, nth, note, state: stateOf(found[1]), line, to, where: "", check: "", run: "", blocks: "", prose: "" };
+    const indent = new RegExp(`^ {0,${LEAD.exec(lines[line - 1])?.[0].length ?? 0}}`);
+    const prose = [];
     for (let at = line + 1; at <= to; at++) {
-      if (nested.some((span) => at >= span.from && at <= span.to)) continue;
-      const source = (lines[at - 1] ?? "").trim();
-      if (!source) continue;
-      const field = FIELD.exec(source);
-      if (field) item[KEYS[field[1]]] = field[2];
-      else item.prose.push(source);
+      const source = lines[at - 1] ?? "";
+      const field = code.some((span) => at >= span.from && at <= span.to) ? null : FIELD.exec(source.trim());
+      if (nested.some((span) => at >= span.from && at <= span.to)) {
+        if (prose.at(-1) !== "") prose.push("");
+      } else if (field) item[KEYS[field[1]]] = field[2];
+      else prose.push(BLANK.test(source) ? "" : source.replace(indent, ""));
     }
+    item.prose = prose.join("\n").replace(/^\n+/, "").trimEnd();
     items.push(item);
   });
 
@@ -144,5 +150,15 @@ export function pullRefs(item, pulls) {
   return { refs, where: /[\p{L}\p{N}]/u.test(where) ? where.replace(/\(\s*\)/g, " ").replace(/\s+/g, " ").trim() : "" };
 }
 
-/** @param {string} value */
-export const runCommand = (value) => (value.length >= 2 && value.startsWith("`") && value.endsWith("`") ? value.slice(1, -1) : value);
+/** What a field's copy button copies, or null when the value reads as prose. A value that is
+ * one code span is a command, and so is a Run value with no code span in it.
+ * @param {"run" | "check"} key @param {string} value */
+export function command(key, value) {
+  const root = /** @type {any} */ (parser.parse(value));
+  const [first] = root.children;
+  const only = root.children.length === 1 && first.type === "paragraph" && first.children.length === 1 ? first.children[0] : null;
+  if (only?.type === "inlineCode") return only.value;
+  let spans = false;
+  visit(root, "inlineCode", () => void (spans = true));
+  return key === "run" && !spans ? value : null;
+}

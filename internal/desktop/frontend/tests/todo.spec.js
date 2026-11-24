@@ -144,6 +144,8 @@ test("each pull request is one chip linking to GitHub, with a state icon only wh
   await expect(merge.locator("[data-where]")).toHaveCount(0);
   await tracked.click();
   await expect.poll(() => page.evaluate(() => window.openedURL)).toBe("https://github.com/acme/api/pull/12");
+  // The pane's link handler and the chip's own once both opened it.
+  expect(await page.evaluate(() => window.openedURLs)).toHaveLength(1);
 
   const announce = item(page, "Announce in the channel");
   const untracked = announce.locator("[data-pull]");
@@ -173,4 +175,42 @@ test("each open at a line scrolls the pane back to that item, even at the same l
   await expect(announce).not.toBeInViewport();
   await page.evaluate((at) => window.focusLine(at, 2), line);
   await expect(announce).toBeInViewport();
+});
+
+const SECRETS = [
+  "# Rollout",
+  "",
+  "- [ ] Set the `AUTH_*` deploy secrets from the [runbook](https://example.com/runbook)",
+  "  - Blocks: deploy",
+  "  - Check: the pod starts and `kubectl get pods` shows it running",
+  "",
+  "  | Variable | staging |",
+  "  |---|---|",
+  "  | `AUTH_ISSUER` | `staging.example.com` |",
+  "",
+].join("\n");
+
+// Catches Markdown shown as raw source in an item: pipe rows, backticks, or a link that navigates the pane.
+test("an item's text, fields and prose render as Markdown, and a link opens outside without ticking", async ({ page }) => {
+  await open(page);
+  await page.evaluate((text) => window.pushContent(text), SECRETS);
+  const secrets = item(page, "Set the `AUTH_*` deploy secrets from the [runbook](https://example.com/runbook)");
+  await expect(secrets.locator(".row .inline-markdown code")).toHaveText("AUTH_*");
+  await expect(secrets.locator(".row .inline-markdown")).toHaveText("Set the AUTH_* deploy secrets from the runbook");
+
+  const check = secrets.locator("[data-check]");
+  await expect(check.locator("code")).toHaveText("kubectl get pods");
+  await expect(check.locator("[data-copy-code]")).toHaveCount(0);
+
+  const table = secrets.locator("[data-prose] table");
+  await expect(table.locator("th")).toHaveText(["Variable", "staging"]);
+  await expect(table.locator("td code")).toHaveText(["AUTH_ISSUER", "staging.example.com"]);
+  await expect(secrets).not.toContainText("|---|");
+
+  const at = page.url();
+  await secrets.getByRole("link", { name: "runbook" }).click();
+  await expect.poll(() => page.evaluate(() => window.openedURLs)).toEqual(["https://example.com/runbook"]);
+  expect(page.url()).toBe(at);
+  await expect(secrets.getByRole("checkbox")).not.toBeChecked();
+  expect(await saves(page)).toHaveLength(0);
 });

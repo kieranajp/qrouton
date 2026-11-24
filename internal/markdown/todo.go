@@ -127,14 +127,17 @@ func (r todoReader) item(node ast.Node) (int, []string) {
 	return line, todoLine.FindStringSubmatch(r.lines[line-1])
 }
 
-// body is every source line under an item but its own, leaving out nested
-// items that are todos themselves.
+// body is every source line under an item that could hold a field: not its
+// own, not inside a code block, and not in a nested item that is a todo itself.
 func (r todoReader) body(item ast.Node, own int) []int {
 	seen := map[int]bool{own: true}
 	var out []int
 	_ = ast.Walk(item, func(child ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering || child.Type() != ast.TypeBlock {
 			return ast.WalkContinue, nil
+		}
+		if child.Kind() == ast.KindFencedCodeBlock || child.Kind() == ast.KindCodeBlock {
+			return ast.WalkSkipChildren, nil
 		}
 		if child != item && child.Kind() == ast.KindListItem {
 			if _, found := r.item(child); found != nil {

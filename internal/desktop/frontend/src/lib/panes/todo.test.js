@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseTodo, pullRefs, reapply, runCommand, setState, spliceDraft, todoKey } from "./todo.js";
+import { command, parseTodo, pullRefs, reapply, setState, spliceDraft, todoKey } from "./todo.js";
 
 const doc = (...lines) => lines.join("\n");
 
@@ -38,7 +38,7 @@ test("prose under an item stays apart from its fields, and the title and section
   const parsed = parseTodo(doc("# Ship it", "", "## Now", "- [ ] Deploy", "  Wait for the canary.", "  - Where: prod", ""));
   assert.equal(parsed.title, "Ship it");
   assert.deepEqual(parsed.sections.map((section) => section.name), ["", "Now"]);
-  assert.deepEqual(parsed.items[0].prose, ["Wait for the canary."]);
+  assert.equal(parsed.items[0].prose, "Wait for the canary.");
   assert.equal(parsed.items[0].to, 6);
   assert.equal(parsed.isTodo, true);
 });
@@ -107,11 +107,51 @@ test("each pull request an item names is one GitHub link, tracked or not, and Wh
   assert.deepEqual(pullRefs({ where: "enclave · production", text: "Merge" }, null), { refs: [], where: "enclave · production" });
 });
 
-test("a run command loses one pair of backticks and nothing else", () => {
-  assert.equal(runCommand("`make migrate`"), "make migrate");
-  assert.equal(runCommand("``a` b``"), "`a` b`");
-  assert.equal(runCommand("make migrate"), "make migrate");
-  assert.equal(runCommand("`"), "`");
+// Catches a Check sentence that opens and closes with code being offered as one broken command.
+test("a lone code span is a command, a bare Run value is one too, and anything holding code among prose is not", () => {
+  assert.equal(command("run", "`make migrate`"), "make migrate");
+  assert.equal(command("check", "``a` b``"), "a` b");
+  assert.equal(command("run", "make migrate"), "make migrate");
+  assert.equal(command("check", "the post has a link"), null);
+  assert.equal(command("check", "`kubectl get pods` shows `Running`"), null);
+  assert.equal(command("run", "`make a` then `make b`"), null);
+  assert.equal(command("check", "# `heading`"), null);
+});
+
+// Catches a table under an item flattened into one line per row, or cut off where a field sits beside it.
+test("prose under an item keeps its blank lines and table, dedented, without its fields or nested todos", () => {
+  const parsed = parseTodo(
+    doc(
+      "## Deploy",
+      "- [ ] Set the `AUTH_*` deploy secrets",
+      "  - Blocks: deploy",
+      "  - Check: the new pod starts.",
+      "",
+      "  | Variable | staging |",
+      "  |---|---|",
+      "  | `AUTH_ISSUER` | `staging.lykon.io` |",
+      "",
+      "  - [ ] Rotate the old key",
+      "    Before the cutover.",
+      "  ```sh",
+      "  make secrets",
+      "  ```",
+      "- [ ] Next item",
+      "",
+    ),
+  );
+  const [secrets, rotate, next] = parsed.items;
+  assert.equal(secrets.text, "Set the `AUTH_*` deploy secrets");
+  assert.equal(secrets.blocks, "deploy");
+  assert.equal(secrets.check, "the new pod starts.");
+  assert.equal(
+    secrets.prose,
+    doc("| Variable | staging |", "|---|---|", "| `AUTH_ISSUER` | `staging.lykon.io` |", "", "```sh", "make secrets", "```"),
+  );
+  assert.equal(rotate.prose, "Before the cutover.");
+  assert.equal(next.line, 15);
+  assert.equal(next.prose, "");
+  assert.equal(parseTodo(doc("- [ ] Deploy", "  Wait for the canary.", "", "  Then watch the logs.", "")).items[0].prose, "Wait for the canary.\n\nThen watch the logs.");
 });
 
 // Items sharing a section and text once shared a key, so ticking the second wrote the first.

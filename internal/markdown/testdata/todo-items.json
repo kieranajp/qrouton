@@ -154,5 +154,44 @@
         "blocks": ""
       }
     ]
+  },
+  {
+    "name": "a table under an item keeps the fields around it, one outside the list ends it, and code is never a field",
+    "text": "## Deploy\n- [ ] Set the `AUTH_*` deploy secrets in staging and prod\n  - Blocks: deploy\n  - Check: the new pod starts. Without these values it exits at boot.\n\n  | Variable | staging | prod |\n  |---|---|---|\n  | `AUTH_ISSUER` | `staging.example.com` | `example.com` |\n\n  - Where: staging · prod\n- [ ] Restart the pods\n\n| Not | under |\n|---|---|\n| an | item |\n\n- [ ] After the table\n  - Run: `make restart`\n  ```sh\n  Check: kubectl get pods\n  ```\n",
+    "items": [
+      {
+        "section": "Deploy",
+        "text": "Set the `AUTH_*` deploy secrets in staging and prod",
+        "note": "",
+        "state": "open",
+        "line": 2,
+        "where": "staging · prod",
+        "check": "the new pod starts. Without these values it exits at boot.",
+        "run": "",
+        "blocks": "deploy"
+      },
+      {
+        "section": "Deploy",
+        "text": "Restart the pods",
+        "note": "",
+        "state": "open",
+        "line": 11,
+        "where": "",
+        "check": "",
+        "run": "",
+        "blocks": ""
+      },
+      {
+        "section": "Deploy",
+        "text": "After the table",
+        "note": "",
+        "state": "open",
+        "line": 17,
+        "where": "",
+        "check": "",
+        "run": "`make restart`",
+        "blocks": ""
+      }
+    ]
   }
 ]

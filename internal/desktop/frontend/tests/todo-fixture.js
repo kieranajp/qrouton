@@ -101,5 +101,9 @@ window.sends = () => window.calls.filter((call) => call.name.endsWith(".SendTodo
 window.TODO = TODO;
 // What the workbench pushes when an item elsewhere is opened at its line.
 window.focusLine = (line, focus) => emitWailsEvent(WINDOW_CONTENT_EVENT + "w1", { ...document_(), line, to: 0, focus });
+window.pushContent = (text) => {
+  window.file = text;
+  emitWailsEvent(WINDOW_CONTENT_EVENT + "w1", document_());
+};
 
 mount(TodoFixture, { target: document.querySelector("#fixture") });

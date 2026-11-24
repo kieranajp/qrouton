@@ -14,7 +14,11 @@
   href={ref.url}
   title={ref.pull?.title ?? null}
   data-pull={ref.pull?.state ?? ""}
-  onclick={(event) => (event.preventDefault(), openURL(ref.url))}>
+  onclick={(event) => {
+    // Inside a pane the links action has already opened it.
+    if (!event.defaultPrevented) openURL(ref.url);
+    event.preventDefault();
+  }}>
   {#if ref.pull}
     <span
       class="pull-state"

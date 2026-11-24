@@ -14,11 +14,11 @@
   import { clampedSpan, holding } from "./deck.js";
   import MarkdownPane from "./MarkdownPane.svelte";
   import PullChip from "./PullChip.svelte";
-  import { render } from "./markdown.js";
+  import { fragment, inline, render } from "./markdown.js";
   import { reader, scrolls } from "./reader.svelte.js";
   import { dealt } from "./sections.js";
   import { sendTodoUpdate } from "./spec-calls.js";
-  import { parseTodo, pullRefs, reapply, runCommand, spliceDraft, todoKey } from "./todo.js";
+  import { command, parseTodo, pullRefs, reapply, spliceDraft, todoKey } from "./todo.js";
   import "./markdown.css";
 
   /** @type {{doc: {text: string, hash?: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number, focus?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
@@ -59,6 +59,32 @@
   let next = $derived(rows.find((row) => row.state === "open")?.key ?? "");
   /** @type {import("../dashboard/dashboard.js").PullRequest[]} */
   let tracked = $derived(pulls.status.sessions?.[slug]?.pullRequests ?? []);
+
+  // Rendered once per read of the file, so typing a note does not render every item again.
+  let markup = $derived(
+    new Map(
+      todo.items.map((item) => [
+        item,
+        {
+          text: inline(item.text),
+          blocks: inline(item.blocks),
+          run: command("run", item.run),
+          runs: inline(item.run),
+          check: command("check", item.check),
+          checks: inline(item.check),
+          prose: item.prose ? fragment(item.prose) : "",
+        },
+      ]),
+    ),
+  );
+  let pulled = $derived(
+    new Map(
+      todo.items.map((item) => {
+        const { refs, where } = pullRefs(item, tracked);
+        return [item, { refs, where: where ? inline(where) : "" }];
+      }),
+    ),
+  );
 
   /** @param {{state: State}[]} of */
   const tally = (of) => ({ done: of.filter((row) => row.state === "done").length, total: of.filter((row) => row.state !== "skipped").length });
@@ -195,7 +221,8 @@
                   {#each group.rows as row (row.item.line)}
                     {@const item = row.item}
                     {@const save = saves.get(row.key)}
-                    {@const named = pullRefs(item, tracked)}
+                    {@const named = pulled.get(item) ?? { refs: [], where: "" }}
+                    {@const view = markup.get(item)}
                     <li
                       class="item"
                       class:next={row.key === next}
@@ -211,15 +238,15 @@
                           disabled={row.state === "skipped"}
                           aria-label="Done: {item.text}"
                           onchange={() => mark(row, row.state === "done" ? "open" : "done")}>
-                          <span class="text">{item.text}</span>
+                          <span class="text inline-markdown">{@html view?.text}</span>
                         </Checkbox>
                         <span class="save" data-save={save?.state ?? ""}>{save ? (STATES[save.state] ?? "") : ""}</span>
                       </div>
                       {#if row.key === next || (row.state === "open" && item.blocks) || named.where || named.refs.length > 0}
                         <div class="chips">
                           {#if row.key === next}<Chip tone="running" selected data-next>Next</Chip>{/if}
-                          {#if row.state === "open" && item.blocks}<Chip tone="waiting" data-blocks>Blocks {item.blocks}</Chip>{/if}
-                          {#if named.where}<Chip data-where>Where {named.where}</Chip>{/if}
+                          {#if row.state === "open" && item.blocks}<Chip tone="waiting" data-blocks>Blocks <span class="inline-markdown">{@html view?.blocks}</span></Chip>{/if}
+                          {#if named.where}<Chip data-where>Where <span class="inline-markdown">{@html named.where}</span></Chip>{/if}
                           {#each named.refs as ref (ref.url)}
                             <PullChip {ref} />
                           {/each}
@@ -229,23 +256,29 @@
                         <dl class="fields">
                           {#if item.run}
                             <dt>Run</dt>
-                            <dd data-run><CopyCode code={runCommand(item.run)} label="run command" /></dd>
+                            <dd data-run>
+                              {#if view?.run != null}
+                                <CopyCode code={view.run} label="run command" />
+                              {:else}
+                                <span class="inline-markdown">{@html view?.runs}</span>
+                              {/if}
+                            </dd>
                           {/if}
                           {#if item.check}
                             <dt>Check</dt>
                             <dd data-check>
-                              {#if runCommand(item.check) !== item.check}
-                                <CopyCode code={runCommand(item.check)} label="check" />
+                              {#if view?.check != null}
+                                <CopyCode code={view.check} label="check" />
                               {:else}
-                                {item.check}
+                                <span class="inline-markdown">{@html view?.checks}</span>
                               {/if}
                             </dd>
                           {/if}
                         </dl>
                       {/if}
-                      {#each item.prose as line}
-                        <p class="prose">{line}</p>
-                      {/each}
+                      {#if view?.prose}
+                        <div class="markdown prose" data-prose>{@html view.prose}</div>
+                      {/if}
                       <div class="edit">
                         <input
                           class="note"
@@ -479,10 +512,24 @@
   }
 
   .prose {
-    margin: 0;
+    min-width: 0;
+    padding-left: 0;
     font: var(--machine-sm);
-    color: var(--text-secondary);
+    line-height: 1.6;
+    overflow-x: auto;
     overflow-wrap: anywhere;
+  }
+
+  .prose :global(table) {
+    font: var(--machine-sm);
+  }
+
+  .prose > :global(:last-child) {
+    margin-bottom: 0;
+  }
+
+  .chips .inline-markdown :global(code) {
+    font: inherit;
   }
 
   .edit {
