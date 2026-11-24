@@ -269,7 +269,7 @@ test("a card with open todos counts them, then lists its blocking and next items
   await expect(card(page, "session-3").locator(".todos")).toHaveCount(0);
 });
 
-// Catches opening the document before the session shows, or without its session, path or line.
+// Catches opening the document without its session, path or line.
 test("a card's todo shows its session, then opens the document at the item's line", async ({ page }) => {
   await card(page, "session-2").getByRole("button", { name: /Announce in the channel/ }).click();
   await expect

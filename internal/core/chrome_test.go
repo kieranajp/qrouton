@@ -175,7 +175,7 @@ func pullWatch(t *testing.T, field time.Duration) (reg *Sessions, alpha, beta *S
 		default:
 		}
 		pushed <- payload.(status.Fields)
-	}, field, time.Hour, unseenCounts{
+	}, field, time.Hour, railCounts{
 		all:   func(string) map[string]int { return map[string]int{} },
 		in:    func(string) (int, bool) { return 0, false },
 		todos: func(string) map[string]status.TodoRollup { return map[string]status.TodoRollup{} },
@@ -406,7 +406,7 @@ func TestRepositoryChangeImmediatelyReplacesCachedMeasurementsWithManifestRows(t
 		if event == chromeEvent {
 			updates <- payload.(status.Fields)
 		}
-	}, time.Hour, time.Hour, unseenCounts{
+	}, time.Hour, time.Hour, railCounts{
 		all:   func(string) map[string]int { return map[string]int{} },
 		in:    func(string) (int, bool) { return 0, false },
 		todos: func(string) map[string]status.TodoRollup { return map[string]status.TodoRollup{} },

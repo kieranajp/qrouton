@@ -61,14 +61,13 @@ func (c *Chrome) publishFields(fields status.Fields) {
 // re-reading it on a poll is what keeps the window agreeing with the session.
 func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, pulls pullRequestSource) {
 	watch(ctx, reg, root, cfg, emit, chromeInterval, repoStatInterval,
-		unseenCounts{all: status.Unseen, in: status.UnseenIn, todos: status.Todos}, pulls)
+		railCounts{all: status.Unseen, in: status.UnseenIn, todos: status.Todos}, pulls)
 }
 
-// unseenCounts is what the rail knows about documents nobody has looked at: every
-// session's, which is what rides the slow ticker, and one session's, which is
-// cheap enough to run the moment the user arrives at it. Every session's open
-// todos ride the slow ticker too.
-type unseenCounts struct {
+// railCounts is what the rail counts per session. Every session's unseen documents
+// and open todos ride the slow ticker; one session's unseen count is cheap enough
+// to run the moment the user arrives at it.
+type railCounts struct {
 	all   func(root string) map[string]int
 	in    func(sessionRoot string) (int, bool)
 	todos func(root string) map[string]status.TodoRollup
@@ -96,7 +95,7 @@ type measurement struct {
 // watch takes its intervals, its unseen count and its pull requests so a test
 // can drive the tickers apart. Everything a background session costs rides the
 // slow one.
-func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, field, slow time.Duration, count unseenCounts, pulls pullRequestSource) {
+func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, field, slow time.Duration, count railCounts, pulls pullRequestSource) {
 	fields := time.NewTicker(field)
 	defer fields.Stop()
 	stats := time.NewTicker(slow)

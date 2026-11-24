@@ -55,7 +55,13 @@ func TestTodosRollUpOpenItemsFromEveryTodoDocumentOldestFirst(t *testing.T) {
 		"  - Where: enclave · production",
 		"  - Blocks: Phase 3",
 	)
-	sessionDoc(t, dir, "plans/P1-plan.md", now)
+	plan := filepath.Join(dir, "thoughts", "shared", "plans", "P1-plan.md")
+	if err := os.MkdirAll(filepath.Dir(plan), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(plan, []byte("- [ ] Ship the plan\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	items := TodosIn(dir)
 	want := []TodoItem{

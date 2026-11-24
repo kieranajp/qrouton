@@ -1032,7 +1032,7 @@ func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.
 			pushes.Add(1)
 		}
 	}
-	counts := unseenCounts{
+	counts := railCounts{
 		all: func(string) map[string]int {
 			all.Add(1)
 			return map[string]int{}
@@ -2781,7 +2781,7 @@ func TestUncommittedAnswersAClickAndNeverATicker(t *testing.T) {
 			pushes.Add(1)
 		}
 	}
-	counts := unseenCounts{
+	counts := railCounts{
 		all:   func(string) map[string]int { return map[string]int{} },
 		in:    func(string) (int, bool) { return 0, true },
 		todos: func(string) map[string]status.TodoRollup { return map[string]status.TodoRollup{} },
