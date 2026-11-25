@@ -26,7 +26,8 @@ func todoDoc(t *testing.T, dir, name string, at time.Time, lines ...string) {
 }
 
 // Catches documents read newest first, a done or not-needed item counted as
-// open, or another folder's tasks counted.
+// open, another folder's tasks counted, or a document dropped or retitled in
+// the document list.
 func TestTodosRollUpOpenItemsFromEveryTodoDocumentOldestFirst(t *testing.T) {
 	root := t.TempDir()
 	dir := sessionDir(t, root, session.Manifest{Slug: "rollout"})
@@ -63,12 +64,20 @@ func TestTodosRollUpOpenItemsFromEveryTodoDocumentOldestFirst(t *testing.T) {
 
 	items := TodosIn(dir)
 	want := []TodoItem{
-		{Text: "Apply the migration", Section: "Before merge", Where: "enclave · production", Path: "thoughts/shared/todos/T1-first.md", Line: 11},
-		{Text: "Announce it", Section: "Ship", Path: "thoughts/shared/todos/T2-later.md", Line: 5},
-		{Text: "Rotate the token", Section: "Ship", Path: "thoughts/shared/todos/T2-later.md", Line: 6},
+		{Text: "Apply the migration", Path: "thoughts/shared/todos/T1-first.md", Line: 11},
+		{Text: "Announce it", Path: "thoughts/shared/todos/T2-later.md", Line: 5},
+		{Text: "Rotate the token", Path: "thoughts/shared/todos/T2-later.md", Line: 6},
 	}
 	if !reflect.DeepEqual(items, want) {
 		t.Fatalf("open items = %+v\nwant %+v", items, want)
+	}
+
+	wantDocs := []TodoDocument{
+		{Path: "thoughts/shared/todos/T1-first.md", Title: "First", Open: 1},
+		{Path: "thoughts/shared/todos/T2-later.md", Title: "Later", Open: 2},
+	}
+	if docs := TodoDocumentsIn(dir); !reflect.DeepEqual(docs, wantDocs) {
+		t.Fatalf("documents = %+v\nwant %+v", docs, wantDocs)
 	}
 
 	rollup := Todos(root)["rollout"]
@@ -99,7 +108,21 @@ func TestASessionWithNoTodosFolderRollsUpEmpty(t *testing.T) {
 	if !ok || rollup.Open != 0 || rollup.Items == nil || len(rollup.Items) != 0 {
 		t.Fatalf("roll-up = %#v, want an empty one", rollup)
 	}
+	if docs := TodoDocumentsIn(dir); docs == nil || len(docs) != 0 {
+		t.Fatalf("documents = %#v, want an empty list", docs)
+	}
 	if row := Sessions(root)[0]; row.Todos.Items == nil {
 		t.Fatal("a session row starts with a nil todo list")
+	}
+}
+
+// Catches a todo document with no heading, or no open item, missing from the
+// document list, or titled with its extension.
+func TestATodoDocumentWithoutHeadingOrOpenItemsIsStillListed(t *testing.T) {
+	dir := sessionDir(t, t.TempDir(), session.Manifest{Slug: "plain"})
+	todoDoc(t, dir, "T4-bare.md", time.Now(), "- [x] Done")
+	want := []TodoDocument{{Path: "thoughts/shared/todos/T4-bare.md", Title: "T4-bare", Open: 0}}
+	if docs := TodoDocumentsIn(dir); !reflect.DeepEqual(docs, want) {
+		t.Fatalf("documents = %+v\nwant %+v", docs, want)
 	}
 }

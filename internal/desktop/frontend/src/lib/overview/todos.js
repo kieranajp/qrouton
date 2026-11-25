@@ -1,7 +1,9 @@
-/** @typedef {{text: string, section: string, where: string, path: string, line: number}} TodoItem */
+import { todoLabel } from "../session/rail.js";
 
-/** The For you tier's rows, in document order.
- * @param {TodoItem[] | null | undefined} items @returns {{key: string, item: TodoItem}[]} */
-export function todoTier(items) {
-  return (items ?? []).map((item) => ({ key: `${item.path}:${item.line}`, item }));
+/** @typedef {{path: string, title: string, open: number}} TodoDocument */
+
+/** One button per todo document, in the order given. A document with nothing open has no count.
+ * @param {TodoDocument[] | null | undefined} documents @returns {{path: string, title: string, count: string}[]} */
+export function todoButtons(documents) {
+  return (documents ?? []).map(({ path, title, open }) => ({ path, title, count: open > 0 ? todoLabel(open) : "" }));
 }

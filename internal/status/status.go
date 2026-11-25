@@ -68,6 +68,8 @@ type Fields struct {
 	SessionDigest SessionDigest   `json:"sessionDigest"`
 	// Todos are the shown session's open todo items in document order.
 	Todos []TodoItem `json:"todos"`
+	// TodoDocuments are the shown session's todo documents, each with its open count.
+	TodoDocuments []TodoDocument `json:"todoDocuments"`
 }
 
 // SessionSummary is the manifest's summary as the page reads it. At is RFC 3339,
@@ -119,6 +121,7 @@ func EmptyFields() Fields {
 		Profiles:            []RunnerProfiles{},
 		PullRequests:        PullRequestList{Items: []PullRequest{}},
 		Todos:               []TodoItem{},
+		TodoDocuments:       []TodoDocument{},
 	}
 }
 
@@ -289,7 +292,7 @@ func Read(root string) Fields {
 	fields.Root = root
 	fields.SessionSummary = sessionSummary(m.Summary)
 	fields.SessionDigest = sessionDigest(m.Digest)
-	fields.Todos = TodosIn(root)
+	fields.TodoDocuments, fields.Todos = readTodos(root)
 	return fields
 }
 

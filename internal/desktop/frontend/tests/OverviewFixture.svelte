@@ -8,12 +8,12 @@
   ];
   /** @typedef {import("../src/lib/overview/pulls.js").PullRequestList} PullRequestList */
   /** @typedef {import("../src/lib/overview/digest.js").SessionDigest} Digest */
-  /** @typedef {import("../src/lib/overview/todos.js").TodoItem} TodoItem */
+  /** @typedef {import("../src/lib/overview/todos.js").TodoDocument} TodoDocument */
   /** @type {{summary: import("../src/lib/overview/summary.js").SessionSummary, pullRequests: PullRequestList,
-   * digest: Digest, todos: TodoItem[]}} */
-  let { summary, pullRequests, digest, todos } = $props();
+   * digest: Digest, todoDocuments: TodoDocument[]}} */
+  let { summary, pullRequests, digest, todoDocuments } = $props();
   let added = $state(0);
   window.overviewAdded = () => added;
 </script>
 
-<OverviewPane slug="fixture" active={true} root="/s/checkout" {summary} {pullRequests} {digest} {todos} {repos} onAddRepos={() => added++} />
+<OverviewPane slug="fixture" active={true} root="/s/checkout" {summary} {pullRequests} {digest} {todoDocuments} {repos} onAddRepos={() => added++} />

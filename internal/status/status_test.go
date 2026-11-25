@@ -50,6 +50,7 @@ func TestReadScratchAssistant(t *testing.T) {
 		Profiles:            []RunnerProfiles{},
 		PullRequests:        PullRequestList{Items: []PullRequest{}},
 		Todos:               []TodoItem{},
+		TodoDocuments:       []TodoDocument{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fields = %#v, want %#v", got, want)
@@ -84,7 +85,7 @@ func TestReadWithoutManifest(t *testing.T) {
 	want := Fields{
 		Sessions: []SessionRow{}, Documents: []Document{}, RepositoryDocuments: []RepositoryDocuments{}, Repos: []RepoStat{},
 		Stickers: []Sticker{}, Profiles: []RunnerProfiles{}, PullRequests: PullRequestList{Items: []PullRequest{}},
-		Todos: []TodoItem{},
+		Todos: []TodoItem{}, TodoDocuments: []TodoDocument{},
 	}
 	if got := Read(t.TempDir()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("missing manifest = %#v, want %#v", got, want)

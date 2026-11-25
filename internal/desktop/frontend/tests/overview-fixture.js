@@ -162,17 +162,12 @@ const digests = {
   },
 };
 const digest = digests[params.get("digest") ?? "none"];
-const todo = (text, line, extra = {}) => ({ text, section: "Before merge", where: "", path: "thoughts/shared/todos/T1-rollout.md", line, ...extra });
+const todoDocument = (title, open, name) => ({ path: `thoughts/shared/todos/${name}.md`, title, open });
 const todoLists = {
   none: [],
-  rows: [
-    todo("Review the copy", 11, { where: "acme/web#41" }),
-    todo("Apply the migration", 14, { where: "enclave · production" }),
-    todo("Announce in the channel", 22, { section: "Ship", where: "https://github.com/acme/api/pull/12" }),
-    todo("Rotate the key", 9, { section: "Later", path: "thoughts/shared/todos/T2-keys.md" }),
-  ],
+  rows: [todoDocument("Rollout", 3, "T1-rollout"), todoDocument("Keys", 1, "T2-keys"), todoDocument("Wrapped up", 0, "T3-done")],
 };
-const todos = todoLists[params.get("todos") ?? "none"];
+const todoDocuments = todoLists[params.get("todos") ?? "none"];
 const DASHBOARD = {
   viewer: "octocat",
   sessions: { fixture: { pullRequests: [{ repo: "acme/web", number: 41, title: "Swap PaymentIntent for the v2 client", url: "https://github.com/acme/web/pull/41", state: "merged", author: "octocat" }] } },
@@ -191,4 +186,4 @@ window.wailsCall = async (name, ...args) => {
 window.pushTree = (key) => emitWailsEvent(AGENT_TREE_EVENT + "fixture", trees[key]);
 window.trees = trees;
 
-mount(OverviewFixture, { target: document.querySelector("#fixture"), props: { summary, pullRequests, digest, todos } });
+mount(OverviewFixture, { target: document.querySelector("#fixture"), props: { summary, pullRequests, digest, todoDocuments } });

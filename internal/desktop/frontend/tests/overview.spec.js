@@ -431,46 +431,38 @@ test("the orchestrator names its profile beside the runner, and the default prof
   await expect(page.locator(".orchestrator .provider")).toHaveText("Claude Code");
 });
 
-// Catches an empty For you tier drawn for a session with nothing open.
-test("a session with no open todos has no For you tier", async ({ page }) => {
+// Catches an empty Todos row drawn for a session with no todo documents.
+test("a session with no todo documents has no todo row", async ({ page }) => {
   await open(page);
   await expect(page.locator(".todos")).toHaveCount(0);
   await expect(page.locator(".tier .label")).toHaveText(["Orchestrator", "Leads", "This session"]);
 });
 
-// Catches the tier sitting anywhere but under the summary, or items out of document order.
-test("For you sits under the summary with its items in document order, each naming its section and Where", async ({ page }) => {
+// Catches a button per open item instead of per document, a count that drifts from the rail's wording or colour, or a finished document dropped.
+test("one button per todo document, titled and counted like the rail, with no count when nothing is open", async ({ page }) => {
   await open(page, "?todos=rows&pulls=rows");
-  await expect(page.locator(".tier .label")).toHaveText(["For you", "Pull requests", "Orchestrator", "Leads", "This session"]);
+  await expect(page.locator(".tier .label")).toHaveText(["Todos", "Pull requests", "Orchestrator", "Leads", "This session"]);
   expect(await page.locator(".summary").evaluate((el) => el.nextElementSibling?.classList.contains("todos"))).toBe(true);
-  await expect(page.locator(".todos .text")).toHaveText(["Review the copy", "Apply the migration", "Announce in the channel", "Rotate the key"]);
-  const migration = page.locator('.todos [data-todo="Apply the migration"]');
-  await expect(migration.locator(".section")).toHaveText("Before merge");
-  await expect(migration.locator(".where")).toHaveText("Where enclave · production");
+  const buttons = page.locator(".todos").getByRole("button");
+  await expect(buttons).toHaveCount(3);
+  await expect(buttons.nth(0)).toHaveText(/^\s*Rollout\s+3 todos\s*$/);
+  await expect(buttons.nth(1)).toHaveText(/^\s*Keys\s+1 todo\s*$/);
+  await expect(buttons.nth(2)).toHaveText("Wrapped up");
+  await expect(buttons.nth(2).locator(".count")).toHaveCount(0);
+  await expect(buttons.nth(0).locator(".count")).toHaveCSS("color", await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--artifact-todo)";
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  }));
 });
 
-// Catches the Overview opening the document without its session, path or line, so the pane would not scroll to the item.
-test("a For you row opens its document at its line in this session", async ({ page }) => {
+// Catches a button opening the wrong document, or opening it at a line as a todo item did.
+test("a todo button opens its document", async ({ page }) => {
   await open(page, "?todos=rows");
-  await page.getByRole("button", { name: /Rotate the key/ }).click();
-  await expect
-    .poll(() => page.evaluate(() => window.calls.filter((call) => call.method === "OpenDocumentAt").map((call) => call.args)))
-    .toEqual([["fixture", "thoughts/shared/todos/T2-keys.md", 9]]);
-});
-
-// Catches the Overview drawing PRs unlike the Todo pane: a Where label on a bare PR, a link inside the row's button, or a state the dashboard does not track.
-test("a PR an item names is one link chip beside the row, with a state icon only when tracked", async ({ page }) => {
-  await open(page, "?todos=rows");
-  const review = page.locator('.todos [data-todo="Review the copy"]');
-  await expect(review.locator(".where")).toHaveCount(0);
-  await expect(review.locator("a.pull")).toHaveText("acme/web#41");
-  await expect(review.locator('a.pull [role="img"]')).toHaveAttribute("aria-label", "Merged");
-  const announce = page.locator('.todos [data-todo="Announce in the channel"]');
-  await expect(announce.locator("a.pull")).toHaveText("acme/api#12");
-  await expect(announce.locator('a.pull [role="img"]')).toHaveCount(0);
-  await expect(page.locator(".todos button a")).toHaveCount(0);
-
-  await review.locator("a.pull").click();
-  await expect.poll(() => page.evaluate(() => window.openedURL)).toBe("https://github.com/acme/web/pull/41");
+  await page.getByRole("button", { name: /^Keys/ }).click();
+  await expect.poll(() => page.evaluate(() => window.opened)).toEqual(["thoughts/shared/todos/T2-keys.md"]);
   expect(await page.evaluate(() => window.calls.some((call) => call.method === "OpenDocumentAt"))).toBe(false);
 });

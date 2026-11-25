@@ -1,23 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { todoTier } from "./todos.js";
+import { todoButtons } from "./todos.js";
 
-const item = (text, line, path = "thoughts/shared/todos/T1-rollout.md") => ({ text, section: "Ship", where: "", path, line });
+const doc = (title, open, path = `thoughts/shared/todos/${title}.md`) => ({ path, title, open });
 
-// Catches a sort that loses document order.
-test("rows keep document order", () => {
-  const rows = todoTier([item("Announce", 9), item("Migrate", 12), item("Tag", 14)]);
-  assert.deepEqual(rows.map((row) => row.item.text), ["Announce", "Migrate", "Tag"]);
+// Catches a button per open item instead of per document, or documents reordered.
+test("one button per document, in the order given", () => {
+  const buttons = todoButtons([doc("Rollout", 3), doc("Keys", 1)]);
+  assert.deepEqual(buttons.map((button) => button.title), ["Rollout", "Keys"]);
+  assert.deepEqual(buttons.map((button) => button.path), ["thoughts/shared/todos/Rollout.md", "thoughts/shared/todos/Keys.md"]);
 });
 
-// Catches two documents' items on the same line sharing a row key.
-test("rows are keyed by document and line", () => {
-  const rows = todoTier([item("One", 9), item("Two", 9, "thoughts/shared/todos/T2-later.md")]);
-  assert.deepEqual(rows.map((row) => row.key), ["thoughts/shared/todos/T1-rollout.md:9", "thoughts/shared/todos/T2-later.md:9"]);
+// Catches the count wording drifting from the rail and dashboard, or a zero count drawn.
+test("the count uses the rail's wording and is blank when nothing is open", () => {
+  assert.deepEqual(todoButtons([doc("A", 1), doc("B", 2), doc("C", 0)]).map((button) => button.count), ["1 todo", "2 todos", ""]);
 });
 
-// Catches the tier drawing an empty For you section.
-test("no items, or none reported, make no rows", () => {
-  assert.deepEqual(todoTier([]), []);
-  assert.deepEqual(todoTier(undefined), []);
+// Catches the row drawing for a session that reports no documents.
+test("no documents, or none reported, make no buttons", () => {
+  assert.deepEqual(todoButtons([]), []);
+  assert.deepEqual(todoButtons(undefined), []);
 });

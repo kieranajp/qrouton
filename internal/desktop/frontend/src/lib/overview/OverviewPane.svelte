@@ -14,13 +14,13 @@
 
   /** @typedef {import("./pulls.js").PullRequestList} PullRequestList */
   /** @typedef {import("./digest.js").SessionDigest} Digest */
-  /** @typedef {import("./todos.js").TodoItem} TodoItem */
+  /** @typedef {import("./todos.js").TodoDocument} TodoDocument */
 
-  /** The session's Overview: its summary, its open todos, its pull requests, its digest, the
+  /** The session's Overview: its summary, its todo documents, its pull requests, its digest, the
    * orchestrator, its leads in stage order, and the session's repositories.
    * @type {{slug: string, active?: boolean, root?: string, summary?: import("./summary.js").SessionSummary,
-   * pullRequests?: PullRequestList, digest?: Digest, todos?: TodoItem[], repos?: any[], onAddRepos?: () => void}} */
-  let { slug, active = false, root = "", summary, pullRequests, digest, todos = [], repos = [], onAddRepos } = $props();
+   * pullRequests?: PullRequestList, digest?: Digest, todoDocuments?: TodoDocument[], repos?: any[], onAddRepos?: () => void}} */
+  let { slug, active = false, root = "", summary, pullRequests, digest, todoDocuments = [], repos = [], onAddRepos } = $props();
 
   /** @type {import("./tree.js").AgentTree | undefined} */
   let tree = $state();
@@ -61,7 +61,7 @@
 
 <div class="overview" style:display={active ? "flex" : "none"}>
   <SessionSummary {summary} {now} />
-  <SessionTodos {slug} {todos} />
+  <SessionTodos documents={todoDocuments} onOpenDocument={read} />
   <SessionPullRequests {pullRequests} />
   <SessionDigest {digest} {now} />
   <Tier label="Orchestrator" name="orchestrator">

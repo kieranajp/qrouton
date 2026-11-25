@@ -203,7 +203,7 @@
               summary={fields.sessionSummary}
               pullRequests={fields.pullRequests}
               digest={fields.sessionDigest}
-              todos={fields.todos}
+              todoDocuments={fields.todoDocuments}
               repos={fields.repos}
               onAddRepos={() => (view.added = fields.slug)} />
           {:else}

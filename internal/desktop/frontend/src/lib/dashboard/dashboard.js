@@ -19,7 +19,7 @@ export function columnCount(width, scale = 1) {
 /** @param {number} [pulls] the pull requests the card shows */
 export const estimatedHeight = (pulls = 0) => 100 + 62 * pulls;
 
-/** @typedef {{text: string, section?: string, where?: string, path: string, line: number}} TodoItem */
+/** @typedef {{text: string, path: string, line: number}} TodoItem */
 /** @typedef {{open?: number, items?: TodoItem[] | null}} TodoRollup */
 
 const TODO_LINE = 24;
