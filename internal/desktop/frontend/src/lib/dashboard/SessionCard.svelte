@@ -165,7 +165,7 @@
     margin: 0;
     padding: 0 calc(14px * var(--ui-scale)) calc(4px * var(--ui-scale));
     font: var(--machine-xs);
-    color: var(--text-muted);
+    color: var(--artifact-todo);
   }
 
   .todo {

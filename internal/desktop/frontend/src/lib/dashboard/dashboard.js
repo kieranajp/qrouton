@@ -1,7 +1,7 @@
 import { DASHBOARD_PULL_STATES, PULL_REQUEST_REVIEWS, PULL_REQUEST_STATES, REPO_ROLES } from "../bridge/generated.js";
 import { SIGNED_OUT } from "../overview/pulls.js";
 import { stamp } from "../relative.js";
-import { repositoryLine } from "../session/rail.js";
+import { repositoryLine, todoLabel } from "../session/rail.js";
 
 export const DASHBOARD_TITLE = "Dashboard";
 
@@ -28,7 +28,7 @@ const TODO_LINE = 24;
 export function todoLine(todos) {
   const open = todos?.open ?? 0;
   if (!open) return "";
-  return `${open} open`;
+  return todoLabel(open);
 }
 
 /** @param {TodoRollup | undefined} todos */

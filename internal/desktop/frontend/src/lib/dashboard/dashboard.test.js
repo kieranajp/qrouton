@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SIGNED_OUT } from "../overview/pulls.js";
+import { summaryFacts } from "../session/rail.js";
 import {
   CHECKING,
   NO_PULLS,
@@ -250,9 +251,18 @@ const todo = (text, line) => ({ text, section: "Ship", where: "", path: "thought
 
 // Catches a todo line on a card whose todos are all done.
 test("a card's todo line counts the open items", () => {
-  assert.equal(todoLine({ open: 3, items: [] }), "3 open");
+  assert.equal(todoLine({ open: 3, items: [] }), "3 todos");
+  assert.equal(todoLine({ open: 1, items: [] }), "1 todo");
   assert.equal(todoLine({ open: 0, items: [] }), "");
   assert.equal(todoLine(undefined), "");
+});
+
+// Catches the card and the rail drifting apart on wording for the same roll-up.
+test("a card's todo line reads as the rail's todo fact for the same roll-up", () => {
+  for (const open of [1, 3]) {
+    const fact = summaryFacts({ running: false }, 0, "", { open }).find((f) => f.kind === "todos");
+    assert.equal(todoLine({ open, items: [] }), fact?.label);
+  }
 });
 
 // Catches a card listing items the roll-up no longer counts as open, or a null list throwing.

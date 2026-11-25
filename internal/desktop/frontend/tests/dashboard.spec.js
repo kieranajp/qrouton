@@ -258,10 +258,18 @@ test.describe("the header line", () => {
   });
 });
 
-// Catches a card that hides its todos, or lists more than the next open item.
+// Catches a card that hides its todos, colours the count off the rail's todo token, or lists more than the next open item.
 test("a card with open todos counts them, then lists the next one on a line", async ({ page }) => {
   const todos = card(page, "session-2").locator(".todos");
-  await expect(todos.locator(".tally")).toHaveText("3 open");
+  await expect(todos.locator(".tally")).toHaveText("3 todos");
+  await expect(todos.locator(".tally")).toHaveCSS("color", await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--artifact-todo)";
+    document.body.append(probe);
+    const resolved = getComputedStyle(probe).color;
+    probe.remove();
+    return resolved;
+  }));
   await expect(todos.getByRole("button")).toHaveCount(1);
   await expect(todos.locator(".todo .text")).toHaveText(["Apply the migration"]);
   await expect(card(page, "session-3").locator(".todos")).toHaveCount(0);
