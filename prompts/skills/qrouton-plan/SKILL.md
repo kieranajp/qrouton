@@ -38,7 +38,7 @@ Require this of the lead's return:
 - how you checked it: the verification each phase carries;
 - what stays unresolved: the blockers the lead could not resolve, including, under a `For you` heading, the actions only the user can take, such as the rollout steps.
 
-After the plan lands, copy the lead's `For you` items into the session's todo document.
+After the plan lands, copy into the session's todo document only the lead's `For you` items that clear the `qrouton-todo` bar.
 
 {{session-digest}}
 

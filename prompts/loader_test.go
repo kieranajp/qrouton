@@ -564,6 +564,12 @@ var (
 	runTableReferenceHomes = []referenceHome{
 		{ID(skillIDPrefix + "qrouton-audit"), "references/test-runs.md"},
 	}
+
+	todoBarHomes = []ID{
+		ID(skillIDPrefix + "qrouton-todo"),
+		ID(agentIDPrefix + "qrouton-planning-lead"),
+		ID(agentIDPrefix + "qrouton-implementation-lead"),
+	}
 )
 
 // A reference home is one file a skill ships beside its entry file.
@@ -585,6 +591,7 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 		scratchCopyFileName:        scratchCopyHomes,
 		fixDisciplineFileName:      fixDisciplineHomes,
 		runTableFileName:           runTableHomes,
+		todoBarFileName:            todoBarHomes,
 	}
 	referenceHomes := map[string][]referenceHome{
 		fixDisciplineFileName: fixDisciplineReferenceHomes,
@@ -650,6 +657,20 @@ func TestRunTablePartialCarriesItsRules(t *testing.T) {
 	for _, phrase := range []string{"one row per attempted run", "failed to start", "A baseline's change is `none`", "anchored", "exactly 120 seconds", "and no other word", "exactly one test ran", "`run-<n>.txt`", "`Checkout status: unchanged`"} {
 		if !strings.Contains(string(partial), phrase) {
 			t.Errorf("%s does not carry %q", runTableFileName, phrase)
+		}
+	}
+}
+
+// Catches the todo bar losing a never-list entry or its push of decisions out of
+// the todo document, which is how sessions pile up items nobody will act on.
+func TestTodoBarKeepsTodosToConcreteActions(t *testing.T) {
+	partial, err := fs.ReadFile(embedded, todoBarFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phrase := range []string{"merge a named pull request", "a decision or judgement call", "a conversation with someone else", "a speculative follow-up", "anything an agent can do or check itself", "already covers", "split into several items", "never in the todo document", "When in doubt, leave it out"} {
+		if !strings.Contains(string(partial), phrase) {
+			t.Errorf("%s does not carry %q", todoBarFileName, phrase)
 		}
 	}
 }
@@ -1053,7 +1074,8 @@ func TestFixStagePromptsCarryPrevention(t *testing.T) {
 }
 
 // Catches a human rollout step sent back to a plan's closing checklist, a lead
-// that stops returning human actions, or a lost todo duty of the orchestrator.
+// that stops returning human actions, a lost todo duty of the orchestrator, or
+// a parent that copies every For you item in without holding it to the bar.
 func TestHumanStepsGoToTheTodoDocument(t *testing.T) {
 	loader := NewEmbeddedLoader()
 	load := func(id ID) (string, []PromptFile) {
@@ -1096,6 +1118,12 @@ func TestHumanStepsGoToTheTodoDocument(t *testing.T) {
 	} {
 		if text, _ := load(id); !strings.Contains(text, "`For you`") {
 			t.Errorf("%s does not carry the For you return", id)
+		}
+	}
+
+	for _, id := range []ID{Orchestrator, ID(skillIDPrefix + "qrouton-implement"), ID(skillIDPrefix + "qrouton-plan")} {
+		if text, _ := load(id); !strings.Contains(text, "that clear the") {
+			t.Errorf("%s copies every For you item without holding it to the todo bar", id)
 		}
 	}
 }

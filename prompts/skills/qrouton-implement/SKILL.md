@@ -34,7 +34,7 @@ Require this of the lead's return:
 - how you checked it: the verification commands and their results;
 - what stays unresolved: the remaining risks, failures, or decisions, including, under a `For you` heading, the actions only the user can take.
 
-Copy the lead's `For you` items into the session's todo document.
+Copy into the session's todo document only the lead's `For you` items that clear the `qrouton-todo` bar.
 
 {{session-digest}}
 

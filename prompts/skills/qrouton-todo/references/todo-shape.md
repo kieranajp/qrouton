@@ -15,7 +15,8 @@ the ones above it, say so in prose under it.
 
 ## Items
 
-Each item is a task-list item on one line, a single action the user takes:
+Each item is a task-list item on one line, a single action that clears the
+skill's bar:
 
 - `- [ ]` open: still to do.
 - `- [x]` done.

@@ -52,3 +52,7 @@ You add progress to the plan and you leave the planning lead's text in place. Ho
 - where the work lives: the repositories and files you changed, and the plan path with its updated status;
 - how you checked it: the verification commands you ran, and their results;
 - what stays unresolved: the remaining risks, failures, and blockers, including, under a `For you` heading, each action only the human can take, with `Where:`, `Check:` and `Run:` when known.
+
+Hold each `For you` item to this bar, and return a decision as an unresolved question instead:
+
+{{todo-bar}}

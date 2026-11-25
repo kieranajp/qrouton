@@ -21,3 +21,7 @@ Draw the shape when the shape is the point: a call sequence, a data path, a stat
 - where the work lives: the artifact path;
 - how you checked it: the live code you inspected, and the verification each phase carries;
 - what stays unresolved: the blockers you did not resolve, including, under a `For you` heading, each action only the human can take, with `Where:`, `Check:` and `Run:` when known.
+
+Hold each `For you` item to this bar, and return a decision as an unresolved question instead:
+
+{{todo-bar}}
