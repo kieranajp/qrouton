@@ -72,6 +72,10 @@ func (w *Windows) OpenShell() (string, error) { return w.windows.OpenShell() }
 
 func (w *Windows) OpenDocument(name string) (string, error) { return w.windows.OpenDocument(name) }
 
+func (w *Windows) OpenDocumentAt(slug, name string, line int) (string, error) {
+	return w.windows.OpenDocumentAt(slug, name, line)
+}
+
 func (w *Windows) Select(slug, id string) error { return w.windows.Select(slug, id) }
 
 func (w *Windows) Reorder(slug, id string, to int) error { return w.windows.Reorder(slug, id, to) }
@@ -107,6 +111,8 @@ func (w *Windows) SaveAnswers(id, hash, text string) (string, error) {
 func (w *Windows) SendSpecAnswers(id string) error { return w.windows.SendSpecAnswers(id) }
 
 func (w *Windows) SendAuditTriage(id string) error { return w.windows.SendAuditTriage(id) }
+
+func (w *Windows) SendTodoUpdate(id string) error { return w.windows.SendTodoUpdate(id) }
 
 type BugReports struct{ reports *core.BugReports }
 

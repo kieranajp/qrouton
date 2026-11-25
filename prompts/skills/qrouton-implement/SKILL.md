@@ -32,7 +32,9 @@ Require this of the lead's return:
 - what happened: the completed phases and the outcome of each;
 - where the work lives: the changed repositories and files, and the plan path with its updated status;
 - how you checked it: the verification commands and their results;
-- what stays unresolved: the remaining risks, failures, or decisions.
+- what stays unresolved: the remaining risks, failures, or decisions, including, under a `For you` heading, the actions only the user can take.
+
+Copy into the session's todo document only the lead's `For you` items that clear the `qrouton-todo` bar.
 
 {{session-digest}}
 

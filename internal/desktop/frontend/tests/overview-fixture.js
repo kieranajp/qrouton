@@ -3,7 +3,7 @@ import "../src/tokens/typography.css";
 import "../src/tokens/spacing.css";
 import "../src/tokens/effects.css";
 import { mount } from "svelte";
-import { AGENT_TREE_EVENT, CHROME_AGENT_TREE, WINDOWS_OPEN_DOCUMENT } from "../src/lib/bridge/generated.js";
+import { AGENT_TREE_EVENT, CHROME_AGENT_TREE, DASHBOARD_SNAPSHOT, WINDOWS_OPEN_DOCUMENT } from "../src/lib/bridge/generated.js";
 import { emitWailsEvent } from "./wails-runtime.js";
 import OverviewFixture from "./OverviewFixture.svelte";
 
@@ -162,10 +162,23 @@ const digests = {
   },
 };
 const digest = digests[params.get("digest") ?? "none"];
+const todoDocument = (title, open, name) => ({ path: `thoughts/shared/todos/${name}.md`, title, open });
+const todoLists = {
+  none: [],
+  rows: [todoDocument("Rollout", 3, "T1-rollout"), todoDocument("Keys", 1, "T2-keys"), todoDocument("Wrapped up", 0, "T3-done")],
+};
+const todoDocuments = todoLists[params.get("todos") ?? "none"];
+const DASHBOARD = {
+  viewer: "octocat",
+  sessions: { fixture: { pullRequests: [{ repo: "acme/web", number: 41, title: "Swap PaymentIntent for the v2 client", url: "https://github.com/acme/web/pull/41", state: "merged", author: "octocat" }] } },
+};
 if (params.has("narrow")) document.querySelector("#fixture").classList.add("narrow");
 
 window.opened = [];
+window.calls = [];
 window.wailsCall = async (name, ...args) => {
+  window.calls.push({ method: name.split(".").at(-1), args });
+  if (name === DASHBOARD_SNAPSHOT) return DASHBOARD;
   if (name === CHROME_AGENT_TREE) return tree;
   if (name === WINDOWS_OPEN_DOCUMENT) window.opened.push(args[0]);
   return undefined;
@@ -173,4 +186,4 @@ window.wailsCall = async (name, ...args) => {
 window.pushTree = (key) => emitWailsEvent(AGENT_TREE_EVENT + "fixture", trees[key]);
 window.trees = trees;
 
-mount(OverviewFixture, { target: document.querySelector("#fixture"), props: { summary, pullRequests, digest } });
+mount(OverviewFixture, { target: document.querySelector("#fixture"), props: { summary, pullRequests, digest, todoDocuments } });

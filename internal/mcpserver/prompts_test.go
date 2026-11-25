@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/prompts"
@@ -107,6 +108,16 @@ func TestSchemaDefaultsNameTheDefaultWindows(t *testing.T) {
 		field, _ := reflect.TypeOf(tc.input).FieldByName("Name")
 		if got := field.Tag.Get("jsonschema"); !strings.Contains(got, tc.want) {
 			t.Errorf("%T name schema = %q, want it to say %q", tc.input, got, tc.want)
+		}
+	}
+}
+
+// Catches a create_artefact description or kind schema that drops a kind the tool accepts, such as todo.
+func TestCreateArtefactNamesEveryKindItAccepts(t *testing.T) {
+	kind := createArtefactSchema().Properties["kind"].Description
+	for _, k := range kinds.Templated() {
+		if !strings.Contains(descCreateArtefact, k.Name) || !strings.Contains(kind, k.Name) {
+			t.Errorf("create_artefact does not name the %s kind: %q / %q", k.Name, descCreateArtefact, kind)
 		}
 	}
 }

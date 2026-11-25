@@ -8,7 +8,7 @@ import { decode } from "../src/lib/terminal-painter.js";
 import { encode, terminalAt } from "../src/lib/xterm.js";
 import { emitWailsEvent } from "./wails-runtime.js";
 
-import { CHROME_DEFAULTS, CHROME_EVENT, PICKER_CONFIRM, SESSIONS_SHOW, SESSIONS_SHOW_DASHBOARD, SESSIONS_UNCOMMITTED, TERM_WRITE, WINDOWS_WRITE } from "../src/lib/bridge/generated.js";
+import { CHROME_DEFAULTS, CHROME_EVENT, PICKER_CONFIRM, SESSIONS_SHOW, SESSIONS_SHOW_DASHBOARD, SESSIONS_UNCOMMITTED, TERM_WRITE, WINDOWS_OPEN_DOCUMENT_AT, WINDOWS_WRITE } from "../src/lib/bridge/generated.js";
 const calls = [];
 let adding;
 let snapshot = { ...CHROME_DEFAULTS, slug: "octopus" };
@@ -69,6 +69,7 @@ window.shell = {
   finishShow: (success = true) => { const pending = showPending.shift(); if (success) pending.resolve(); else pending.reject(new Error("refused")); },
   shows: () => calls.filter(({ name }) => name === SESSIONS_SHOW).map(({ args }) => args),
   dashboards: () => calls.filter(({ name }) => name === SESSIONS_SHOW_DASHBOARD).length,
+  opensAt: () => calls.filter(({ name }) => name === WINDOWS_OPEN_DOCUMENT_AT).map(({ args }) => args),
   allWrites: () => calls.filter(({ name }) => name === TERM_WRITE || name === WINDOWS_WRITE).map(({ name, args }) => [name, args[0], new TextDecoder().decode(decode(args[1]))]),
   focus: (id) => terminalAt(document.querySelector(`[data-terminal-id="${id}"]`))?.focus(),
   focused: () => document.activeElement?.closest("[data-terminal-id]")?.getAttribute("data-terminal-id"),

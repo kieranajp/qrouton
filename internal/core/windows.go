@@ -19,7 +19,7 @@ type Windows struct {
 	terminals   *terminals
 	diagrams    *diagramWorker
 	newShell    func() (string, error)
-	newDocument func(name string) (string, error)
+	newDocument func(owner *SessionState, name string) (string, error)
 	stopFollow  context.CancelFunc
 }
 
@@ -53,12 +53,57 @@ func (w *Windows) OpenDocument(name string) (string, error) {
 	if name == "" {
 		return "", ErrNoDocumentName
 	}
-	return w.showOrOpen(w.shown(), name, func() (string, error) {
+	owner := w.shown()
+	return w.showOrOpen(owner, name, func() (string, error) {
 		if w.newDocument == nil {
 			return "", ErrNoEditorCommand
 		}
-		return w.newDocument(name)
+		return w.newDocument(owner, name)
 	})
+}
+
+// OpenDocumentAt opens a session's document at a one-based line, or moves the
+// tab already showing it there. The session need not be on screen.
+func (w *Windows) OpenDocumentAt(slug, name string, line int) (string, error) {
+	if name == "" {
+		return "", ErrNoDocumentName
+	}
+	owner := w.sessions.BySlug(slug)
+	if owner == nil {
+		return "", UnknownSession(slug)
+	}
+	id, err := w.showOrOpen(owner, name, func() (string, error) {
+		if w.newDocument == nil {
+			return "", ErrNoEditorCommand
+		}
+		return w.newDocument(owner, name)
+	})
+	if err != nil {
+		return "", err
+	}
+	return id, w.focusLine(id, line)
+}
+
+// focusLine points a rendered document at a line and pushes it, so its page
+// scrolls there. An editor tab has no line to move to.
+func (w *Windows) focusLine(id string, line int) error {
+	var doc Document
+	var rendered bool
+	err := w.with(id, func(window *agentWindow) error {
+		content, ok := window.document()
+		if !ok {
+			return nil
+		}
+		window.opts.Span = workbench.LineSpan{Line: line}
+		content.focus++
+		doc, rendered = documentFor(window), true
+		return nil
+	})
+	if err != nil || !rendered {
+		return err
+	}
+	w.emit(windowContentEvent+id, doc)
+	return nil
 }
 
 func (w *Windows) Select(slug, id string) error { return w.selectBySlug(slug, id) }

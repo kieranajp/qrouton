@@ -1,6 +1,9 @@
 <script>
   import { dashboard } from "../src/lib/dashboard.svelte.js";
   import Dashboard from "../src/lib/dashboard/Dashboard.svelte";
+  import { openTodo } from "../src/lib/overview/calls.js";
+  import { show } from "../src/lib/sessions.js";
+  import { call } from "../src/lib/wails.js";
 
   const hours = (count) => new Date(Date.now() - count * 3600000).toISOString();
   // Opened most recently further down the rail, so a sort by last opened would reverse the cards.
@@ -25,7 +28,15 @@
       ],
       opened: hours(21 * 24),
     }),
-    ...Array.from({ length: 10 }, (_, i) => session(i + 2)),
+    session(2, {
+      todos: {
+        open: 3,
+        items: [
+          { text: "Apply the migration", section: "Before merge", where: "", path: "thoughts/shared/todos/T1-rollout.md", line: 14 },
+        ],
+      },
+    }),
+    ...Array.from({ length: 9 }, (_, i) => session(i + 3, { todos: { open: 0, items: [] } })),
   ]);
   let width = $state(1180);
   let shown = $state(true);
@@ -43,6 +54,7 @@
     <Dashboard
       {sessions}
       onOpen={(slug) => window.dashboardBridge.opened.push(slug)}
+      onOpenTodo={(slug, path, line) => openTodo(async (shown) => (await call(show(shown))).ok, slug, path, line)}
       store={dashboard()}
       onSettings={(tab) => window.dashboardBridge.settings.push(tab)} />
   {/if}

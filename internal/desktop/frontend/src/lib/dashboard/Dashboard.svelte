@@ -24,8 +24,8 @@
 
   const TICK = 15000;
 
-  /** @type {{sessions: any[], onOpen: (slug: string) => void, store: {status: import("./dashboard.js").DashboardStatus, refresh: () => void}, onSettings: (tab: "github") => void}} */
-  let { sessions = [], onOpen, store, onSettings } = $props();
+  /** @type {{sessions: any[], onOpen: (slug: string) => void, onOpenTodo: (slug: string, path: string, line: number) => void, store: {status: import("./dashboard.js").DashboardStatus, refresh: () => void}, onSettings: (tab: "github") => void}} */
+  let { sessions = [], onOpen, onOpenTodo, store, onSettings } = $props();
 
   let now = $state(Date.now());
   $effect(() => {
@@ -43,7 +43,7 @@
   let width = $state(0);
   let columns = $derived(
     masonry(
-      sections.map(cardHeight),
+      sections.map((section, index) => cardHeight(section, sessions[index].todos)),
       columnCount(width, uiScale() / 100),
     ),
   );
@@ -72,6 +72,7 @@
             row={sessions[index]}
             position={index}
             {onOpen}
+            {onOpenTodo}
             section={sections[index]}
             git={gitLine(status.sessions?.[sessions[index].slug]?.repos)}
             {now}

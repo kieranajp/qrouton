@@ -1,0 +1,182 @@
+[
+  {
+    "name": "sections, every state, every field, notes and prose",
+    "text": "---\nkind: todo\n---\n\n# Rollout\n\n- [ ] Before any section\n\n## Before merge\n\n- [ ] Apply the migration\n  - Where: enclave · production\n  - Check: `select count(*) from tenants`\n  - Run: `make migrate ENV=production`\n  This can run alongside the items above.\n- [x] Merge #4789 — live as v2.94.0\n- [-] Roll back the cache — not needed after all\n- A plain bullet, not a task\n- [X] Rotate the token\n\n## Ship\n\n1. [ ] Announce in the channel\n   Where: #releases\n- [ ]\n",
+    "items": [
+      {
+        "section": "",
+        "text": "Before any section",
+        "note": "",
+        "state": "open",
+        "line": 7,
+        "where": "",
+        "check": "",
+        "run": ""
+      },
+      {
+        "section": "Before merge",
+        "text": "Apply the migration",
+        "note": "",
+        "state": "open",
+        "line": 11,
+        "where": "enclave · production",
+        "check": "`select count(*) from tenants`",
+        "run": "`make migrate ENV=production`"
+      },
+      {
+        "section": "Before merge",
+        "text": "Merge #4789",
+        "note": "live as v2.94.0",
+        "state": "done",
+        "line": 16,
+        "where": "",
+        "check": "",
+        "run": ""
+      },
+      {
+        "section": "Before merge",
+        "text": "Roll back the cache",
+        "note": "not needed after all",
+        "state": "skipped",
+        "line": 17,
+        "where": "",
+        "check": "",
+        "run": ""
+      },
+      {
+        "section": "Before merge",
+        "text": "Rotate the token",
+        "note": "",
+        "state": "done",
+        "line": 19,
+        "where": "",
+        "check": "",
+        "run": ""
+      },
+      {
+        "section": "Ship",
+        "text": "Announce in the channel",
+        "note": "",
+        "state": "open",
+        "line": 23,
+        "where": "#releases",
+        "check": "",
+        "run": ""
+      }
+    ]
+  },
+  {
+    "name": "a nested task is its own item and keeps its own fields",
+    "text": "## Now\n- [ ] Parent\n  - [ ] Child\n  - Where: staging\n",
+    "items": [
+      {
+        "section": "Now",
+        "text": "Parent",
+        "note": "",
+        "state": "open",
+        "line": 2,
+        "where": "staging",
+        "check": "",
+        "run": ""
+      },
+      {
+        "section": "Now",
+        "text": "Child",
+        "note": "",
+        "state": "open",
+        "line": 3,
+        "where": "",
+        "check": "",
+        "run": ""
+      }
+    ]
+  },
+  {
+    "name": "code is not an item, keys open the line, the last field wins, a note needs spaced dashes",
+    "text": "## Ship\n\n```\n- [ ] not an item\n```\n\n- [ ] An item\n  - See Where: the docs\n  - where: lowercase is prose\n  - Check: first\n  - Check: second\n- [x] Pre—flight\n- [ ] Wait for review — Alice is on it\n",
+    "items": [
+      {
+        "section": "Ship",
+        "text": "An item",
+        "note": "",
+        "state": "open",
+        "line": 7,
+        "where": "",
+        "check": "second",
+        "run": ""
+      },
+      {
+        "section": "Ship",
+        "text": "Pre—flight",
+        "note": "",
+        "state": "done",
+        "line": 12,
+        "where": "",
+        "check": "",
+        "run": ""
+      },
+      {
+        "section": "Ship",
+        "text": "Wait for review",
+        "note": "Alice is on it",
+        "state": "open",
+        "line": 13,
+        "where": "",
+        "check": "",
+        "run": ""
+      }
+    ]
+  },
+  {
+    "name": "a section is named by its heading.s plain text, and the last spaced dash starts the note",
+    "text": "## Deploy `api` **now**\n\n- [x] Merge — the web side — live as v3\n",
+    "items": [
+      {
+        "section": "Deploy api now",
+        "text": "Merge — the web side",
+        "note": "live as v3",
+        "state": "done",
+        "line": 3,
+        "where": "",
+        "check": "",
+        "run": ""
+      }
+    ]
+  },
+  {
+    "name": "a table under an item keeps the fields around it, one outside the list ends it, and code is never a field",
+    "text": "## Deploy\n- [ ] Set the `AUTH_*` deploy secrets in staging and prod\n  - Check: the new pod starts. Without these values it exits at boot.\n\n  | Variable | staging | prod |\n  |---|---|---|\n  | `AUTH_ISSUER` | `staging.example.com` | `example.com` |\n\n  - Where: staging · prod\n- [ ] Restart the pods\n\n| Not | under |\n|---|---|\n| an | item |\n\n- [ ] After the table\n  - Run: `make restart`\n  ```sh\n  Check: kubectl get pods\n  ```\n",
+    "items": [
+      {
+        "section": "Deploy",
+        "text": "Set the `AUTH_*` deploy secrets in staging and prod",
+        "note": "",
+        "state": "open",
+        "line": 2,
+        "where": "staging · prod",
+        "check": "the new pod starts. Without these values it exits at boot.",
+        "run": ""
+      },
+      {
+        "section": "Deploy",
+        "text": "Restart the pods",
+        "note": "",
+        "state": "open",
+        "line": 10,
+        "where": "",
+        "check": "",
+        "run": ""
+      },
+      {
+        "section": "Deploy",
+        "text": "After the table",
+        "note": "",
+        "state": "open",
+        "line": 16,
+        "where": "",
+        "check": "",
+        "run": "`make restart`"
+      }
+    ]
+  }
+]

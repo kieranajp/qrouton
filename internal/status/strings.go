@@ -40,6 +40,7 @@ var (
 	researchDir = kinds.Research.Dir
 	plansDir    = kinds.Plan.Dir
 	auditsDir   = kinds.Audit.Dir
+	todosDir    = kinds.Todo.Dir
 )
 
 const (

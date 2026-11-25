@@ -58,6 +58,7 @@ var Roles = map[string]string{
 	RoleArtifactNote:      Flamingo,
 	RoleArtifactExplainer: Maroon,
 	RoleArtifactAudit:     Rosewater,
+	RoleArtifactTodo:      Peach,
 	RolePullOpen:          Green,
 	RolePullMerged:        Mauve,
 	RolePullClosed:        Red,
@@ -71,7 +72,7 @@ var roleOrder = []string{
 	RoleStateFailed, RoleStateWaiting, RoleStateGuided,
 	RoleRepoEditing, RoleRepoReference, RoleRepoOff,
 	RoleArtifactPlan, RoleArtifactSpec, RoleArtifactResearch, RoleArtifactNote, RoleArtifactExplainer,
-	RoleArtifactAudit,
+	RoleArtifactAudit, RoleArtifactTodo,
 	RolePullOpen, RolePullMerged, RolePullClosed, RolePullDraft,
 }
 

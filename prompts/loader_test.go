@@ -74,6 +74,7 @@ var embeddedPromptIDs = []string{
 	"skills/qrouton-review",
 	"skills/qrouton-slides",
 	"skills/qrouton-spec",
+	"skills/qrouton-todo",
 }
 
 func TestQroutonSkillsAreNarrowSoloEntrypoints(t *testing.T) {
@@ -563,6 +564,12 @@ var (
 	runTableReferenceHomes = []referenceHome{
 		{ID(skillIDPrefix + "qrouton-audit"), "references/test-runs.md"},
 	}
+
+	todoBarHomes = []ID{
+		ID(skillIDPrefix + "qrouton-todo"),
+		ID(agentIDPrefix + "qrouton-planning-lead"),
+		ID(agentIDPrefix + "qrouton-implementation-lead"),
+	}
 )
 
 // A reference home is one file a skill ships beside its entry file.
@@ -584,6 +591,7 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 		scratchCopyFileName:        scratchCopyHomes,
 		fixDisciplineFileName:      fixDisciplineHomes,
 		runTableFileName:           runTableHomes,
+		todoBarFileName:            todoBarHomes,
 	}
 	referenceHomes := map[string][]referenceHome{
 		fixDisciplineFileName: fixDisciplineReferenceHomes,
@@ -649,6 +657,20 @@ func TestRunTablePartialCarriesItsRules(t *testing.T) {
 	for _, phrase := range []string{"one row per attempted run", "failed to start", "A baseline's change is `none`", "anchored", "exactly 120 seconds", "and no other word", "exactly one test ran", "`run-<n>.txt`", "`Checkout status: unchanged`"} {
 		if !strings.Contains(string(partial), phrase) {
 			t.Errorf("%s does not carry %q", runTableFileName, phrase)
+		}
+	}
+}
+
+// Catches the todo bar losing a never-list entry or its push of decisions out of
+// the todo document, which is how sessions pile up items nobody will act on.
+func TestTodoBarKeepsTodosToConcreteActions(t *testing.T) {
+	partial, err := fs.ReadFile(embedded, todoBarFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phrase := range []string{"merge a named pull request", "a decision or judgement call", "a conversation with someone else", "a speculative follow-up", "anything an agent can do or check itself", "already covers", "split into several items", "never in the todo document", "When in doubt, leave it out"} {
+		if !strings.Contains(string(partial), phrase) {
+			t.Errorf("%s does not carry %q", todoBarFileName, phrase)
 		}
 	}
 }
@@ -957,9 +979,10 @@ func TestTheResearchTemplateReadsAsAFramedDocument(t *testing.T) {
 }
 
 func TestSkillsSendAgentsToCreateArtefactAndNameNoHandBuiltPath(t *testing.T) {
-	handBuilt := regexp.MustCompile(`[RSPA]<n>-`)
+	handBuilt := regexp.MustCompile(`[RSPAT]<n>-`)
 	for skill, kind := range map[string]string{
 		"qrouton-questions": "research", "qrouton-spec": "spec", "qrouton-plan": "plan", "qrouton-audit": "audit",
+		"qrouton-todo": "todo",
 	} {
 		prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+skill))
 		if err != nil {
@@ -1047,5 +1070,60 @@ func TestFixStagePromptsCarryPrevention(t *testing.T) {
 	}
 	if !workspaceWriteAgents["test-verifier"] {
 		t.Error("test-verifier can no longer write the scratch copy")
+	}
+}
+
+// Catches a human rollout step sent back to a plan's closing checklist, a lead
+// that stops returning human actions, a lost todo duty of the orchestrator, or
+// a parent that copies every For you item in without holding it to the bar.
+func TestHumanStepsGoToTheTodoDocument(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	load := func(id ID) (string, []PromptFile) {
+		t.Helper()
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(prompt.Content), prompt.Files
+	}
+
+	orchestrator, _ := load(Orchestrator)
+	for _, phrase := range []string{"`kind: todo`", "`qrouton-todo`, phase letters"} {
+		if !strings.Contains(orchestrator, phrase) {
+			t.Errorf("the orchestrator lost %q", phrase)
+		}
+	}
+	for _, row := range strings.Split(orchestrator, "\n") {
+		if strings.HasPrefix(row, "|") && strings.Contains(strings.ToLower(row), "todo") {
+			t.Errorf("the routing table routes todos: %s", row)
+		}
+	}
+
+	_, files := load(ID(skillIDPrefix + "qrouton-plan"))
+	var shape string
+	for _, file := range files {
+		if file.Path == "references/plan-shape.md" {
+			shape = string(file.Content)
+		}
+	}
+	if !strings.Contains(shape, "todo document") {
+		t.Error("the plan shape does not send human-only steps to the todo document")
+	}
+
+	for _, id := range []ID{
+		ID(agentIDPrefix + "qrouton-planning-lead"),
+		ID(agentIDPrefix + "qrouton-implementation-lead"),
+		ID(skillIDPrefix + "qrouton-implement"),
+		ID(skillIDPrefix + "qrouton-plan"),
+	} {
+		if text, _ := load(id); !strings.Contains(text, "`For you`") {
+			t.Errorf("%s does not carry the For you return", id)
+		}
+	}
+
+	for _, id := range []ID{Orchestrator, ID(skillIDPrefix + "qrouton-implement"), ID(skillIDPrefix + "qrouton-plan")} {
+		if text, _ := load(id); !strings.Contains(text, "that clear the") {
+			t.Errorf("%s copies every For you item without holding it to the todo bar", id)
+		}
 	}
 }

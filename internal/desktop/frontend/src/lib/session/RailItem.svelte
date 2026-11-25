@@ -5,7 +5,7 @@
   import { rowLabel, summaryFacts } from "./rail.js";
   import { sticker, stickerControlLabel, stickerCss, stickerTitle } from "./stickers.js";
 
-  /** @type {{slug?: string, initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, dragging?: boolean, over?: boolean, onPointerDown?: (event: PointerEvent) => void, onPointerMove?: (event: PointerEvent) => void, onPointerUp?: (event: PointerEvent) => void, onPointerCancel?: (event: PointerEvent) => void, stickerId?: string, stickers?: import("./stickers.js").Sticker[], stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
+  /** @type {{slug?: string, initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, todos?: import("./rail.js").Todos, idle?: string, selected?: boolean, dragging?: boolean, over?: boolean, onPointerDown?: (event: PointerEvent) => void, onPointerMove?: (event: PointerEvent) => void, onPointerUp?: (event: PointerEvent) => void, onPointerCancel?: (event: PointerEvent) => void, stickerId?: string, stickers?: import("./stickers.js").Sticker[], stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
   let {
     slug = "",
     initials,
@@ -14,6 +14,7 @@
     repos = [],
     summary = {},
     unseen = 0,
+    todos = {},
     idle = "",
     selected = false,
     dragging = false,
@@ -31,7 +32,7 @@
     onContextMenu,
   } = $props();
 
-  let facts = $derived(summaryFacts(summary, unseen, idle));
+  let facts = $derived(summaryFacts(summary, unseen, idle, todos));
   let label = $derived(rowLabel(name, repos, facts));
   let running = $derived(Boolean(summary.running));
   let stickerItem = $derived(sticker(stickerId, stickers));
@@ -91,7 +92,7 @@
     onclick={(event) => {
       if (event.detail === 0) onSelect?.();
     }}>
-    <SessionIdentity {initials} {shortcut} {name} {repos} {summary} {unseen} {idle} {selected} />
+    <SessionIdentity {initials} {shortcut} {name} {repos} {summary} {unseen} {todos} {idle} {selected} />
   </button>
 
   <button

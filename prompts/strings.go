@@ -48,6 +48,9 @@ const (
 	runTableFileName    = "run-table.md"
 	runTablePlaceholder = "{{run-table}}"
 
+	todoBarFileName    = "todo-bar.md"
+	todoBarPlaceholder = "{{todo-bar}}"
+
 	agyNameFormat   = "name: %s\ndescription: %s\n"
 	agySubagentKey  = "subagent"
 	agySubagentLine = agySubagentKey + ": true\n"
@@ -78,6 +81,7 @@ var partials = map[string]string{
 	scratchCopyPlaceholder:        scratchCopyFileName,
 	fixDisciplinePlaceholder:      fixDisciplineFileName,
 	runTablePlaceholder:           runTableFileName,
+	todoBarPlaceholder:            todoBarFileName,
 	"{{audit-policy}}":            "audit-policy.md",
 }
 

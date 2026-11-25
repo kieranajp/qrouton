@@ -1,7 +1,7 @@
 import { DASHBOARD_PULL_STATES, PULL_REQUEST_REVIEWS, PULL_REQUEST_STATES, REPO_ROLES } from "../bridge/generated.js";
 import { SIGNED_OUT } from "../overview/pulls.js";
 import { stamp } from "../relative.js";
-import { repositoryLine } from "../session/rail.js";
+import { repositoryLine, todoLabel } from "../session/rail.js";
 
 export const DASHBOARD_TITLE = "Dashboard";
 
@@ -19,9 +19,26 @@ export function columnCount(width, scale = 1) {
 /** @param {number} [pulls] the pull requests the card shows */
 export const estimatedHeight = (pulls = 0) => 100 + 62 * pulls;
 
+/** @typedef {{text: string, path: string, line: number}} TodoItem */
+/** @typedef {{open?: number, items?: TodoItem[] | null}} TodoRollup */
+
+const TODO_LINE = 24;
+
+/** @param {TodoRollup | undefined} todos */
+export function todoLine(todos) {
+  const open = todos?.open ?? 0;
+  if (!open) return "";
+  return todoLabel(open);
+}
+
+/** @param {TodoRollup | undefined} todos */
+export const todoItems = (todos) => (todos?.open ? (todos.items ?? []) : []);
+
 /** Expanding a card leaves its estimate alone, so no other card changes column under the pointer.
- * @param {{shown: unknown[], more: number}} section */
-export const cardHeight = (section) => estimatedHeight(Math.min(section.shown.length + section.more, SHOWN_PULLS));
+ * @param {{shown: unknown[], more: number}} section @param {TodoRollup} [todos] */
+export const cardHeight = (section, todos) =>
+  estimatedHeight(Math.min(section.shown.length + section.more, SHOWN_PULLS)) +
+  (todos?.open ? TODO_LINE * (1 + todoItems(todos).length) : 0);
 
 /** Each card's index, in the column that was shortest when it was placed.
  * A tie goes left, so the first row reads left to right in rail order.

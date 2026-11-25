@@ -78,6 +78,7 @@ export const WINDOWS_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Wind
 export const WINDOWS_CONTENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.Content";
 export const WINDOWS_FOCUS_ASSET = "github.com/kieranajp/qrouton/internal/desktop.Windows.FocusAsset";
 export const WINDOWS_OPEN_DOCUMENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocument";
+export const WINDOWS_OPEN_DOCUMENT_AT = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocumentAt";
 export const WINDOWS_OPEN_SHELL = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenShell";
 export const WINDOWS_RENDER_DIAGRAMS = "github.com/kieranajp/qrouton/internal/desktop.Windows.RenderDiagrams";
 export const WINDOWS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.Windows.Reorder";
@@ -87,6 +88,7 @@ export const WINDOWS_SAVE_ANSWERS = "github.com/kieranajp/qrouton/internal/deskt
 export const WINDOWS_SELECT = "github.com/kieranajp/qrouton/internal/desktop.Windows.Select";
 export const WINDOWS_SEND_AUDIT_TRIAGE = "github.com/kieranajp/qrouton/internal/desktop.Windows.SendAuditTriage";
 export const WINDOWS_SEND_SPEC_ANSWERS = "github.com/kieranajp/qrouton/internal/desktop.Windows.SendSpecAnswers";
+export const WINDOWS_SEND_TODO_UPDATE = "github.com/kieranajp/qrouton/internal/desktop.Windows.SendTodoUpdate";
 export const WINDOWS_START = "github.com/kieranajp/qrouton/internal/desktop.Windows.Start";
 export const WINDOWS_SURFACES = "github.com/kieranajp/qrouton/internal/desktop.Windows.Surfaces";
 export const WINDOWS_WRITE = "github.com/kieranajp/qrouton/internal/desktop.Windows.Write";
@@ -152,13 +154,14 @@ export const AGENT_STAGES = Object.freeze({
   IMPLEMENT: "implement",
 });
 
-/** @typedef {"RESEARCH"|"SPEC"|"PLAN"|"EXPLAINER"|"AUDIT"|"NOTE"} ArtifactKind */
+/** @typedef {"RESEARCH"|"SPEC"|"PLAN"|"EXPLAINER"|"AUDIT"|"TODO"|"NOTE"} ArtifactKind */
 export const ARTIFACT_KINDS = Object.freeze({
   RESEARCH: "RESEARCH",
   SPEC: "SPEC",
   PLAN: "PLAN",
   EXPLAINER: "EXPLAINER",
   AUDIT: "AUDIT",
+  TODO: "TODO",
   NOTE: "NOTE",
 });
 
@@ -415,7 +418,7 @@ export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green
 /** @type {readonly StickerSymbol[]} */
 export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, pickerID: string, welcoming: boolean, placing: boolean, stickers: any[], profiles: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, pickerID: string, welcoming: boolean, placing: boolean, stickers: any[], profiles: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}, todos: any[], todoDocuments: any[]}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -460,4 +463,6 @@ export const CHROME_DEFAULTS = {
     text: "",
     at: "",
   },
+  todos: [],
+  todoDocuments: [],
 };

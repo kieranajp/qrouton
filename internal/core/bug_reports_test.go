@@ -260,7 +260,7 @@ func TestBugReportChromeHydratesAndExpiresOnlyOwnedPreview(t *testing.T) {
 	reg.reveal(second)
 	chrome := newChrome(func(string, any) {})
 	push := func() status.Fields {
-		pushChrome(reg, root, nil, nil, nil, nil, chrome.publish)
+		pushChrome(reg, root, nil, nil, nil, railFacts{}, chrome.publish)
 		return chrome.Snapshot()
 	}
 	if push().BugReportID != "" {

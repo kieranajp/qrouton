@@ -471,6 +471,14 @@ func windowsRows() []adapterRow {
 				t.Fatalf("OpenDocument with no editor = %v", err)
 			}
 		}},
+		{"Windows.OpenDocumentAt", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			id := a.document(t, "thoughts/shared/todos/T1-x.md", "- [ ] Merge")
+			got, err := (&Windows{windows: a.kernel.Windows}).OpenDocumentAt(a.slug(), "thoughts/shared/todos/T1-x.md", 1)
+			if err != nil || got != id {
+				t.Fatalf("OpenDocumentAt = %q, %v; want the open tab %q", got, err, id)
+			}
+		}},
 		{"Windows.Select", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			first := a.document(t, "one.md", "# one")
@@ -611,6 +619,15 @@ func windowsRows() []adapterRow {
 			id := a.document(t, "thoughts/shared/specs/S1-x.md", "# spec")
 			if err := (&Windows{windows: a.kernel.Windows}).SendAuditTriage(id); !errors.Is(err, core.ErrWrongSend) {
 				t.Fatalf("sending audit triage from a spec = %v, want ErrWrongSend", err)
+			}
+		}},
+		{"Windows.SendTodoUpdate", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			for _, source := range []string{"thoughts/shared/specs/S1-x.md", "thoughts/shared/audits/A1-x.md"} {
+				id := a.document(t, source, "# x")
+				if err := (&Windows{windows: a.kernel.Windows}).SendTodoUpdate(id); !errors.Is(err, core.ErrWrongSend) {
+					t.Fatalf("sending a todo update from %s = %v, want ErrWrongSend", source, err)
+				}
 			}
 		}},
 	}

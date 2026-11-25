@@ -44,11 +44,11 @@
     <div class="results" id="session-switcher-results" role="listbox" aria-label={SWITCHER_LABEL}>
       {#each controller.matches as match (match.row.slug)}
         {@const row = match.row}
-        <div class="option" class:active={controller.active === row.slug} id={optionID(row.slug)} role="option" aria-selected={controller.active === row.slug} aria-label={[row.dashboard ? row.name : rowLabel(row.name, row.repos, summaryFacts(row.summary, row.unseen)), match.context, row.slug === currentKey ? SWITCHER_CURRENT : ""].filter(Boolean).join(" · ")} onclick={() => controller.activate(row.slug)} onkeydown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); controller.activate(row.slug); } }} onmousedown={(event) => event.preventDefault()} tabindex="-1">
+        <div class="option" class:active={controller.active === row.slug} id={optionID(row.slug)} role="option" aria-selected={controller.active === row.slug} aria-label={[row.dashboard ? row.name : rowLabel(row.name, row.repos, summaryFacts(row.summary, row.unseen, "", row.todos)), match.context, row.slug === currentKey ? SWITCHER_CURRENT : ""].filter(Boolean).join(" · ")} onclick={() => controller.activate(row.slug)} onkeydown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); controller.activate(row.slug); } }} onmousedown={(event) => event.preventDefault()} tabindex="-1">
           {#if row.dashboard}
             <div class="home"><span class="tile"><Icon name="dashboard" inherit /></span><span class="title">{row.name}</span></div>
           {:else}
-            <SessionIdentity initials={row.initials} name={row.name} repos={row.repos} summary={row.summary} unseen={row.unseen} idle={row.summary?.running ? "" : age(row.opened)} context={match.context} />
+            <SessionIdentity initials={row.initials} name={row.name} repos={row.repos} summary={row.summary} unseen={row.unseen} todos={row.todos} idle={row.summary?.running ? "" : age(row.opened)} context={match.context} />
           {/if}
           {#if row.slug === currentKey}<span class="current">{SWITCHER_CURRENT}</span>{/if}
           {#if !row.dashboard}<SessionSticker id={row.sticker} {stickers} />{/if}

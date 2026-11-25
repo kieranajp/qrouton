@@ -1682,3 +1682,68 @@ func TestConcurrentLaunchAndMountStartOnlyOneTerminalProcess(t *testing.T) {
 		t.Fatalf("process launches = %q, %v", launches, err)
 	}
 }
+
+// Catches a tab already open on the document left where it was, or a second
+// click on the same item that no longer scrolls.
+func TestOpeningADocumentAtALineMovesTheOpenTabThere(t *testing.T) {
+	w, r := testWindows(t)
+	const doc = "thoughts/shared/todos/T1-rollout.md"
+	id, err := w.openStructural(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "Rollout", Source: doc, Content: "- [ ] Merge\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.newDocument = func(*SessionState, string) (string, error) {
+		t.Fatal("a second tab opened on a document already up")
+		return "", nil
+	}
+	pushed := func() Document {
+		t.Helper()
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		got, ok := r.events[windowContentEvent+id].(Document)
+		if !ok {
+			t.Fatalf("no document pushed at %s: %v", id, r.events)
+		}
+		return got
+	}
+
+	for want := uint64(1); want <= 2; want++ {
+		got, err := w.OpenDocumentAt(w.shown().Slug(), doc, 7)
+		if err != nil || got != id {
+			t.Fatalf("OpenDocumentAt = %q, %v; want the open tab %q", got, err, id)
+		}
+		if sent := pushed(); sent.Line != 7 || sent.Focus != want {
+			t.Fatalf("pushed line %d focus %d, want line 7 focus %d", sent.Line, sent.Focus, want)
+		}
+	}
+	if selected := w.Surfaces(w.shown().Slug()).Selected; selected != id {
+		t.Fatalf("selected %q, want the document %q", selected, id)
+	}
+}
+
+// Catches a todo opened from the dashboard landing in whichever session happens
+// to be on screen.
+func TestOpeningADocumentAtALineOpensItInTheNamedSession(t *testing.T) {
+	root := t.TempDir()
+	reg := testRegistry(t, sessionDir(t, root, "onscreen"))
+	other := reg.add(sessionDir(t, root, "elsewhere"), []string{"/bin/cat"}, os.Environ())
+	w := newWindows(newFakeClient().Emit, reg)
+	t.Cleanup(w.stopAll)
+	var openedIn *SessionState
+	w.newDocument = func(owner *SessionState, name string) (string, error) {
+		openedIn = owner
+		return w.openStructural(owner, workbench.WindowOptions{Kind: workbench.KindDocument, Label: "Rollout", Source: name})
+	}
+
+	if _, err := w.OpenDocumentAt("elsewhere", "thoughts/shared/todos/T1-rollout.md", 3); err != nil {
+		t.Fatal(err)
+	}
+	if openedIn != other {
+		t.Fatalf("the document opened in %v, want the named session", openedIn)
+	}
+	if _, err := w.OpenDocumentAt("nowhere", "thoughts/shared/todos/T1-rollout.md", 3); err == nil {
+		t.Fatal("a session that is not loaded opened a document")
+	}
+}

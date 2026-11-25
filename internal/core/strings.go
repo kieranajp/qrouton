@@ -100,6 +100,7 @@ const (
 
 	specAnswersInFormat = "I've answered the design questions in %s. Please fold them into Decisions."
 	auditTriageInFormat = "I've triaged the findings in %s. Please plan the accepted findings."
+	todoUpdatedFormat   = "I've updated the todos in %s."
 	conversationSubmit  = "\r"
 	pasteStart          = "\x1b[200~"
 	pasteEnd            = "\x1b[201~"

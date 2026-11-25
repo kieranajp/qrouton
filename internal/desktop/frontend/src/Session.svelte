@@ -10,6 +10,7 @@
   import { DASHBOARD_TITLE } from "./lib/dashboard/dashboard.js";
   import { dashboard } from "./lib/dashboard.svelte.js";
   import OverviewPane from "./lib/overview/OverviewPane.svelte";
+  import { openTodo } from "./lib/overview/calls.js";
   import SessionSwitcher from "./lib/session/SessionSwitcher.svelte";
   import Rail from "./lib/session/Rail.svelte";
   import Terminal from "./lib/session/Terminal.svelte";
@@ -108,6 +109,7 @@
       <Dashboard
         sessions={fields.sessions}
         onOpen={(slug) => rail?.openSession(slug)}
+        onOpenTodo={(slug, path, line) => openTodo((shown) => rail?.openSession(shown), slug, path, line)}
         store={pulls}
         onSettings={view.openSettings} />
     {/if}
@@ -201,6 +203,7 @@
               summary={fields.sessionSummary}
               pullRequests={fields.pullRequests}
               digest={fields.sessionDigest}
+              todoDocuments={fields.todoDocuments}
               repos={fields.repos}
               onAddRepos={() => (view.added = fields.slug)} />
           {:else}

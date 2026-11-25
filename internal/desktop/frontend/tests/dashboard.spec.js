@@ -257,3 +257,40 @@ test.describe("the header line", () => {
     expect(await page.evaluate(() => window.dashboardBridge.settings)).toEqual(["github"]);
   });
 });
+
+// Catches a card that hides its todos, colours the count off the rail's todo token, or lists more than the next open item.
+test("a card with open todos counts them, then lists the next one on a line", async ({ page }) => {
+  const todos = card(page, "session-2").locator(".todos");
+  await expect(todos.locator(".tally")).toHaveText("3 todos");
+  await expect(todos.locator(".tally")).toHaveCSS("color", await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--artifact-todo)";
+    document.body.append(probe);
+    const resolved = getComputedStyle(probe).color;
+    probe.remove();
+    return resolved;
+  }));
+  await expect(todos.getByRole("button")).toHaveCount(1);
+  await expect(todos.locator(".todo .text")).toHaveText(["Apply the migration"]);
+  await expect(card(page, "session-3").locator(".todos")).toHaveCount(0);
+});
+
+// Catches opening the document without its session, path or line.
+test("a card's todo shows its session, then opens the document at the item's line", async ({ page }) => {
+  await card(page, "session-2").getByRole("button", { name: /Apply the migration/ }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.dashboardBridge.calls().map((call) => [call.method, ...call.args])))
+    .toEqual([
+      ["Show", "session-2"],
+      ["OpenDocumentAt", "session-2", "thoughts/shared/todos/T1-rollout.md", 14],
+    ]);
+});
+
+// Catches a refused show still opening the document, which would land in whichever session is on screen.
+test("a card's todo opens nothing when its session will not show", async ({ page }) => {
+  await page.evaluate(() => window.dashboardBridge.refuseNextShow());
+  await card(page, "session-2").getByRole("button", { name: /Apply the migration/ }).click();
+  await expect.poll(() => page.evaluate(() => window.dashboardBridge.calls().map((call) => call.method))).toEqual(["Show"]);
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.dashboardBridge.calls().map((call) => call.method))).toEqual(["Show"]);
+});

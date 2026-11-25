@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { documentPath, linkKind, marks, render } from "./markdown.js";
+import { documentPath, fragment, inline, linkKind, marks, render } from "./markdown.js";
 
 /** @param {string} body */
 const numbered = (body) => [...body.matchAll(/<(\w+)[^>]*data-line="(\d+)"/g)].map((m) => [m[1], Number(m[2])]);
@@ -159,4 +159,13 @@ test("a bad escape in a link leaves only the link's own text raw", () => {
   const from = "thoughts/my notes/P7.md";
   assert.equal(documentPath("100%.md", from), "thoughts/my notes/100%.md");
   assert.equal(documentPath("my%20file.md", from), "thoughts/my notes/my file.md");
+});
+
+// Catches a fragment's line numbers marking the wrong blocks, or a block or script leaking into a line of text.
+test("a fragment carries no line numbers, and inline markup is one paragraph's contents or else escaped source", () => {
+  assert.equal(fragment("| a |\n|---|\n| b |").includes("data-line"), false);
+  assert.equal(inline("Set the `AUTH_*` [secrets](https://example.com)"), 'Set the <code>AUTH_*</code> <a href="https://example.com">secrets</a>');
+  assert.equal(inline("- not a list <b>"), "- not a list &lt;b&gt;");
+  assert.equal(inline("one\n\ntwo"), "one\n\ntwo");
+  assert.equal(inline("Hi <img src=x onerror=alert(1)>").includes("<img"), false);
 });

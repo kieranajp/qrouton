@@ -10,8 +10,8 @@ import (
 )
 
 // answerableWindow is the only kind of window the page may write a file
-// through: a spec the user answers or an audit the user triages. It returns
-// the document's kind as well.
+// through: a spec the user answers, an audit the user triages or a todo the
+// user ticks. It returns the document's kind as well.
 func answerableWindow(window *agentWindow) (*documentContent, string, string, error) {
 	rendered, ok := window.document()
 	path := window.sourcePath()
@@ -19,7 +19,9 @@ func answerableWindow(window *agentWindow) (*documentContent, string, string, er
 		return nil, "", "", ErrNotAnswerable
 	}
 	kind := status.DocumentKind(window.opts.Source)
-	if kind != kinds.Spec.Label() && kind != kinds.Audit.Label() {
+	switch kind {
+	case kinds.Spec.Label(), kinds.Audit.Label(), kinds.Todo.Label():
+	default:
 		return nil, "", "", ErrNotAnswerable
 	}
 	return rendered, path, kind, nil
@@ -77,6 +79,12 @@ func (w *Windows) SendSpecAnswers(id string) error {
 // submits it. Only the window id comes from the page.
 func (w *Windows) SendAuditTriage(id string) error {
 	return w.sendFixedLine(id, kinds.Audit.Label(), auditTriageInFormat)
+}
+
+// SendTodoUpdate pastes one fixed line into the todo's conversation and
+// submits it. Only the window id comes from the page.
+func (w *Windows) SendTodoUpdate(id string) error {
+	return w.sendFixedLine(id, kinds.Todo.Label(), todoUpdatedFormat)
 }
 
 func (w *Windows) sendFixedLine(id, want, format string) error {

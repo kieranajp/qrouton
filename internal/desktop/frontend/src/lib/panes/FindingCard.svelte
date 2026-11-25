@@ -2,16 +2,13 @@
   import NoteEditor from "./NoteEditor.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { CHOICES, TRIAGED } from "./audit.js";
-  import { render } from "./markdown.js";
+  import { fragment } from "./markdown.js";
 
   /** @type {{finding: import("./audit.js").Finding, draft: {choice: string, note: string}, state?: string, message?: string, onChoose?: (choice: string) => void, onNote?: (text: string) => void, onCommit?: () => void}} */
   let { finding, draft, state = "", message = "", onChoose, onNote, onCommit } = $props();
 
   const STATES = { unsaved: "Not saved", saving: "Saving…", saved: "Saved", failed: "Not saved", reloaded: "Not saved" };
   const LABELS = { accept: "Accept", reject: "Reject", defer: "Defer" };
-
-  // Line numbers here would count from the card, not the file.
-  const prose = (text) => render(text).body.replace(/ data-line(?:-end)?="\d+"/g, "");
 
   let fields = $derived(finding.fields);
   let triaged = $derived(Boolean(draft.choice || draft.note.trim()));
@@ -34,7 +31,7 @@
     {/if}
     {#if fields.evidence}
       <dt>Evidence</dt>
-      <dd class="markdown">{@html prose(fields.evidence)}</dd>
+      <dd class="markdown">{@html fragment(fields.evidence)}</dd>
     {/if}
     {#if fields.verdict}
       <dt>Verdict</dt>
@@ -42,7 +39,7 @@
     {/if}
     {#if fields.fix}
       <dt>Proposed fix</dt>
-      <dd class="markdown">{@html prose(fields.fix)}</dd>
+      <dd class="markdown">{@html fragment(fields.fix)}</dd>
     {/if}
     {#if fields.risk}
       <dt>Behaviour risk</dt>

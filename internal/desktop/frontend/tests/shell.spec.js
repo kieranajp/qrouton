@@ -424,3 +424,25 @@ test("with no sessions the dialog opens itself and Escape keeps it", async ({ pa
   await expect(assembly(page)).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel" })).toHaveCount(0);
 });
+
+// Catches the rail's show no longer reporting success, so a dashboard todo opens nothing, or one opening before or without its session.
+test("a dashboard todo shows its session through the rail, then opens at its line", async ({ page }) => {
+  await page.goto("/tests/shell.html");
+  const todo = { text: "Announce it", section: "Ship", where: "", path: "thoughts/shared/todos/T1-x.md", line: 9 };
+  const sessions = [{ ...ON_DISK[0], todos: { open: 1, items: [todo] } }];
+  await page.evaluate((rows) => window.shell.snapshot({ slug: "", identity: "", terminal: "", sessions: rows }), sessions);
+  await page.evaluate(() => window.shell.controlShow());
+  const item = dashboard(page).getByRole("button", { name: /Announce it/ });
+
+  await item.click();
+  await expect.poll(() => page.evaluate(() => window.shell.shows())).toEqual([["octopus"]]);
+  expect(await page.evaluate(() => window.shell.opensAt())).toEqual([]);
+  await page.evaluate(() => window.shell.finishShow());
+  await expect.poll(() => page.evaluate(() => window.shell.opensAt())).toEqual([["octopus", todo.path, todo.line]]);
+
+  await item.click();
+  await expect.poll(() => page.evaluate(() => window.shell.shows().length)).toBe(2);
+  await page.evaluate(() => window.shell.finishShow(false));
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.shell.opensAt())).toHaveLength(1);
+});

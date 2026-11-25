@@ -61,15 +61,22 @@ func (c *Chrome) publishFields(fields status.Fields) {
 // re-reading it on a poll is what keeps the window agreeing with the session.
 func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, pulls pullRequestSource) {
 	watch(ctx, reg, root, cfg, emit, chromeInterval, repoStatInterval,
-		unseenCounts{all: status.Unseen, in: status.UnseenIn}, pulls)
+		railCounts{all: status.Unseen, in: status.UnseenIn, todos: status.Todos}, pulls)
 }
 
-// unseenCounts is what the rail knows about documents nobody has looked at: every
-// session's, which is what rides the slow ticker, and one session's, which is
-// cheap enough to run the moment the user arrives at it.
-type unseenCounts struct {
-	all func(root string) map[string]int
-	in  func(sessionRoot string) (int, bool)
+// railCounts is what the rail counts per session. Every session's unseen documents
+// and open todos ride the slow ticker; one session's unseen count is cheap enough
+// to run the moment the user arrives at it.
+type railCounts struct {
+	all   func(root string) map[string]int
+	in    func(sessionRoot string) (int, bool)
+	todos func(root string) map[string]status.TodoRollup
+}
+
+// railFacts are the per-session counts a push copies onto the rail's rows.
+type railFacts struct {
+	unseen map[string]int
+	todos  map[string]status.TodoRollup
 }
 
 // pullRequestSource is the Dashboard as the chrome loop sees it.
@@ -88,14 +95,14 @@ type measurement struct {
 // watch takes its intervals, its unseen count and its pull requests so a test
 // can drive the tickers apart. Everything a background session costs rides the
 // slow one.
-func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, field, slow time.Duration, count unseenCounts, pulls pullRequestSource) {
+func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, field, slow time.Duration, count railCounts, pulls pullRequestSource) {
 	fields := time.NewTicker(field)
 	defer fields.Stop()
 	stats := time.NewTicker(slow)
 	defer stats.Stop()
 
 	measured := map[string][]status.RepoStat{}
-	unseen := count.all(root)
+	rail := railFacts{unseen: count.all(root), todos: count.todos(root)}
 	result := make(chan measurement, 1)
 	// A refresh runs off this loop so a wedged git cannot stall the field ticker;
 	// pending guards against a second one starting before it answers.
@@ -128,7 +135,7 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 
 	refresh()
 	request()
-	pushChrome(reg, root, cfg, measured, pulls, unseen, emit)
+	pushChrome(reg, root, cfg, measured, pulls, rail, emit)
 	for {
 		select {
 		case <-ctx.Done():
@@ -140,7 +147,8 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 		case <-stats.C:
 			delete(measured, reg.Current().Root())
 			refresh()
-			unseen = count.all(root)
+			rail.unseen = count.all(root)
+			rail.todos = count.todos(root)
 		case <-reg.touched:
 			for _, root := range reg.takeRepositoryChanges() {
 				delete(measured, root)
@@ -157,12 +165,12 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 			// lit after that is a marker nobody reads.
 			if shown := reg.Current().Root(); shown != "" {
 				if at, ok := count.in(shown); ok {
-					unseen[slugFor(shown)] = at
+					rail.unseen[slugFor(shown)] = at
 				}
 			}
 		case <-fields.C:
 		}
-		pushChrome(reg, root, cfg, measured, pulls, unseen, emit)
+		pushChrome(reg, root, cfg, measured, pulls, rail, emit)
 		if reg.trees != nil {
 			reg.trees.schedule(reg.Current())
 		}
@@ -171,7 +179,7 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 
 // pushChrome emits even with the session-level fields empty: the page cannot
 // attach to a conversation whose terminal id it has not been told.
-func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, pulls pullRequestSource, unseen map[string]int, emit Emitter) {
+func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, pulls pullRequestSource, rail railFacts, emit Emitter) {
 	for _, state := range reg.all() {
 		state.mu.Lock()
 		state.pruneBugReports(reg.now())
@@ -232,7 +240,17 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 		if snapshot, ok := agentSnapshots[row.Slug]; ok {
 			fields.Sessions[i].Summary = agentSummary(snapshot)
 		}
-		fields.Sessions[i].Unseen = unseen[row.Slug]
+		fields.Sessions[i].Unseen = rail.unseen[row.Slug]
+		if row.Slug == fields.Slug {
+			// The shown row agrees with the Overview, and keeps that count once the user moves on.
+			shownTodos := status.Rollup(fields.Todos)
+			fields.Sessions[i].Todos = shownTodos
+			if rail.todos != nil {
+				rail.todos[row.Slug] = shownTodos
+			}
+		} else if rollup, ok := rail.todos[row.Slug]; ok {
+			fields.Sessions[i].Todos = rollup
+		}
 	}
 	emit(chromeEvent, fields)
 }

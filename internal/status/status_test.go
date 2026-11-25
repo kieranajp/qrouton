@@ -49,6 +49,8 @@ func TestReadScratchAssistant(t *testing.T) {
 		Stickers:            []Sticker{},
 		Profiles:            []RunnerProfiles{},
 		PullRequests:        PullRequestList{Items: []PullRequest{}},
+		Todos:               []TodoItem{},
+		TodoDocuments:       []TodoDocument{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fields = %#v, want %#v", got, want)
@@ -83,6 +85,7 @@ func TestReadWithoutManifest(t *testing.T) {
 	want := Fields{
 		Sessions: []SessionRow{}, Documents: []Document{}, RepositoryDocuments: []RepositoryDocuments{}, Repos: []RepoStat{},
 		Stickers: []Sticker{}, Profiles: []RunnerProfiles{}, PullRequests: PullRequestList{Items: []PullRequest{}},
+		Todos: []TodoItem{}, TodoDocuments: []TodoDocument{},
 	}
 	if got := Read(t.TempDir()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("missing manifest = %#v, want %#v", got, want)
@@ -170,6 +173,8 @@ func TestDocumentsAreClassifiedByArtifactTaxonomyThenFilenamePrefix(t *testing.T
 		{"explainers/onboarding.md", "EXPLAINER"},
 		{"explainers/E1-billing-flow.md", "EXPLAINER"},
 		{"E2-webhook-retries.md", "EXPLAINER"},
+		{"todos/notes.md", "TODO"},
+		{"T1-rollout.md", "TODO"},
 		{"escalation-notes.md", "NOTE"},
 	}
 	base := time.Now().Add(-time.Hour)
@@ -591,7 +596,7 @@ func TestEmptySlicesMarshalAsArraysNotNull(t *testing.T) {
 	if err := json.Unmarshal(b, &keyed); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"sessions", "documents", "repositoryDocuments", "repos"} {
+	for _, key := range []string{"sessions", "documents", "repositoryDocuments", "repos", "todos"} {
 		if string(keyed[key]) == "null" {
 			t.Errorf("%q marshalled as null", key)
 		}

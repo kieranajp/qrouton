@@ -240,3 +240,44 @@ func TestSplitGivesTheLineTheBodyStartsOn(t *testing.T) {
 		})
 	}
 }
+
+// The todo pane reads the same cases, so the pane and the roll-up agree on every item.
+func TestTodoItemsReadTheSharedCases(t *testing.T) {
+	body, err := os.ReadFile("testdata/todo-items.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name  string `json:"name"`
+		Text  string `json:"text"`
+		Items []struct {
+			Section string `json:"section"`
+			Text    string `json:"text"`
+			Note    string `json:"note"`
+			State   string `json:"state"`
+			Line    int    `json:"line"`
+			Where   string `json:"where"`
+			Check   string `json:"check"`
+			Run     string `json:"run"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range cases {
+		got := TodoItems(tc.Text)
+		if len(got) != len(tc.Items) {
+			t.Errorf("%s: %d items, want %d: %+v", tc.Name, len(got), len(tc.Items), got)
+			continue
+		}
+		for i, want := range tc.Items {
+			item := TodoItem{
+				Section: want.Section, Text: want.Text, Note: want.Note, State: TodoState(want.State), Line: want.Line,
+				Where: want.Where, Check: want.Check, Run: want.Run,
+			}
+			if got[i] != item {
+				t.Errorf("%s: item %d = %+v, want %+v", tc.Name, i, got[i], item)
+			}
+		}
+	}
+}
