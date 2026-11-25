@@ -47,7 +47,6 @@
           title={item.text}
           onclick={() => onOpenTodo(row.slug, item.path, item.line)}>
           <span class="text">{item.text}</span>
-          {#if item.blocks}<span class="blocks">Blocking</span>{/if}
         </button>
       {/each}
     </div>
@@ -200,11 +199,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .blocks {
-    flex: none;
-    color: var(--state-waiting);
   }
 
   .more {

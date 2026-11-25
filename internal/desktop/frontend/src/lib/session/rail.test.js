@@ -100,14 +100,14 @@ test("rows that are not busy drop a stage they were given", () => {
   }
 });
 
-// Catches the todo fact going missing, or a "0 blocking" tail on a list nothing waits on.
-test("open todos sit after the new docs, naming the blocking ones only when any block", () => {
-  assert.deepEqual(summaryFacts({ running: false }, 2, "", { open: 3, blocking: 1 }), [
+// Catches the todo fact going missing, or sitting before the new docs.
+test("open todos sit after the new docs", () => {
+  assert.deepEqual(summaryFacts({ running: false }, 2, "", { open: 3 }), [
     { kind: "agents", label: "Idle" },
     { kind: "unseen", label: "2 new docs" },
-    { kind: "todos", label: "3 todos · 1 blocking" },
+    { kind: "todos", label: "3 todos" },
   ]);
-  assert.deepEqual(summaryFacts({ running: false }, 0, "", { open: 1, blocking: 0 }), [
+  assert.deepEqual(summaryFacts({ running: false }, 0, "", { open: 1 }), [
     { kind: "agents", label: "Idle" },
     { kind: "todos", label: "1 todo" },
   ]);
@@ -115,6 +115,6 @@ test("open todos sit after the new docs, naming the blocking ones only when any 
 
 // Catches a fact for a session whose todos are all done, or a row without todos throwing.
 test("a session with no open todos, or none reported, has no todo fact", () => {
-  assert.deepEqual(summaryFacts({ running: false }, 0, "", { open: 0, blocking: 0 }), [{ kind: "agents", label: "Idle" }]);
+  assert.deepEqual(summaryFacts({ running: false }, 0, "", { open: 0 }), [{ kind: "agents", label: "Idle" }]);
   assert.deepEqual(summaryFacts({ running: false }, 0, ""), [{ kind: "agents", label: "Idle" }]);
 });

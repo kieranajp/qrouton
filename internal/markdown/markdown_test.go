@@ -259,7 +259,6 @@ func TestTodoItemsReadTheSharedCases(t *testing.T) {
 			Where   string `json:"where"`
 			Check   string `json:"check"`
 			Run     string `json:"run"`
-			Blocks  string `json:"blocks"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(body, &cases); err != nil {
@@ -274,7 +273,7 @@ func TestTodoItemsReadTheSharedCases(t *testing.T) {
 		for i, want := range tc.Items {
 			item := TodoItem{
 				Section: want.Section, Text: want.Text, Note: want.Note, State: TodoState(want.State), Line: want.Line,
-				Where: want.Where, Check: want.Check, Run: want.Run, Blocks: want.Blocks,
+				Where: want.Where, Check: want.Check, Run: want.Run,
 			}
 			if got[i] != item {
 				t.Errorf("%s: item %d = %+v, want %+v", tc.Name, i, got[i], item)

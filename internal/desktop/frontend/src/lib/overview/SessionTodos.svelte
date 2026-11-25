@@ -25,13 +25,12 @@
   <Tier label="For you" name="todos">
     {#each rows as row (row.key)}
       {@const named = pullRefs(row.item, tracked)}
-      <div class="todo" class:blocking={row.blocking} data-todo={row.item.text}>
+      <div class="todo" data-todo={row.item.text}>
         <button type="button" class="open" onclick={() => open(row.item)}>
           <span class="text">{row.item.text}</span>
           <span class="meta">
             {#if row.item.section}<span class="section">{row.item.section}</span>{/if}
             {#if named.where}<span class="where">Where {named.where}</span>{/if}
-            {#if row.blocking}<span class="blocks">Blocks {row.item.blocks}</span>{/if}
           </span>
         </button>
         {#if named.refs.length}
@@ -96,10 +95,6 @@
   .where {
     color: var(--text-faint);
     overflow-wrap: anywhere;
-  }
-
-  .blocks {
-    color: var(--state-waiting);
   }
 
   .refs {

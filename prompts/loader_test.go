@@ -1066,13 +1066,10 @@ func TestHumanStepsGoToTheTodoDocument(t *testing.T) {
 	}
 
 	orchestrator, _ := load(Orchestrator)
-	for _, phrase := range []string{"`kind: todo`", "call `notify` naming that item", "open items that block the phase about to run", "`qrouton-todo`, phase letters"} {
+	for _, phrase := range []string{"`kind: todo`", "`qrouton-todo`, phase letters"} {
 		if !strings.Contains(orchestrator, phrase) {
 			t.Errorf("the orchestrator lost %q", phrase)
 		}
-	}
-	if implement, _ := load(ID(skillIDPrefix + "qrouton-implement")); !strings.Contains(implement, "open items that block the phase about to run") {
-		t.Error("the implement skill no longer checks blocking todos before spawning the lead")
 	}
 	for _, row := range strings.Split(orchestrator, "\n") {
 		if strings.HasPrefix(row, "|") && strings.Contains(strings.ToLower(row), "todo") {
@@ -1087,7 +1084,7 @@ func TestHumanStepsGoToTheTodoDocument(t *testing.T) {
 			shape = string(file.Content)
 		}
 	}
-	if !strings.Contains(shape, "todo document") || !strings.Contains(shape, "`Blocks: Phase <n>`") {
+	if !strings.Contains(shape, "todo document") {
 		t.Error("the plan shape does not send human-only steps to the todo document")
 	}
 

@@ -28,12 +28,11 @@ type TodoItem struct {
 	Where   string
 	Check   string
 	Run     string
-	Blocks  string
 }
 
 var (
 	todoLine  = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+\[([ xX-])\][ \t]+(\S.*?)\s*$`)
-	todoField = regexp.MustCompile(`^(?:[-*+]\s+)?(Where|Check|Run|Blocks):[ \t]*(.*?)\s*$`)
+	todoField = regexp.MustCompile(`^(?:[-*+]\s+)?(Where|Check|Run):[ \t]*(.*?)\s*$`)
 )
 
 const todoNote = " — "
@@ -101,8 +100,6 @@ func (item *TodoItem) setField(key, value string) {
 		item.Check = value
 	case "Run":
 		item.Run = value
-	case "Blocks":
-		item.Blocks = value
 	}
 }
 

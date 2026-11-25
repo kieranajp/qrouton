@@ -162,14 +162,14 @@ const digests = {
   },
 };
 const digest = digests[params.get("digest") ?? "none"];
-const todo = (text, line, extra = {}) => ({ text, section: "Before merge", where: "", blocks: "", path: "thoughts/shared/todos/T1-rollout.md", line, ...extra });
+const todo = (text, line, extra = {}) => ({ text, section: "Before merge", where: "", path: "thoughts/shared/todos/T1-rollout.md", line, ...extra });
 const todoLists = {
   none: [],
   rows: [
     todo("Review the copy", 11, { where: "acme/web#41" }),
-    todo("Apply the migration", 14, { where: "enclave · production", blocks: "Phase 3" }),
+    todo("Apply the migration", 14, { where: "enclave · production" }),
     todo("Announce in the channel", 22, { section: "Ship", where: "https://github.com/acme/api/pull/12" }),
-    todo("Rotate the key", 9, { section: "Later", blocks: "the agent", path: "thoughts/shared/todos/T2-keys.md" }),
+    todo("Rotate the key", 9, { section: "Later", path: "thoughts/shared/todos/T2-keys.md" }),
   ],
 };
 const todos = todoLists[params.get("todos") ?? "none"];

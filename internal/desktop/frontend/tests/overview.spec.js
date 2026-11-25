@@ -438,16 +438,15 @@ test("a session with no open todos has no For you tier", async ({ page }) => {
   await expect(page.locator(".tier .label")).toHaveText(["Orchestrator", "Leads", "This session"]);
 });
 
-// Catches the tier sitting anywhere but under the summary, or blocking items left in document order behind open ones.
-test("For you sits under the summary with blocking items first, each naming its section and Where", async ({ page }) => {
+// Catches the tier sitting anywhere but under the summary, or items out of document order.
+test("For you sits under the summary with its items in document order, each naming its section and Where", async ({ page }) => {
   await open(page, "?todos=rows&pulls=rows");
   await expect(page.locator(".tier .label")).toHaveText(["For you", "Pull requests", "Orchestrator", "Leads", "This session"]);
   expect(await page.locator(".summary").evaluate((el) => el.nextElementSibling?.classList.contains("todos"))).toBe(true);
-  await expect(page.locator(".todos .text")).toHaveText(["Apply the migration", "Rotate the key", "Review the copy", "Announce in the channel"]);
+  await expect(page.locator(".todos .text")).toHaveText(["Review the copy", "Apply the migration", "Announce in the channel", "Rotate the key"]);
   const migration = page.locator('.todos [data-todo="Apply the migration"]');
   await expect(migration.locator(".section")).toHaveText("Before merge");
   await expect(migration.locator(".where")).toHaveText("Where enclave · production");
-  await expect(migration.locator(".blocks")).toHaveText("Blocks Phase 3");
 });
 
 // Catches the Overview opening the document without its session, path or line, so the pane would not scroll to the item.

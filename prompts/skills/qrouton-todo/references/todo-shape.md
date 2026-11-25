@@ -1,8 +1,7 @@
 # The shape of a todo document
 
 The workbench reads a todo document as a checklist the user works through in
-its pane. It counts open items and calls out blocking ones, so keep to the
-shape below.
+its pane. It counts open items, so keep to the shape below.
 
 `create_artefact` writes the skeleton from `todo-template.md` beside this file.
 Replace the example section and item with real ones.
@@ -27,7 +26,7 @@ mark it `[-]` so the record stays.
 
 ## Fields
 
-An item may carry up to four fields, each on its own indented `- Key: value`
+An item may carry up to three fields, each on its own indented `- Key: value`
 line. Spell the keys exactly:
 
 - `Where:` the target, such as a repo, a pull request link or an environment.
@@ -36,8 +35,6 @@ line. Spell the keys exactly:
 - `Check:` how to confirm it is done, in prose or a command in backticks.
 - `Run:` a command that does it, in backticks. The pane offers a copy button
   and never runs it.
-- `Blocks:` what waits on it, such as `Phase 3` or `the agent`. An open item
-  with `Blocks:` is a blocking item, and the workbench calls it out.
 
 Any other line under an item is prose.
 
@@ -58,7 +55,6 @@ text, because the last one starts the note.
 - [ ] Merge the schema migration
   - Where: https://github.com/acme/api/pull/4789
   - Check: `select count(*) from tenants` returns rows
-  - Blocks: Phase 3
 
 ## Clean up
 

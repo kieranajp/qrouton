@@ -258,25 +258,23 @@ test.describe("the header line", () => {
   });
 });
 
-// Catches a card that hides its todos, drops the blocking count, or marks the wrong item as blocking.
-test("a card with open todos counts them, then lists its blocking and next items one line each", async ({ page }) => {
+// Catches a card that hides its todos, or lists more than the next open item.
+test("a card with open todos counts them, then lists the next one on a line", async ({ page }) => {
   const todos = card(page, "session-2").locator(".todos");
-  await expect(todos.locator(".tally")).toHaveText("3 open · 1 blocking");
-  await expect(todos.getByRole("button")).toHaveCount(2);
-  await expect(todos.locator(".todo .text")).toHaveText(["Apply the migration", "Announce in the channel"]);
-  await expect(todos.locator(".todo").nth(0).locator(".blocks")).toHaveText("Blocking");
-  await expect(todos.locator(".todo").nth(1).locator(".blocks")).toHaveCount(0);
+  await expect(todos.locator(".tally")).toHaveText("3 open");
+  await expect(todos.getByRole("button")).toHaveCount(1);
+  await expect(todos.locator(".todo .text")).toHaveText(["Apply the migration"]);
   await expect(card(page, "session-3").locator(".todos")).toHaveCount(0);
 });
 
 // Catches opening the document without its session, path or line.
 test("a card's todo shows its session, then opens the document at the item's line", async ({ page }) => {
-  await card(page, "session-2").getByRole("button", { name: /Announce in the channel/ }).click();
+  await card(page, "session-2").getByRole("button", { name: /Apply the migration/ }).click();
   await expect
     .poll(() => page.evaluate(() => window.dashboardBridge.calls().map((call) => [call.method, ...call.args])))
     .toEqual([
       ["Show", "session-2"],
-      ["OpenDocumentAt", "session-2", "thoughts/shared/todos/T1-rollout.md", 22],
+      ["OpenDocumentAt", "session-2", "thoughts/shared/todos/T1-rollout.md", 14],
     ]);
 });
 

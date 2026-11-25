@@ -11,4 +11,3 @@ title: <title>
   - Where: <the repo, pull request or environment it happens in>
   - Check: <how to confirm it is done>
   - Run: `<a command that does it>`
-  - Blocks: <what waits on it, such as Phase 3 or the agent>

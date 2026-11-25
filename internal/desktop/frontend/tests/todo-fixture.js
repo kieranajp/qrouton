@@ -24,7 +24,6 @@ export const TODO = [
   "  - Where: enclave · production",
   "  - Check: `select count(*) from tenants`",
   "  - Run: `make migrate ENV=production`",
-  "  - Blocks: Phase 3",
   "  This can run alongside the items above.",
   "- [-] Roll back the cache — not needed after all",
   "",

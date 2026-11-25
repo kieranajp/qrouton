@@ -17,17 +17,15 @@ type TodoItem struct {
 	Text    string `json:"text"`
 	Section string `json:"section"`
 	Where   string `json:"where"`
-	Blocks  string `json:"blocks"`
 	Path    string `json:"path"`
 	Line    int    `json:"line"`
 }
 
-// TodoRollup is what a session row says about its open todos. Items holds every
-// blocking item, then the next open item when it is not one of them.
+// TodoRollup is what a session row says about its open todos. Items holds the
+// next open item.
 type TodoRollup struct {
-	Open     int        `json:"open"`
-	Blocking int        `json:"blocking"`
-	Items    []TodoItem `json:"items"`
+	Open  int        `json:"open"`
+	Items []TodoItem `json:"items"`
 }
 
 // TodosIn is a session's open todo items in document order, reading its todo
@@ -53,7 +51,7 @@ func TodosIn(sessionRoot string) []TodoItem {
 				continue
 			}
 			out = append(out, TodoItem{
-				Text: item.Text, Section: item.Section, Where: item.Where, Blocks: item.Blocks,
+				Text: item.Text, Section: item.Section, Where: item.Where,
 				Path: filepath.ToSlash(rel), Line: item.Line,
 			})
 		}
@@ -61,16 +59,10 @@ func TodosIn(sessionRoot string) []TodoItem {
 	return out
 }
 
-// Rollup counts open items in document order and picks the ones a card lists.
+// Rollup counts open items in document order and picks the next one for a card.
 func Rollup(items []TodoItem) TodoRollup {
 	out := TodoRollup{Open: len(items), Items: []TodoItem{}}
-	for _, item := range items {
-		if item.Blocks != "" {
-			out.Blocking++
-			out.Items = append(out.Items, item)
-		}
-	}
-	if len(items) > 0 && items[0].Blocks == "" {
+	if len(items) > 0 {
 		out.Items = append(out.Items, items[0])
 	}
 	return out

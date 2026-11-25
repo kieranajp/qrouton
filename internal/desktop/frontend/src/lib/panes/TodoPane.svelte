@@ -67,7 +67,6 @@
         item,
         {
           text: inline(item.text),
-          blocks: inline(item.blocks),
           run: command("run", item.run),
           runs: inline(item.run),
           check: command("check", item.check),
@@ -89,7 +88,6 @@
   /** @param {{state: State}[]} of */
   const tally = (of) => ({ done: of.filter((row) => row.state === "done").length, total: of.filter((row) => row.state !== "skipped").length });
   let overall = $derived(tally(rows));
-  let blocking = $derived(rows.filter((row) => row.state === "open" && row.item.blocks).length);
 
   let blocks = $derived(dealt(rendered.body));
   let groups = $derived(
@@ -198,9 +196,6 @@
             <h1 class="display-lg">{heading}</h1>
             <div class="tally">
               <span class="says" data-tally>{@render done(overall)}</span>
-              {#if blocking > 0}
-                <span class="blocking" data-blocking>{blocking} blocking</span>
-              {/if}
             </div>
           </section>
           {#each groups as group (group.from)}
@@ -242,10 +237,9 @@
                         </Checkbox>
                         <span class="save" data-save={save?.state ?? ""}>{save ? (STATES[save.state] ?? "") : ""}</span>
                       </div>
-                      {#if row.key === next || (row.state === "open" && item.blocks) || named.where || named.refs.length > 0}
+                      {#if row.key === next || named.where || named.refs.length > 0}
                         <div class="chips">
                           {#if row.key === next}<Chip tone="running" selected data-next>Next</Chip>{/if}
-                          {#if row.state === "open" && item.blocks}<Chip tone="waiting" data-blocks>Blocks <span class="inline-markdown">{@html view?.blocks}</span></Chip>{/if}
                           {#if named.where}<Chip data-where>Where <span class="inline-markdown">{@html named.where}</span></Chip>{/if}
                           {#each named.refs as ref (ref.url)}
                             <PullChip {ref} />
@@ -388,11 +382,6 @@
     font: var(--machine-bold);
     font-size: calc(14px * var(--ui-scale));
     color: var(--text-primary);
-  }
-
-  .blocking {
-    font: var(--machine-sm);
-    color: var(--state-waiting);
   }
 
   .group {

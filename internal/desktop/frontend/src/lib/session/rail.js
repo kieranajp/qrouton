@@ -4,7 +4,7 @@ import { stateWords } from "../overview/tree.js";
 /** @typedef {{attention?: string, active?: number, coverage?: string, running?: boolean, tools?: boolean,
  * state?: string, reason?: string, tool?: string, stage?: string}} Summary */
 /** @typedef {{kind: string, label: string, active?: boolean, stage?: string, title?: string}} Fact */
-/** @typedef {{open?: number, blocking?: number}} Todos */
+/** @typedef {{open?: number}} Todos */
 
 /** @type {string[]} */
 const BUSY = [AGENT_STATES.WORKING, AGENT_STATES.WAITING_AGENTS];
@@ -55,8 +55,7 @@ export function summaryFacts(summary = {}, unseen = 0, idleAge = "", todos = {})
   if (unseen > 0) facts.push({ kind: "unseen", label: `${unseen} new ${unseen === 1 ? "doc" : "docs"}` });
   const open = todos.open ?? 0;
   if (open > 0) {
-    const blocking = todos.blocking ?? 0;
-    facts.push({ kind: "todos", label: `${open} ${open === 1 ? "todo" : "todos"}${blocking > 0 ? ` · ${blocking} blocking` : ""}` });
+    facts.push({ kind: "todos", label: `${open} ${open === 1 ? "todo" : "todos"}` });
   }
   return facts;
 }

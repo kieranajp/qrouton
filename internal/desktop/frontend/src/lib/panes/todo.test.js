@@ -27,7 +27,7 @@ test("the shared todo cases parse as Go parses them", () => {
   const cases = JSON.parse(readFileSync(url, "utf8"));
   for (const { name, text, items } of cases) {
     assert.deepEqual(
-      parseTodo(text).items.map(({ section, text, note, state, line, where, check, run, blocks }) => ({ section, text, note, state, line, where, check, run, blocks })),
+      parseTodo(text).items.map(({ section, text, note, state, line, where, check, run }) => ({ section, text, note, state, line, where, check, run })),
       items,
       name,
     );
@@ -124,7 +124,6 @@ test("prose under an item keeps its blank lines and table, dedented, without its
     doc(
       "## Deploy",
       "- [ ] Set the `AUTH_*` deploy secrets",
-      "  - Blocks: deploy",
       "  - Check: the new pod starts.",
       "",
       "  | Variable | staging |",
@@ -142,14 +141,13 @@ test("prose under an item keeps its blank lines and table, dedented, without its
   );
   const [secrets, rotate, next] = parsed.items;
   assert.equal(secrets.text, "Set the `AUTH_*` deploy secrets");
-  assert.equal(secrets.blocks, "deploy");
   assert.equal(secrets.check, "the new pod starts.");
   assert.equal(
     secrets.prose,
     doc("| Variable | staging |", "|---|---|", "| `AUTH_ISSUER` | `staging.lykon.io` |", "", "```sh", "make secrets", "```"),
   );
   assert.equal(rotate.prose, "Before the cutover.");
-  assert.equal(next.line, 15);
+  assert.equal(next.line, 14);
   assert.equal(next.prose, "");
   assert.equal(parseTodo(doc("- [ ] Deploy", "  Wait for the canary.", "", "  Then watch the logs.", "")).items[0].prose, "Wait for the canary.\n\nThen watch the logs.");
 });

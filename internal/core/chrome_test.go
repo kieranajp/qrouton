@@ -688,7 +688,6 @@ func TestTheShownRowTakesItsTodosFromTheFileReadAndOthersFromTheSlowTick(t *test
 		"## Ship",
 		"",
 		"- [ ] Apply the migration",
-		"  - Blocks: Phase 3",
 		"- [ ] Announce it",
 	)
 	reg := testRegistry(t, shownRoot)
@@ -708,8 +707,8 @@ func TestTheShownRowTakesItsTodosFromTheFileReadAndOthersFromTheSlowTick(t *test
 	if len(fields.Todos) != 2 {
 		t.Fatalf("shown todos = %+v, want both open items", fields.Todos)
 	}
-	if got := rows["onscreen"].Todos; got.Open != 2 || got.Blocking != 1 || len(got.Items) != 1 || got.Items[0].Text != "Apply the migration" {
-		t.Fatalf("shown row todos = %+v, want the file's 2 open and 1 blocking", got)
+	if got := rows["onscreen"].Todos; got.Open != 2 || len(got.Items) != 1 || got.Items[0].Text != "Apply the migration" {
+		t.Fatalf("shown row todos = %+v, want the file's 2 open", got)
 	}
 	if got := rows["background"].Todos; !reflect.DeepEqual(got, background) {
 		t.Fatalf("background row todos = %+v, want the slow tick's %+v", got, background)

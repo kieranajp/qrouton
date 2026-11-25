@@ -19,8 +19,8 @@ export function columnCount(width, scale = 1) {
 /** @param {number} [pulls] the pull requests the card shows */
 export const estimatedHeight = (pulls = 0) => 100 + 62 * pulls;
 
-/** @typedef {{text: string, section?: string, where?: string, blocks?: string, path: string, line: number}} TodoItem */
-/** @typedef {{open?: number, blocking?: number, items?: TodoItem[] | null}} TodoRollup */
+/** @typedef {{text: string, section?: string, where?: string, path: string, line: number}} TodoItem */
+/** @typedef {{open?: number, items?: TodoItem[] | null}} TodoRollup */
 
 const TODO_LINE = 24;
 
@@ -28,8 +28,7 @@ const TODO_LINE = 24;
 export function todoLine(todos) {
   const open = todos?.open ?? 0;
   if (!open) return "";
-  const blocking = todos?.blocking ?? 0;
-  return blocking ? `${open} open · ${blocking} blocking` : `${open} open`;
+  return `${open} open`;
 }
 
 /** @param {TodoRollup | undefined} todos */

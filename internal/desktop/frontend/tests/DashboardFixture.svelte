@@ -31,14 +31,12 @@
     session(2, {
       todos: {
         open: 3,
-        blocking: 1,
         items: [
-          { text: "Apply the migration", section: "Before merge", where: "", blocks: "Phase 3", path: "thoughts/shared/todos/T1-rollout.md", line: 14 },
-          { text: "Announce in the channel", section: "Ship", where: "", blocks: "", path: "thoughts/shared/todos/T1-rollout.md", line: 22 },
+          { text: "Apply the migration", section: "Before merge", where: "", path: "thoughts/shared/todos/T1-rollout.md", line: 14 },
         ],
       },
     }),
-    ...Array.from({ length: 9 }, (_, i) => session(i + 3, { todos: { open: 0, blocking: 0, items: [] } })),
+    ...Array.from({ length: 9 }, (_, i) => session(i + 3, { todos: { open: 0, items: [] } })),
   ]);
   let width = $state(1180);
   let shown = $state(true);

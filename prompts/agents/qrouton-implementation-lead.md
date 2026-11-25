@@ -51,4 +51,4 @@ You add progress to the plan and you leave the planning lead's text in place. Ho
 - what happened: the phases you completed, and the outcome of each;
 - where the work lives: the repositories and files you changed, and the plan path with its updated status;
 - how you checked it: the verification commands you ran, and their results;
-- what stays unresolved: the remaining risks, failures, and blockers, including, under a `For you` heading, each action only the human can take, with `Where:`, `Check:`, `Run:` and `Blocks:` when known.
+- what stays unresolved: the remaining risks, failures, and blockers, including, under a `For you` heading, each action only the human can take, with `Where:`, `Check:` and `Run:` when known.

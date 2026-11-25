@@ -246,31 +246,30 @@ test("Refresh is disabled while a refresh runs", () => {
   assert.equal(refreshDisabled(fresh(), NOW), false);
 });
 
-const todo = (text, line, blocks = "") => ({ text, section: "Ship", where: "", blocks, path: "thoughts/shared/todos/T1-rollout.md", line });
+const todo = (text, line) => ({ text, section: "Ship", where: "", path: "thoughts/shared/todos/T1-rollout.md", line });
 
-// Catches a "0 blocking" tail, or a todo line on a card whose todos are all done.
-test("a card's todo line counts the open items and names the blocking ones only when any block", () => {
-  assert.equal(todoLine({ open: 3, blocking: 1, items: [] }), "3 open · 1 blocking");
-  assert.equal(todoLine({ open: 2, blocking: 0, items: [] }), "2 open");
-  assert.equal(todoLine({ open: 0, blocking: 0, items: [] }), "");
+// Catches a todo line on a card whose todos are all done.
+test("a card's todo line counts the open items", () => {
+  assert.equal(todoLine({ open: 3, items: [] }), "3 open");
+  assert.equal(todoLine({ open: 0, items: [] }), "");
   assert.equal(todoLine(undefined), "");
 });
 
 // Catches a card listing items the roll-up no longer counts as open, or a null list throwing.
 test("a card lists the roll-up's items only while any are open", () => {
-  const items = [todo("Migrate", 12, "Phase 3"), todo("Announce", 20)];
-  assert.deepEqual(todoItems({ open: 2, blocking: 1, items }), items);
-  assert.deepEqual(todoItems({ open: 0, blocking: 0, items }), []);
-  assert.deepEqual(todoItems({ open: 1, blocking: 0, items: null }), []);
+  const items = [todo("Migrate", 12), todo("Announce", 20)];
+  assert.deepEqual(todoItems({ open: 2, items }), items);
+  assert.deepEqual(todoItems({ open: 0, items }), []);
+  assert.deepEqual(todoItems({ open: 1, items: null }), []);
 });
 
 // Catches masonry placing cards by their pull requests alone, so a column of todo-heavy cards ran long.
 test("a card's estimate grows with its todo line and each item it lists", () => {
   const section = { shown: [], more: 0 };
   const bare = cardHeight(section);
-  assert.equal(cardHeight(section, { open: 0, blocking: 0, items: [] }), bare);
-  const one = cardHeight(section, { open: 1, blocking: 0, items: [todo("Announce", 20)] });
-  const two = cardHeight(section, { open: 2, blocking: 1, items: [todo("Migrate", 12, "Phase 3"), todo("Announce", 20)] });
+  assert.equal(cardHeight(section, { open: 0, items: [] }), bare);
+  const one = cardHeight(section, { open: 1, items: [todo("Announce", 20)] });
+  const two = cardHeight(section, { open: 2, items: [todo("Migrate", 12), todo("Announce", 20)] });
   assert.ok(one > bare);
   assert.equal(two - one, (one - bare) / 2);
 });

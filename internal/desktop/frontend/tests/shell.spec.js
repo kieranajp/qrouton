@@ -428,8 +428,8 @@ test("with no sessions the dialog opens itself and Escape keeps it", async ({ pa
 // Catches the rail's show no longer reporting success, so a dashboard todo opens nothing, or one opening before or without its session.
 test("a dashboard todo shows its session through the rail, then opens at its line", async ({ page }) => {
   await page.goto("/tests/shell.html");
-  const todo = { text: "Announce it", section: "Ship", where: "", blocks: "", path: "thoughts/shared/todos/T1-x.md", line: 9 };
-  const sessions = [{ ...ON_DISK[0], todos: { open: 1, blocking: 0, items: [todo] } }];
+  const todo = { text: "Announce it", section: "Ship", where: "", path: "thoughts/shared/todos/T1-x.md", line: 9 };
+  const sessions = [{ ...ON_DISK[0], todos: { open: 1, items: [todo] } }];
   await page.evaluate((rows) => window.shell.snapshot({ slug: "", identity: "", terminal: "", sessions: rows }), sessions);
   await page.evaluate(() => window.shell.controlShow());
   const item = dashboard(page).getByRole("button", { name: /Announce it/ });

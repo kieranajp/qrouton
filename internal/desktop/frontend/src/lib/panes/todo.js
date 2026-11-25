@@ -9,15 +9,15 @@ const parser = unified().use([remarkParse, remarkFrontmatter, remarkGfm]);
 
 const TODO_LINE = /^\s*(?:[-*+]|\d+[.)])\s+\[([ xX-])\][ \t]+(\S.*?)\s*$/;
 const LEAD = /^\s*(?:[-*+]|\d+[.)])\s+/;
-const FIELD = /^(?:[-*+]\s+)?(Where|Check|Run|Blocks):[ \t]*(.*?)\s*$/;
+const FIELD = /^(?:[-*+]\s+)?(Where|Check|Run):[ \t]*(.*?)\s*$/;
 const NOTE = " — ";
 const BOXES = { open: " ", done: "x", skipped: "-" };
 const BLANK = /^\s*$/;
-const KEYS = { Where: "where", Check: "check", Run: "run", Blocks: "blocks" };
+const KEYS = { Where: "where", Check: "check", Run: "run" };
 const CONTAINERS = new Set(["list", "blockquote"]);
 
 /** @typedef {"open" | "done" | "skipped"} State */
-/** @typedef {{section: string, text: string, nth: number, note: string, state: State, line: number, to: number, where: string, check: string, run: string, blocks: string, prose: string}} Item */
+/** @typedef {{section: string, text: string, nth: number, note: string, state: State, line: number, to: number, where: string, check: string, run: string, prose: string}} Item */
 /** @typedef {{key: string, section: string, text: string, state: State, note?: string}} Draft */
 
 /** @param {string} box @returns {State} */
@@ -64,7 +64,7 @@ export function parseTodo(text) {
     const section = sectionOf(line);
     const nth = items.filter((earlier) => earlier.section === section && earlier.text === said).length;
     /** @type {Item} */
-    const item = { section, text: said, nth, note, state: stateOf(found[1]), line, to, where: "", check: "", run: "", blocks: "", prose: "" };
+    const item = { section, text: said, nth, note, state: stateOf(found[1]), line, to, where: "", check: "", run: "", prose: "" };
     const indent = new RegExp(`^ {0,${LEAD.exec(lines[line - 1])?.[0].length ?? 0}}`);
     const prose = [];
     for (let at = line + 1; at <= to; at++) {

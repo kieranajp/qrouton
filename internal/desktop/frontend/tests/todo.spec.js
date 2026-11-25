@@ -16,8 +16,6 @@ test("the tally counts open and done items, leaving out the ones not needed", as
   await expect(page.locator('[data-section="Before merge"] [data-section-tally]')).toHaveText("1 of 2 done");
   await expect(item(page, "Roll back the cache")).toHaveAttribute("data-state", "skipped");
   await expect(item(page, "Apply the migration").locator("[data-next]")).toHaveCount(1);
-  await expect(item(page, "Apply the migration").locator("[data-blocks]")).toHaveText("Blocks Phase 3");
-  await expect(page.locator("[data-blocking]")).toHaveText("1 blocking");
 });
 
 test("an item shows its fields and prose", async ({ page }) => {
@@ -181,7 +179,6 @@ const SECRETS = [
   "# Rollout",
   "",
   "- [ ] Set the `AUTH_*` deploy secrets from the [runbook](https://example.com/runbook)",
-  "  - Blocks: deploy",
   "  - Check: the pod starts and `kubectl get pods` shows it running",
   "",
   "  | Variable | staging |",
