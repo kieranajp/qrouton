@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package qrouton.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1";
+
+message Repository {
+  string name = 1;
+  string org = 2;
+  string ssh_url = 3 [json_name = "ssh_url"];
+  string default_branch = 4 [json_name = "default_branch"];
+  google.protobuf.Timestamp pushed_at = 5 [json_name = "pushed_at"];
+}
+
+// RepositoryRefresh is one owner's place in a repository refresh.
+message RepositoryRefresh {
+  int32 generation = 1;
+  string owner = 2;
+  string state = 3;
+  repeated Repository repos = 4;
+  string error = 5;
+}

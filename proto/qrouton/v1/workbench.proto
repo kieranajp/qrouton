@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package qrouton.v1;
+
+option go_package = "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1";
+
+// WorkbenchService opens a client's conversation with the core.
+service WorkbenchService {
+  // Hello must come first. Every other call carries the client id it returns.
+  rpc Hello(HelloRequest) returns (HelloResponse);
+}
+
+message HelloRequest {
+  uint32 protocol = 1;
+  string build = 2;
+  string client_name = 3;
+  repeated string capabilities = 4;
+}
+
+message HelloResponse {
+  string client_id = 1;
+  uint32 protocol = 2;
+  string build = 3;
+}

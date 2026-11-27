@@ -51,21 +51,40 @@ func TestATabRingKeepsTheLast256KiB(t *testing.T) {
 	}
 }
 
-// Catches a transport that is not lossless for bytes JSON or UTF-8 would mangle:
-// invalid sequences, NULs and a multibyte rune cut at a chunk boundary.
-func TestEncodeChunkAndDecodeInputRoundTripArbitraryBytes(t *testing.T) {
+// Catches a replay that is not lossless for bytes JSON or UTF-8 would mangle:
+// invalid sequences, NULs and a multibyte rune cut at a write boundary.
+func TestReplaySinceAnOffsetReturnsArbitraryBytesExactly(t *testing.T) {
 	random := make([]byte, 4096)
 	source := rand.New(rand.NewPCG(1, 2))
 	for i := range random {
 		random[i] = byte(source.UintN(256))
 	}
 	for _, in := range [][]byte{nil, {0}, {0xff, 0xfe, 0x80}, []byte("é")[:1], []byte("\x1b[31m\r\n"), random} {
-		out, err := DecodeInput(EncodeChunk(in).Encoded)
-		if err != nil {
-			t.Fatalf("decoding %q: %v", in, err)
+		ring := NewRing(WindowScrollback)
+		ring.Write([]byte("before"))
+		offset := ring.Write(in)
+		out, start, reset := ring.Since(offset)
+		if reset || start != offset || !bytes.Equal(out, in) {
+			t.Fatalf("Since(%d) of %q gave %q from %d, reset %v", offset, in, out, start, reset)
 		}
-		if !bytes.Equal(out, in) {
-			t.Fatalf("round trip of %q gave %q", in, out)
+	}
+}
+
+// Catches a resume from bytes the ring has dropped, or from a future offset,
+// being served as if it continued the page's stream.
+func TestReplayFromAnOffsetOutsideTheRingResetsToTheWholeRing(t *testing.T) {
+	ring := NewRing(8)
+	ring.Write([]byte("0123456789abc"))
+	for _, offset := range []uint64{0, 4, 14, 1 << 40} {
+		out, start, reset := ring.Since(offset)
+		if !reset || start != 5 || string(out) != "56789abc" {
+			t.Fatalf("Since(%d) = %q from %d, reset %v; want the whole ring from 5 with reset", offset, out, start, reset)
+		}
+	}
+	for offset, want := range map[uint64]string{5: "56789abc", 9: "9abc", 13: ""} {
+		out, start, reset := ring.Since(offset)
+		if reset || start != offset || string(out) != want {
+			t.Fatalf("Since(%d) = %q from %d, reset %v; want %q", offset, out, start, reset, want)
 		}
 	}
 }

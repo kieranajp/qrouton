@@ -258,9 +258,9 @@ func TestBugReportChromeHydratesAndExpiresOnlyOwnedPreview(t *testing.T) {
 	b := newBugReports(reg)
 	queueTestBugReport(t, b, first, "one")
 	reg.reveal(second)
-	chrome := newChrome(func(string, any) {})
+	chrome := newChrome(emitFunc(func(string, any) {}))
 	push := func() status.Fields {
-		pushChrome(reg, root, nil, nil, nil, nil, chrome.publish)
+		pushChrome(reg, root, nil, nil, nil, nil, chrome.publishFields)
 		return chrome.Snapshot()
 	}
 	if push().BugReportID != "" {

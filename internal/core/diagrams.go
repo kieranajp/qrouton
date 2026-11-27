@@ -20,7 +20,7 @@ type RenderedDiagram struct {
 // diagramWorker lays a document's d2 fences out off the goroutine that asked
 // for them, and holds the cancellation a quit reaches them through.
 type diagramWorker struct {
-	emit      Emitter
+	events    Events
 	renderer  *diagram.Renderer
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -30,10 +30,10 @@ type diagramWorker struct {
 	closed bool
 }
 
-func newDiagramWorker(emit Emitter) *diagramWorker {
+func newDiagramWorker(events Events) *diagramWorker {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &diagramWorker{
-		emit:     emit,
+		events:   events,
 		renderer: diagram.New(diagram.DefaultTimeout),
 		ctx:      ctx,
 		cancel:   cancel,
@@ -78,7 +78,7 @@ func (d *diagramWorker) layOut(id string, fences []diagram.Fence, request uint64
 			if d.ctx.Err() != nil {
 				return
 			}
-			d.emit(windowDiagramEvent+id, drawnDiagram(out, request))
+			d.events.WindowDiagram(id, drawnDiagram(out, request))
 		}
 	}()
 }

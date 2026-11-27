@@ -102,21 +102,21 @@ func (f *fakeGitHub) tokenFetches() int {
 }
 
 // testRepositories is a repository list that never reads the user's own cache.
-func testRepositories(t *testing.T, orgs []string, fake *fakeGitHub) (*Repositories, chan int, *[]refreshEvent) {
+func testRepositories(t *testing.T, orgs []string, fake *fakeGitHub) (*Repositories, chan int, *[]RefreshEvent) {
 	t.Helper()
 	var mu sync.Mutex
-	var events []refreshEvent
+	var events []RefreshEvent
 	finished := make(chan int, 8)
 	r := &Repositories{
 		cfg: &config.Config{Orgs: orgs},
-		emit: func(event string, payload any) {
-			if event != reposRefreshEvent {
+		events: emitFunc(func(event string, payload any) {
+			if event != reposRefreshName {
 				return
 			}
 			mu.Lock()
-			events = append(events, payload.(refreshEvent))
+			events = append(events, payload.(RefreshEvent))
 			mu.Unlock()
-		},
+		}),
 		gh:           fake.calls(),
 		errs:         map[string]error{},
 		done:         func(generation int) { finished <- generation },
@@ -210,7 +210,7 @@ func TestAStalledRetryFailsThatOwnerAloneAtItsDeadline(t *testing.T) {
 		t.Fatal("a stalled owner held the retry past its deadline")
 	}
 
-	outcome := map[string]refreshEvent{}
+	outcome := map[string]RefreshEvent{}
 	for _, event := range *events {
 		if event.Generation == retry && event.Owner != "" && event.State != string(github.RefreshStarted) {
 			outcome[event.Owner] = event
@@ -239,7 +239,7 @@ func TestARetryThatStillFailsWritesNoCache(t *testing.T) {
 	}
 }
 
-// Emit broadcasts process-wide, so a superseded refresh's events are still in
+// Events broadcast process-wide, so a superseded refresh's events are still in
 // flight. They are dropped rather than applied.
 func TestASupersededRefreshsEventsAreDropped(t *testing.T) {
 	fake := newFakeGitHub()
@@ -314,6 +314,24 @@ func TestATokenFailureFailsEveryOwnerAndCompletes(t *testing.T) {
 	}
 	if len(failed) != 2 || !complete {
 		t.Fatalf("a token failure reported failed=%v complete=%v", failed, complete)
+	}
+}
+
+// Catches a token failure that completes with no list, which the page reads as
+// an empty one and clears the repositories on screen.
+func TestATokenFailureCompletesWithTheListAlreadyShown(t *testing.T) {
+	fake := newFakeGitHub()
+	fake.token = errors.New("no token")
+	repos, finished, events := testRepositories(t, []string{"acme"}, fake)
+	repos.repos = []github.Repo{{Org: "acme", Name: "api"}}
+
+	repos.Refresh()
+	<-finished
+
+	for _, event := range *events {
+		if event.State == string(github.RefreshComplete) && (len(event.Repos) != 1 || event.Repos[0].Name != "api") {
+			t.Fatalf("the complete event carried %v, want the list already shown", event.Repos)
+		}
 	}
 }
 

@@ -78,7 +78,7 @@ type pullsCache struct {
 type Dashboard struct {
 	root      string
 	showing   func() bool
-	emit      Emitter
+	events    Events
 	api       dashboardAPI
 	now       func() time.Time
 	cachePath string
@@ -111,9 +111,9 @@ type Dashboard struct {
 	runs sync.WaitGroup
 }
 
-func newDashboard(root string, showing func() bool, emit Emitter, api dashboardAPI, now func() time.Time, cachePath string) *Dashboard {
+func newDashboard(root string, showing func() bool, events Events, api dashboardAPI, now func() time.Time, cachePath string) *Dashboard {
 	d := &Dashboard{
-		root: root, showing: showing, emit: emit, api: api, now: now, cachePath: cachePath,
+		root: root, showing: showing, events: events, api: api, now: now, cachePath: cachePath,
 		every: dashboardInterval, shownEvery: dashboardShownInterval,
 		wake:  make(chan struct{}, 1),
 		pulls: map[string]map[string]map[string][]status.PullRequest{},
@@ -325,8 +325,8 @@ func (d *Dashboard) publish() {
 		return
 	}
 	d.last, d.published = next, true
-	if d.emit != nil {
-		d.emit(dashboardEvent, next)
+	if d.events != nil {
+		d.events.Dashboard(next)
 	}
 }
 

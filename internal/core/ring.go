@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/base64"
 	"strings"
 	"sync"
 
@@ -9,28 +8,46 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// Ring keeps the last limit bytes written to it.
+// Ring keeps the last limit bytes written to it, and counts every byte ever
+// written, so a reader can name a place in the output by offset.
 type Ring struct {
 	mu    sync.Mutex
 	limit int
 	buf   []byte
+	total uint64
 }
 
 func NewRing(limit int) *Ring { return &Ring{limit: limit} }
 
-func (r *Ring) Write(b []byte) {
+// Write returns the offset b starts at.
+func (r *Ring) Write(b []byte) uint64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	start := r.total
+	r.total += uint64(len(b))
 	r.buf = append(r.buf, b...)
 	if len(r.buf) > r.limit {
 		r.buf = r.buf[len(r.buf)-r.limit:]
 	}
+	return start
 }
 
 func (r *Ring) Bytes() []byte {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]byte(nil), r.buf...)
+}
+
+// Since returns what was written from offset on. An offset the ring no longer
+// holds, or one not yet written, returns the whole ring with reset set.
+func (r *Ring) Since(offset uint64) (data []byte, start uint64, reset bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	first := r.total - uint64(len(r.buf))
+	if offset < first || offset > r.total {
+		return append([]byte(nil), r.buf...), first, true
+	}
+	return append([]byte(nil), r.buf[offset-first:]...), offset, false
 }
 
 // Text renders the buffer as the agent reads it: escape sequences stripped, and
@@ -48,26 +65,6 @@ func terminalText(raw []byte, full bool) string {
 		lines = lines[len(lines)-screenLines:]
 	}
 	return strings.Join(lines, "\n")
-}
-
-// Chunk is one stretch of a terminal's output as the page receives it.
-type Chunk struct {
-	Encoded  string `json:"encoded"`
-	Replay   bool   `json:"replay,omitempty"`
-	ExitCode *int   `json:"exit_code,omitempty"`
-	// First marks a running process's first replay, whose queries the page
-	// answers as if live.
-	First bool `json:"first,omitempty"`
-}
-
-// EncodeChunk is base64 because a raw PTY chunk is not valid UTF-8 at its
-// boundary and JSON marshalling corrupts it.
-func EncodeChunk(b []byte) Chunk {
-	return Chunk{Encoded: base64.StdEncoding.EncodeToString(b)}
-}
-
-func DecodeInput(encoded string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(encoded)
 }
 
 func WithTerminalEnv(env []string) []string {

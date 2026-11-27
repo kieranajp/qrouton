@@ -131,7 +131,7 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 	cfg := &config.Config{Root: filepath.Dir(shown)}
 	repo := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
-	p := newPicker(context.Background(), cfg, reg, repos, func(string, any) {}, nil)
+	p := newPicker(context.Background(), cfg, reg, repos, emitFunc(func(string, any) {}), nil)
 
 	if err := reg.QueuePicker(workbench.PickerRequest{SessionRoot: shown, Deadline: time.Now().Add(time.Minute)}); err != nil {
 		t.Fatal(err)
@@ -208,7 +208,7 @@ func TestConfirmTakesUpAHeldReferenceRepoAndIgnoresTheRest(t *testing.T) {
 	if err := reg.Show(filepath.Base(dir)); err != nil {
 		t.Fatal(err)
 	}
-	p := newPicker(context.Background(), cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, func(string, any) {}, nil)
+	p := newPicker(context.Background(), cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, emitFunc(func(string, any) {}), nil)
 
 	in := PickerInput{Upgrades: []string{"org/docs", "org/docs", "org/kraken"}}
 	if err := p.Confirm(t.Context(), "reading", "", in); err != nil {
@@ -275,7 +275,7 @@ func holdClones(t *testing.T) func() bool {
 func addingPicker(ctx context.Context, kernel *Core, shown string) *Picker {
 	cfg := &config.Config{Root: filepath.Dir(shown)}
 	repo := github.Repo{Org: "org", Name: "svc", SSHURL: "git@example.invalid:org/svc.git", DefaultBranch: "main"}
-	return newPicker(ctx, cfg, kernel.Sessions, &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}, func(string, any) {}, nil)
+	return newPicker(ctx, cfg, kernel.Sessions, &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}, emitFunc(func(string, any) {}), nil)
 }
 
 var pickSvc = PickerInput{Repos: []RepoPick{{ID: "org/svc", Role: "editing"}}}
@@ -337,16 +337,16 @@ func TestPickerConfirmEmitsProgressForItsSession(t *testing.T) {
 	cfg := &config.Config{Root: filepath.Dir(shown)}
 	repo := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
 	var mu sync.Mutex
-	var steps []progressEvent
+	var steps []ProgressEvent
 	p := newPicker(context.Background(), cfg, kernel.Sessions, &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}},
-		func(event string, payload any) {
-			if event != assemblyProgressEvent {
+		emitFunc(func(event string, payload any) {
+			if event != assemblyProgressName {
 				return
 			}
 			mu.Lock()
-			steps = append(steps, payload.(progressEvent))
+			steps = append(steps, payload.(ProgressEvent))
 			mu.Unlock()
-		}, nil)
+		}), nil)
 
 	if err := p.Confirm(t.Context(), "shown", "", pickSvc); err != nil {
 		t.Fatal(err)
@@ -421,7 +421,7 @@ func TestAnEscalationArrivingDuringAnAddStaysPending(t *testing.T) {
 	var arrived *workbench.PickerRequest
 	var once sync.Once
 	arriveMidAdd := func(string, any) { once.Do(func() { arrived = queueEscalation(t, reg, shown) }) }
-	p := newPicker(context.Background(), cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}, arriveMidAdd, nil)
+	p := newPicker(context.Background(), cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}, emitFunc(arriveMidAdd), nil)
 
 	if err := p.Confirm(t.Context(), "shown", "", pickSvc); err != nil {
 		t.Fatal(err)

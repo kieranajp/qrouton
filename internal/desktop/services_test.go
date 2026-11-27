@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -13,9 +14,12 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/api"
+	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
@@ -28,6 +32,8 @@ import (
 	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 // adapterOllama records which core calls reached the client behind it.
@@ -84,29 +90,64 @@ func adapterRows() [][]adapterRow {
 func ollamaRows() []adapterRow {
 	return []adapterRow{
 		{"Ollama.Check", func(t *testing.T) {
-			client := newAdapterOllama()
-			adapter := &Ollama{ollama: core.NewOllama(client, func(string, any) {})}
-			if got := adapter.Check(); client.probes.Load() != 1 || got.Model != vault.OllamaModel {
-				t.Fatalf("Check answered %+v after %d probes", got, client.probes.Load())
+			rec, conn := recorded(t)
+			got, err := (&Ollama{ollama: qroutonv1.NewOllamaServiceClient(conn)}).Check()
+			rec.reached(t, "Ollama.Check")
+			if err != nil || !strings.Contains(string(got), `"model":"recorded"`) {
+				t.Fatalf("Check answered %s, %v", got, err)
 			}
 		}},
 		{"Ollama.Pull", func(t *testing.T) {
-			client := newAdapterOllama()
-			defer close(client.released)
-			adapter := &Ollama{ollama: core.NewOllama(client, func(string, any) {})}
-			adapter.Pull()
-			arrives(t, client.pulled, "Pull started no pull")
+			rec, conn := recorded(t)
+			if err := (&Ollama{ollama: qroutonv1.NewOllamaServiceClient(conn)}).Pull(); err != nil {
+				t.Fatal(err)
+			}
+			rec.reached(t, "Ollama.Pull")
 		}},
 		{"Ollama.CancelPull", func(t *testing.T) {
-			client := newAdapterOllama()
-			defer close(client.released)
-			ollama := core.NewOllama(client, func(string, any) {})
-			adapter := &Ollama{ollama: ollama}
-			ollama.Pull()
-			arrives(t, client.pulled, "the pull never started")
-			adapter.CancelPull()
-			arrives(t, client.stopped, "CancelPull left the pull running")
+			rec, conn := recorded(t)
+			if err := (&Ollama{ollama: qroutonv1.NewOllamaServiceClient(conn)}).CancelPull(); err != nil {
+				t.Fatal(err)
+			}
+			rec.reached(t, "Ollama.CancelPull")
 		}},
+	}
+}
+
+// Catches an adapter that hands the page the status wrapper, or drops the
+// error, rather than the text the core refused with.
+func TestAnOllamaErrorReachesThePageWithItsOwnText(t *testing.T) {
+	rec, conn := recorded(t)
+	rec.err = grpcstatus.Error(codes.Unimplemented, core.ErrNoRevealCommand.Error())
+	adapter := &Ollama{ollama: qroutonv1.NewOllamaServiceClient(conn)}
+	_, checkErr := adapter.Check()
+	for name, err := range map[string]error{"Check": checkErr, "Pull": adapter.Pull(), "CancelPull": adapter.CancelPull()} {
+		if err == nil || err.Error() != core.ErrNoRevealCommand.Error() || !errors.Is(err, core.ErrUnavailable) {
+			t.Fatalf("%s returned %v, want the core's own refusal", name, err)
+		}
+	}
+}
+
+// Catches a desktop that serves the core but never says Hello, or drops the
+// client id, which would refuse every call the page makes.
+func TestTheOllamaAdapterReachesTheCoreAfterHello(t *testing.T) {
+	opts, _ := testOptions(t)
+	opts.Config = &config.Config{Root: opts.Root}
+	options := coreOptions(opts, func() {})
+	options.GitHubCredential = signedOut
+	ollama := newAdapterOllama()
+	defer close(ollama.released)
+	options.Ollama = ollama
+	hub := api.NewHub()
+	r := newFakeRenderer()
+	in, err := startInProcess(core.New(options, newLocalClient(r, opts.Launcher, nil), hub), hub, opts.Socket, "", r.Emit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer in.Close()
+	got, err := (&Ollama{ollama: in.ollama}).Check()
+	if err != nil || ollama.probes.Load() != 1 || !strings.Contains(string(got), vault.OllamaModel) {
+		t.Fatalf("Check answered %s, %v after %d probes", got, err, ollama.probes.Load())
 	}
 }
 
@@ -152,6 +193,7 @@ func dashboardRows() []adapterRow {
 // own window host and a marker file its commands can write to.
 type adapterWorkbench struct {
 	kernel *core.Core
+	in     *inProcess
 	r      *fakeRenderer
 	boot   *stubBoot
 	opts   Options
@@ -174,15 +216,13 @@ func newAdapterWorkbench(t *testing.T, argv ...string) *adapterWorkbench {
 	}
 	r := newFakeRenderer()
 	kernel := testWorkbench(t, r, &opts)
-	if err := kernel.Start(opts.Socket); err != nil {
-		t.Fatal(err)
-	}
+	in := translate(t, kernel, &opts, r)
 	if err := kernel.OpenSession(opts.SessionRoot, false); err != nil {
 		t.Fatal(err)
 	}
 	socket := boot.socketOf(t, opts.SessionRoot)
 	host := (workbench.Handle{Socket: socket, SessionRoot: opts.SessionRoot}).WindowHost()
-	return &adapterWorkbench{kernel: kernel, r: r, boot: boot, opts: opts, host: host, marker: marker}
+	return &adapterWorkbench{kernel: kernel, in: in, r: r, boot: boot, opts: opts, host: host, marker: marker}
 }
 
 func (a *adapterWorkbench) slug() string { return filepath.Base(a.opts.SessionRoot) }
@@ -417,13 +457,13 @@ func termRows() []adapterRow {
 		{"Term.Start", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			id := a.conversation(t)
-			if err := a.kernel.Term.Write(id, encoded("x")); !errors.Is(err, core.ErrTerminalNotStarted) {
+			if err := a.kernel.Term.Write(id, []byte("x")); !errors.Is(err, core.ErrTerminalNotStarted) {
 				t.Fatalf("a write before Start = %v", err)
 			}
-			if err := (&Term{term: a.kernel.Term}).Start(id, 80, 24); err != nil {
+			if err := (&Term{terminals: a.in.terminals}).Start(id, 80, 24); err != nil {
 				t.Fatal(err)
 			}
-			if err := a.kernel.Term.Write(id, encoded("x")); err != nil {
+			if err := a.kernel.Term.Write(id, []byte("x")); err != nil {
 				t.Fatalf("a write after Start = %v", err)
 			}
 		}},
@@ -431,10 +471,10 @@ func termRows() []adapterRow {
 			marker := filepath.Join(t.TempDir(), "conversation")
 			b := newAdapterWorkbench(t, "/bin/sh", "-c", catToMarker, "sh", marker)
 			id := b.conversation(t)
-			if err := b.kernel.Term.Start(id, 80, 24); err != nil {
+			if err := b.kernel.Term.Attach(id, &core.Size{Cols: 80, Rows: 24}, nil, discard); err != nil {
 				t.Fatal(err)
 			}
-			if err := (&Term{term: b.kernel.Term}).Write(id, encoded("hello\n")); err != nil {
+			if err := (&Term{terminals: b.in.terminals}).Write(id, encoded("hello\n")); err != nil {
 				t.Fatal(err)
 			}
 			markedFile(t, marker, "hello")
@@ -443,10 +483,10 @@ func termRows() []adapterRow {
 			marker := filepath.Join(t.TempDir(), "conversation")
 			b := newAdapterWorkbench(t, "/bin/sh", "-c", sizeToMarker, "sh", marker)
 			id := b.conversation(t)
-			if err := b.kernel.Term.Start(id, 80, 24); err != nil {
+			if err := b.kernel.Term.Attach(id, &core.Size{Cols: 80, Rows: 24}, nil, discard); err != nil {
 				t.Fatal(err)
 			}
-			if err := (&Term{term: b.kernel.Term}).Resize(id, 132, 50); err != nil {
+			if err := (&Term{terminals: b.in.terminals}).Resize(id, 132, 50); err != nil {
 				t.Fatal(err)
 			}
 			markedFile(t, marker, "50 132")
@@ -499,7 +539,7 @@ func windowsRows() []adapterRow {
 			if _, err := os.Stat(a.marker); !os.IsNotExist(err) {
 				t.Fatalf("the shell ran before the page started it: %v", err)
 			}
-			if err := (&Windows{windows: a.kernel.Windows}).Start(id, 80, 24); err != nil {
+			if err := (&Windows{windows: a.kernel.Windows, terminals: a.in.terminals}).Start(id, 80, 24); err != nil {
 				t.Fatal(err)
 			}
 			a.marked(t, "started")
@@ -507,10 +547,10 @@ func windowsRows() []adapterRow {
 		{"Windows.Write", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			id := a.terminal(t, catToMarker)
-			if err := a.kernel.Windows.Start(id, 80, 24); err != nil {
+			if err := a.kernel.Windows.Attach(id, &core.Size{Cols: 80, Rows: 24}, nil, discard); err != nil {
 				t.Fatal(err)
 			}
-			if err := (&Windows{windows: a.kernel.Windows}).Write(id, encoded("typed\n")); err != nil {
+			if err := (&Windows{windows: a.kernel.Windows, terminals: a.in.terminals}).Write(id, encoded("typed\n")); err != nil {
 				t.Fatal(err)
 			}
 			a.marked(t, "typed")
@@ -518,7 +558,7 @@ func windowsRows() []adapterRow {
 		{"Windows.Resize", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			id := a.shell(t, `while :; do stty size >> "$1"; sleep 0.05; done`)
-			adapter := &Windows{windows: a.kernel.Windows}
+			adapter := &Windows{windows: a.kernel.Windows, terminals: a.in.terminals}
 			if err := adapter.Resize(id, 100, 40); err != nil {
 				t.Fatalf("resizing a shell the page has not started = %v", err)
 			}
@@ -528,7 +568,7 @@ func windowsRows() []adapterRow {
 			if _, err := os.Stat(a.marker); !os.IsNotExist(err) {
 				t.Fatalf("a resize started the shell: %v", err)
 			}
-			if err := a.kernel.Windows.Start(id, 80, 24); err != nil {
+			if err := a.kernel.Windows.Attach(id, &core.Size{Cols: 80, Rows: 24}, nil, discard); err != nil {
 				t.Fatal(err)
 			}
 			a.marked(t, "24 80")
@@ -788,6 +828,7 @@ func assemblyRows() []adapterRow {
 func repositoriesCore(t *testing.T) (*core.Core, *fakeRenderer) {
 	t.Helper()
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("GITHUB_TOKEN", "")
 	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme"}}
@@ -795,7 +836,10 @@ func repositoriesCore(t *testing.T) (*core.Core, *fakeRenderer) {
 		t.Fatal(err)
 	}
 	r := newFakeRenderer()
-	return testWorkbench(t, r, &Options{Root: cfg.Root, Config: cfg}), r
+	opts := &Options{Root: cfg.Root, Config: cfg}
+	kernel := testWorkbench(t, r, opts)
+	translate(t, kernel, opts, r)
+	return kernel, r
 }
 
 func repositoriesRows() []adapterRow {
@@ -1065,7 +1109,7 @@ func profilesRows() []adapterRow {
 		{"Profiles.ChooseFolder", func(t *testing.T) {
 			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
-				newLocalClient(newFakeRenderer(), newStubBoot(), func(bool) (string, error) { return "/picked", nil }))
+				newLocalClient(newFakeRenderer(), newStubBoot(), func(bool) (string, error) { return "/picked", nil }), api.NewHub())
 			t.Cleanup(kernel.Shutdown)
 			if got, err := (&Profiles{profiles: kernel.Profiles}).ChooseFolder(); err != nil || got != "/picked" {
 				t.Fatalf("ChooseFolder = %q, %v", got, err)
@@ -1096,7 +1140,7 @@ func firstRunRows() []adapterRow {
 		{"FirstRun.ChooseRoot", func(t *testing.T) {
 			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
-				newLocalClient(newFakeRenderer(), newStubBoot(), func(bool) (string, error) { return "/picked", nil }))
+				newLocalClient(newFakeRenderer(), newStubBoot(), func(bool) (string, error) { return "/picked", nil }), api.NewHub())
 			t.Cleanup(kernel.Shutdown)
 			if got, err := (&FirstRun{firstRun: kernel.FirstRun}).ChooseRoot(); err != nil || got != "/picked" {
 				t.Fatalf("ChooseRoot = %q, %v", got, err)
@@ -1194,4 +1238,129 @@ func TestEveryAdapterMethodHasARow(t *testing.T) {
 	if found != len(rows) {
 		t.Errorf("services.go declares %d adapter methods and there are %d rows", found, len(rows))
 	}
+}
+
+// Catches the exit criterion regressing: a reloaded page that starts the
+// conversation again must be handed its scrollback rather than a blank pane.
+func TestASecondStartReplaysTheConversationToThePage(t *testing.T) {
+	a := newAdapterWorkbench(t, "/bin/sh", "-c", `printf 'scrollback-marker\n'; exec cat`)
+	id := a.conversation(t)
+	term := &Term{terminals: a.in.terminals}
+	if err := term.Start(id, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	page := func() map[string]any {
+		var got map[string]any
+		_ = json.Unmarshal(emitted(t, a.r, ptyDataEvent+id), &got)
+		return got
+	}
+	waitFor(t, "the live output", func() bool {
+		data, _ := base64.StdEncoding.DecodeString(fmt.Sprint(page()["encoded"]))
+		return strings.Contains(string(data), "scrollback-marker")
+	})
+	if err := term.Start(id, 100, 30); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the replay", func() bool {
+		got := page()
+		data, _ := base64.StdEncoding.DecodeString(fmt.Sprint(got["encoded"]))
+		return got["replay"] == true && strings.Contains(string(data), "scrollback-marker")
+	})
+}
+
+// A page reload is the page mounting every terminal again. It must not end a
+// tab, its process or the conversation, and each tab must replay.
+func TestAPageReloadKeepsEveryTabItsProcessesAndTheConversation(t *testing.T) {
+	conversationPID := filepath.Join(t.TempDir(), "conversation.pid")
+	a := newAdapterWorkbench(t, "/bin/sh", "-c", `echo $$ > "$0"; exec cat`, conversationPID)
+	a.boot.shell = func(string) []string { return []string{"/bin/sh", "-c", "echo shell-live; exec cat"} }
+	term := &Term{terminals: a.in.terminals}
+	windows := &Windows{windows: a.kernel.Windows, terminals: a.in.terminals}
+	conversation := a.conversation(t)
+	failed := a.terminal(t, `echo failed-output; exit 7`)
+	loop := a.terminal(t, `echo $$ > "$1.loop"; sleep 600 & echo $! > "$1.child"; echo loop-live; wait`)
+	shell, err := windows.OpenShell()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mount := func(cols, rows int) {
+		t.Helper()
+		_ = windows.Surfaces(a.slug())
+		if err := term.Start(conversation, cols, rows); err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []string{failed, loop, shell} {
+			if err := windows.Start(id, cols, rows); err != nil {
+				t.Fatal(id, err)
+			}
+		}
+	}
+	painted := func(id, want string, replay bool) map[string]any {
+		t.Helper()
+		var got map[string]any
+		waitFor(t, id+" to paint "+want, func() bool {
+			got = nil
+			_ = json.Unmarshal(emitted(t, a.r, windowDataEvent+id), &got)
+			data, _ := base64.StdEncoding.DecodeString(fmt.Sprint(got["encoded"]))
+			return (!replay || got["replay"] == true) && strings.Contains(string(data), want)
+		})
+		return got
+	}
+	mount(80, 24)
+	painted(loop, "loop-live", false)
+	painted(shell, "shell-live", false)
+	pids := []int{readPID(t, conversationPID), readPID(t, a.marker+".loop"), readPID(t, a.marker+".child")}
+	waitFor(t, "the failed tab to finish", func() bool {
+		read, err := a.host.Read(context.Background(), failed, false)
+		return err == nil && read.Terminal != nil && read.Terminal.ExitCode != nil
+	})
+	opened, err := a.host.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{failed, loop, shell} {
+		a.r.mu.Lock()
+		delete(a.r.events, windowDataEvent+id)
+		a.r.mu.Unlock()
+	}
+
+	mount(100, 30)
+
+	if got := painted(failed, "failed-output", true); got["exit_code"] != float64(7) {
+		t.Fatalf("the failed tab replayed exit_code %v, want 7", got["exit_code"])
+	}
+	for id, want := range map[string]string{loop: "loop-live", shell: "shell-live"} {
+		if got := painted(id, want, true); got["exit_code"] != nil {
+			t.Fatalf("live tab %s replayed exit_code %v", id, got["exit_code"])
+		}
+	}
+	after, err := a.host.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(after, opened) {
+		t.Fatalf("a reload left windows %v, want %v", after, opened)
+	}
+	for _, pid := range pids {
+		if err := syscall.Kill(pid, 0); err != nil {
+			t.Fatalf("process %d did not survive the reload: %v", pid, err)
+		}
+	}
+	if got := a.conversation(t); got != conversation {
+		t.Fatalf("the conversation became %q, want %q", got, conversation)
+	}
+}
+
+func readPID(t *testing.T, path string) int {
+	t.Helper()
+	var pid int
+	waitFor(t, path, func() bool {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return false
+		}
+		_, err = fmt.Sscan(string(data), &pid)
+		return err == nil && pid > 0
+	})
+	return pid
 }

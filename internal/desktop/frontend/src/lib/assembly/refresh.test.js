@@ -53,3 +53,10 @@ test("an event carrying no repositories leaves the ones on screen", () => {
   const refresh = apply(live(1), { generation: 1, state: "succeeded", owner: "lifesum" });
   assert.deepEqual(refresh.repos, CACHED);
 });
+
+// Catches an owner event, whose repos the wire always sends as [], wiping the list on screen.
+test("an owner event leaves the repository list alone", () => {
+  let refresh = apply(live(1), { generation: 1, state: "started", owner: "lifesum", repos: [] });
+  refresh = apply(refresh, { generation: 1, state: "succeeded", owner: "lifesum", repos: [] });
+  assert.deepEqual(refresh.repos, CACHED);
+});

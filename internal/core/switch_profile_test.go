@@ -53,7 +53,7 @@ func newSwitchFixture(t *testing.T, runner string, argv ...string) *switchFixtur
 		t.Fatal(err)
 	}
 	f.before = reg.Current()
-	if err := newTerm(reg, r.Emit).Start(f.before.terminal, 80, 24); err != nil {
+	if err := startTerm(newTerm(reg, emitFunc(r.Emit)), f.before.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	return f

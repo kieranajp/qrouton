@@ -14,7 +14,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
-// AgentTree answers the Overview tab on load; agentTreeEvent only fires on a
+// AgentTree answers the Overview tab on load; the AgentTree event only fires on a
 // change after that.
 func (c *Chrome) AgentTree(slug string) status.AgentTree {
 	c.mu.RLock()
@@ -119,7 +119,7 @@ func coverageNote(provider string, caps agentCapabilities) string {
 // never twice the same. A timer flushes it, so the last change before a quiet
 // spell still draws.
 type agentTrees struct {
-	emit     Emitter
+	events   Events
 	interval time.Duration
 	shown    func() *SessionState
 	build    func(*SessionState) status.AgentTree
@@ -130,9 +130,9 @@ type agentTrees struct {
 	last    map[string]status.AgentTree
 }
 
-func newAgentTrees(emit Emitter, interval time.Duration, shown func() *SessionState, build func(*SessionState) status.AgentTree) *agentTrees {
+func newAgentTrees(events Events, interval time.Duration, shown func() *SessionState, build func(*SessionState) status.AgentTree) *agentTrees {
 	return &agentTrees{
-		emit: emit, interval: interval, shown: shown, build: build,
+		events: events, interval: interval, shown: shown, build: build,
 		after:   func(d time.Duration, f func()) { time.AfterFunc(d, f) },
 		pending: map[*SessionState]bool{}, last: map[string]status.AgentTree{},
 	}
@@ -167,5 +167,5 @@ func (t *agentTrees) flush(state *SessionState) {
 	}
 	t.last[slug] = tree
 	t.mu.Unlock()
-	t.emit(agentTreeEvent+slug, tree)
+	t.events.AgentTree(slug, tree)
 }

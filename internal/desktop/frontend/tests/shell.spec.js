@@ -36,6 +36,41 @@ test("the conversation starts on Term and a tab on Windows", async ({ page }) =>
   ]);
 });
 
+// A reload is the page mounting each terminal again; it must ask Go to end nothing.
+// The calls are kept in sessionStorage, so one made while the page unloads survives it.
+test("a page reload mounts each terminal again and closes nothing", async ({ page }) => {
+  await page.addInitScript(() => {
+    let inner;
+    const record = (name, args) => {
+      const calls = JSON.parse(sessionStorage.getItem("calls") ?? "[]");
+      sessionStorage.setItem("calls", JSON.stringify([...calls, { name, args }]));
+    };
+    Object.defineProperty(window, "wailsCall", {
+      configurable: true,
+      get: () => inner && ((name, ...args) => (record(name, args), inner(name, ...args))),
+      set: (fn) => (inner = fn),
+    });
+  });
+  const calls = () => page.evaluate(() => JSON.parse(sessionStorage.getItem("calls") ?? "[]"));
+  const started = async () =>
+    (await calls()).filter(({ name }) => name.endsWith(".Start")).map(({ name, args }) => [name.split(".").at(-2), args[0]]);
+  await open(page, "window-1");
+  await expect.poll(started).toEqual([["Term", "term-1"], ["Windows", "window-2"]]);
+
+  await page.reload();
+  await page.evaluate(() => window.shell.chrome({ identity: "Octopus", mode: "RPI", terminal: "term-1" }));
+  await page.evaluate((tabs) => window.shell.windows("window-1", tabs), TABS);
+
+  await expect.poll(started).toEqual([
+    ["Term", "term-1"],
+    ["Windows", "window-2"],
+    ["Term", "term-1"],
+    ["Windows", "window-2"],
+  ]);
+  const ending = /\.(Windows\.Close|Sessions\.(Show|Reload|Unload|Cleanup|SwitchProfile))$/;
+  expect((await calls()).map(({ name }) => name).filter((name) => ending.test(name))).toEqual([]);
+});
+
 test("an untouched right pane opens at its wider default", async ({ page }) => {
   await open(page, "window-1");
   await expect(page.locator(".human")).toHaveCSS("width", "640px");

@@ -71,16 +71,16 @@ type Core struct {
 	once   sync.Once
 }
 
-func New(opts Options, client Client) *Core {
+func New(opts Options, client Client, events Events) *Core {
 	ctx, cancel := context.WithCancel(context.Background())
 	reg := newSessions()
-	windows := newWindows(client.Emit, reg)
+	windows := newWindows(events, reg)
 	c := &Core{
 		Sessions:   reg,
-		Term:       newTerm(reg, client.Emit),
+		Term:       newTerm(reg, events),
 		Windows:    windows,
 		BugReports: newBugReports(reg),
-		Chrome:     newChrome(client.Emit),
+		Chrome:     newChrome(events),
 		Vault:      opts.Vault,
 		opts:       opts,
 		client:     client,
@@ -88,35 +88,35 @@ func New(opts Options, client Client) *Core {
 		cancel:     cancel,
 	}
 	if opts.Ollama != nil {
-		c.Ollama = NewOllama(opts.Ollama, client.Emit)
+		c.Ollama = NewOllama(opts.Ollama, events)
 	}
 	var signal func(string)
 	var runners func() ([]assembly.Runner, error)
 	if opts.Launcher != nil {
 		signal, runners = opts.Launcher.Signal, opts.Launcher.Runners
 	}
-	c.Repositories = newRepositories(opts.Config, client.Emit)
+	c.Repositories = newRepositories(opts.Config, events)
 	dashboardAPI := liveDashboardAPI()
 	if opts.GitHubCredential != nil {
 		dashboardAPI.credential = opts.GitHubCredential
 	}
-	c.Dashboard = newDashboard(opts.Root, func() bool { return reg.Current() != nil }, client.Emit,
+	c.Dashboard = newDashboard(opts.Root, func() bool { return reg.Current() != nil }, events,
 		dashboardAPI, time.Now, config.PullsCachePath())
 	c.Orgs = &Orgs{cfg: opts.Config}
-	c.Assembly = newAssembly(opts.Config, c.Repositories, reg, client.Emit, signal, runners)
-	c.Picker = newPicker(ctx, opts.Config, reg, c.Repositories, client.Emit, signal)
-	c.Settings = newSettings(opts.Config, client.Emit, opts.ValidateEditor, opts.ValidateLaunch, opts.LinearCommand,
+	c.Assembly = newAssembly(opts.Config, c.Repositories, reg, events, signal, runners)
+	c.Picker = newPicker(ctx, opts.Config, reg, c.Repositories, events, signal)
+	c.Settings = newSettings(opts.Config, events, opts.ValidateEditor, opts.ValidateLaunch, opts.LinearCommand,
 		opts.LinearEnvironment, withoutTicket(opts.Relaunch), opts.Quit, reg.Touch, ReconfigureVault(c.Vault), runners, client)
 	c.Profiles = newProfiles(opts.Config, ReconfigureVault(c.Vault), runners, opts.Launcher, reg, windows, client)
 	c.FirstRun = newFirstRun(opts.Config, reg.Touch, pendingRelaunch(opts.Relaunch, c.PendingTicket), opts.Quit,
 		func() (string, error) { return client.ChooseDirectory(false) }, ReconfigureVault(c.Vault))
 	c.Placement = newPlacement(opts.Config, reg)
 	c.FirstRun.onWelcomed = c.Placement.CheckInBackground
-	c.wire()
+	c.wire(events)
 	return c
 }
 
-func (c *Core) wire() {
+func (c *Core) wire(events Events) {
 	reg, windows, opts, client := c.Sessions, c.Windows, c.opts, c.client
 	launcher := opts.Launcher
 	shell := &shellWindow{windows: windows, launcher: launcher}
@@ -196,7 +196,7 @@ func (c *Core) wire() {
 		environ: os.Environ,
 	}
 	tree := func(state *SessionState) status.AgentTree { return sessionTree(opts.Config, state) }
-	reg.trees = newAgentTrees(client.Emit, agentTreeInterval, reg.Current, tree)
+	reg.trees = newAgentTrees(events, agentTreeInterval, reg.Current, tree)
 	c.Chrome.answerTrees(func(slug string) status.AgentTree {
 		if state := reg.BySlug(slug); state != nil {
 			return tree(state)
@@ -234,7 +234,7 @@ func (c *Core) Start(socket string) error {
 	}
 	c.server = server
 	c.Dashboard.start(c.ctx)
-	go watchChrome(c.ctx, c.Sessions, c.opts.Root, c.opts.Config, c.Chrome.publish, c.Dashboard)
+	go watchChrome(c.ctx, c.Sessions, c.opts.Root, c.opts.Config, c.Chrome.publishFields, c.Dashboard)
 	if c.Vault != nil {
 		c.Vault.Warm(c.ctx)
 	}

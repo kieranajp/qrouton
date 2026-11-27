@@ -1,15 +1,16 @@
 import { expect, test } from "@playwright/test";
-import { ASSEMBLY_PROGRESS_EVENT, PROFILES_STATUS, REPOS_REFRESH_EVENT, SIGN_IN_STATES } from "../src/lib/bridge/generated.js";
+import { ASSEMBLY_PROGRESS_EVENT, PROFILES_STATUS, REFRESH_STATES, REPOS_REFRESH_EVENT, SIGN_IN_STATES } from "../src/lib/bridge/generated.js";
 
 test("clearing repository searches keeps selected rows first, ahead of the display cap", async ({ page }) => {
   await page.goto("/tests/assembly.html");
   await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
   await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
   await page.getByRole("button", { name: "Choose repositories" }).click();
-  await page.evaluate((event) => window.assembly.emit(event, {
+  await page.evaluate(([event, state]) => window.assembly.emit(event, {
     generation: 1,
+    state,
     repos: Array.from({ length: 60 }, (_, i) => ({ org: "acme", name: `repo${String(i).padStart(2, "0")}`, default_branch: "main" })),
-  }), REPOS_REFRESH_EVENT);
+  }), [REPOS_REFRESH_EVENT, REFRESH_STATES.COMPLETE]);
 
   const search = page.getByRole("textbox", { name: "Search repositories" });
   const clear = page.getByRole("button", { name: "Clear repository search" });

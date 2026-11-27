@@ -1,0 +1,11 @@
+{
+  "live": {
+    "encoded": "bGl2ZQ=="
+  },
+  "replay": {
+    "encoded": "G1szMW1yZWT/",
+    "replay": true,
+    "exit_code": 2,
+    "first": true
+  }
+}

@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -249,7 +248,7 @@ func testOptions(t *testing.T) (workbenchOptions, *stubBoot) {
 // directory the test's cleanup is already removing.
 func testWorkbench(t *testing.T, r *fakeClient, opts workbenchOptions) *Core {
 	t.Helper()
-	c := New(opts.Options, r)
+	c := New(opts.Options, r, emitFunc(r.Emit))
 	t.Cleanup(c.Shutdown)
 	return c
 }
@@ -281,7 +280,7 @@ func testSessions(t *testing.T, root string, boot *stubBoot) (*Sessions, *Window
 	t.Helper()
 	r := newFakeClient()
 	reg := newSessions()
-	windows := newWindows(r.Emit, reg)
+	windows := newWindows(emitFunc(r.Emit), reg)
 	t.Cleanup(reg.stopAll)
 	t.Cleanup(windows.stopAll)
 	reg.boot = booting{
@@ -348,7 +347,7 @@ func shownSession(t *testing.T, reg *Sessions) *SessionState {
 // end-of-transmission.
 func endConversation(t *testing.T, term *Term, state *SessionState) {
 	t.Helper()
-	if err := term.Write(state.terminal, base64.StdEncoding.EncodeToString([]byte{0x04})); err != nil {
+	if err := term.Write(state.terminal, []byte{0x04}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -391,7 +390,7 @@ func TestACleanSupervisorExitRetiresOnlyItsSession(t *testing.T) {
 	}
 	second := reg.Current()
 	for _, state := range []*SessionState{first, second} {
-		if err := term.Start(state.terminal, 80, 24); err != nil {
+		if err := startTerm(term, state.terminal, 80, 24); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -422,7 +421,7 @@ func TestACleanSupervisorExitLeavesNoSessionWhenItWasTheOnlyOne(t *testing.T) {
 
 	startWorkbench(t, c, opts)
 	state := shownSession(t, reg)
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 
@@ -452,7 +451,7 @@ func TestClosingTheConversationWindowTearsDownEverySession(t *testing.T) {
 	var pids []int
 	var sockets []string
 	for _, state := range []*SessionState{first, reg.Current()} {
-		if err := term.Start(state.terminal, 80, 24); err != nil {
+		if err := startTerm(term, state.terminal, 80, 24); err != nil {
 			t.Fatal(err)
 		}
 		pids = append(pids, ptyPid(state.process))
@@ -482,14 +481,14 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 	startWorkbench(t, c, opts)
 	state := shownSession(t, reg)
 	conversation := state.terminal
-	if err := term.Start(conversation, 80, 24); err != nil {
+	if err := startTerm(term, conversation, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 
 	waitFor(t, "the exit to reach the page", func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		code, reported := r.events[ptyExitEvent+conversation]
+		code, reported := r.events[ptyExitName+conversation]
 		return reported && code == 3
 	})
 	if shutDown(opts) {
@@ -753,11 +752,11 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 
 	reg := testRegistry(t, dir)
 	state := reg.Current()
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, emitFunc(r.Emit).Chrome)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(status.Fields)
+	fields, ok := r.events[chromeName].(status.Fields)
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
@@ -774,10 +773,10 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 func welcomingFor(t *testing.T, reg *Sessions, root string, cfg *config.Config) bool {
 	t.Helper()
 	r := newFakeClient()
-	pushChrome(reg, root, cfg, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, cfg, nil, nil, nil, emitFunc(r.Emit).Chrome)
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(status.Fields)
+	fields, ok := r.events[chromeName].(status.Fields)
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
@@ -833,7 +832,7 @@ func TestWatchChromeStopsWithItsContext(t *testing.T) {
 	cancel()
 	done := make(chan struct{})
 	go func() {
-		watchChrome(ctx, testRegistry(t, t.TempDir()), t.TempDir(), nil, func(string, any) {}, newFakePulls())
+		watchChrome(ctx, testRegistry(t, t.TempDir()), t.TempDir(), nil, emitFunc(func(string, any) {}).Chrome, newFakePulls())
 		close(done)
 	}()
 	<-done
@@ -852,11 +851,11 @@ func TestChromeNamesTheTerminalOfEveryBootedSessionAndTheSlugOnScreen(t *testing
 	}
 
 	reg := testRegistry(t, filepath.Join(root, "octopus"))
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, emitFunc(r.Emit).Chrome)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(status.Fields)
+	fields, ok := r.events[chromeName].(status.Fields)
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
@@ -899,11 +898,11 @@ func TestAttentionOnABackgroundSessionsListenerMarksOnlyItsRow(t *testing.T) {
 	if err := handle.Attention(context.Background(), status.ActivityWaiting, 1); err != nil {
 		t.Fatal(err)
 	}
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, emitFunc(r.Emit).Chrome)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(status.Fields)
+	fields, ok := r.events[chromeName].(status.Fields)
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
@@ -935,11 +934,11 @@ func TestOnlyTheSessionOnScreenCarriesMeasuredRepos(t *testing.T) {
 	}
 
 	measured := status.RepoStat{Name: "lifesum/svc", Role: "editing", Commits: 3, Measured: true}
-	pushChrome(testRegistry(t, shown), root, nil, map[string][]status.RepoStat{shown: {measured}}, nil, nil, r.Emit)
+	pushChrome(testRegistry(t, shown), root, nil, map[string][]status.RepoStat{shown: {measured}}, nil, nil, emitFunc(r.Emit).Chrome)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(status.Fields)
+	fields, ok := r.events[chromeName].(status.Fields)
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
@@ -958,7 +957,7 @@ func pushedChrome(t *testing.T, r *fakeClient) status.Fields {
 	t.Helper()
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(status.Fields)
+	fields, ok := r.events[chromeName].(status.Fields)
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
@@ -968,11 +967,11 @@ func pushedChrome(t *testing.T, r *fakeClient) status.Fields {
 func TestChromeSnapshotsTheInitialStateAndSuppressesUnchangedUpdates(t *testing.T) {
 	var snapshots []status.Fields
 	var chrome *Chrome
-	chrome = newChrome(func(event string, _ any) {
-		if event == chromeEvent {
+	chrome = newChrome(emitFunc(func(event string, _ any) {
+		if event == chromeName {
 			snapshots = append(snapshots, chrome.Snapshot())
 		}
-	})
+	}))
 
 	empty := chrome.Snapshot()
 	if empty.Sessions == nil || empty.Documents == nil || empty.RepositoryDocuments == nil || empty.Repos == nil {
@@ -982,15 +981,15 @@ func TestChromeSnapshotsTheInitialStateAndSuppressesUnchangedUpdates(t *testing.
 		Activity: "idle", Sessions: []status.SessionRow{},
 		Documents: []status.Document{}, RepositoryDocuments: []status.RepositoryDocuments{}, Repos: []status.RepoStat{},
 	}
-	chrome.publish(chromeEvent, first)
-	chrome.publish(chromeEvent, first)
+	chrome.publishFields(first)
+	chrome.publishFields(first)
 	if len(snapshots) != 1 || !reflect.DeepEqual(snapshots[0], first) {
 		t.Fatalf("initial publishes = %+v, want one stored-before-emit snapshot", snapshots)
 	}
 
 	changed := first
 	changed.Activity = "working"
-	chrome.publish(chromeEvent, changed)
+	chrome.publishFields(changed)
 	if len(snapshots) != 2 || !reflect.DeepEqual(chrome.Snapshot(), changed) {
 		t.Fatalf("changed publishes = %+v, snapshot = %+v", snapshots, chrome.Snapshot())
 	}
@@ -1008,13 +1007,13 @@ func TestSwitchingSessionsDropsThePreviousSessionsRepos(t *testing.T) {
 	}
 
 	reg := testRegistry(t, first)
-	pushChrome(reg, root, nil, measured, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, measured, nil, nil, emitFunc(r.Emit).Chrome)
 	if repos := pushedChrome(t, r).Repos; len(repos) != 1 || repos[0].Name != "lifesum/svc" {
 		t.Fatalf("chrome repos = %+v, want what was measured for the session on screen", repos)
 	}
 
 	reg.reveal(reg.add(second, []string{"/bin/cat"}, os.Environ()))
-	pushChrome(reg, root, nil, measured, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, measured, nil, nil, emitFunc(r.Emit).Chrome)
 	if repos := pushedChrome(t, r).Repos; len(repos) != 0 {
 		t.Fatalf("chrome repos = %+v after the switch, want none of the previous session's", repos)
 	}
@@ -1028,7 +1027,7 @@ func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.
 	reg := testRegistry(t, sessionDir(t, root, "octopus"))
 	var pushes, all, arrivals atomic.Int64
 	emit := func(event string, _ any) {
-		if event == chromeEvent {
+		if event == chromeName {
 			pushes.Add(1)
 		}
 	}
@@ -1048,7 +1047,7 @@ func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.
 	<-reg.touched
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, time.Hour, counts, newFakePulls())
+	go watch(ctx, reg, root, nil, emitFunc(emit).Chrome, time.Millisecond, time.Hour, counts, newFakePulls())
 
 	waitFor(t, "the fast ticker to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := all.Load(); got != 1 {
@@ -1122,8 +1121,8 @@ func TestShowBootsASessionOnceAndRevealsItAfterwards(t *testing.T) {
 	if booted.control == nil {
 		t.Fatal("the booted session has no listener of its own")
 	}
-	term := newTerm(reg, r.Emit)
-	if err := term.Start(booted.terminal, 80, 24); err != nil {
+	term := newTerm(reg, emitFunc(r.Emit))
+	if err := startTerm(term, booted.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	if booted.process == nil {
@@ -1219,13 +1218,13 @@ func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	term := newTerm(reg, r.Emit)
-	if err := term.Start(dead.terminal, 80, 24); err != nil {
+	term := newTerm(reg, emitFunc(r.Emit))
+	if err := startTerm(term, dead.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
 
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, emitFunc(r.Emit).Chrome)
 	crashed := pushedChrome(t, r)
 	if crashed.Terminal != "" {
 		t.Fatalf("the session on screen still names terminal %q after its supervisor died", crashed.Terminal)
@@ -1250,7 +1249,7 @@ func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
 	if tabs := windows.surfaces(dead).Tabs; len(tabs) != 0 {
 		t.Fatalf("the reboot left the dead session's tabs open: %+v", tabs)
 	}
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, emitFunc(r.Emit).Chrome)
 	if got := rowTerminal(t, pushedChrome(t, r), "octopus"); got != booted.terminal {
 		t.Fatalf("the row names terminal %q, want the session just booted %q", got, booted.terminal)
 	}
@@ -1268,8 +1267,8 @@ func TestReloadReplacesALiveSupervisorAndResumesTheConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := reg.Current()
-	term := newTerm(reg, r.Emit)
-	if err := term.Start(before.terminal, 80, 24); err != nil {
+	term := newTerm(reg, emitFunc(r.Emit))
+	if err := startTerm(term, before.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	pid := ptyPid(before.process)
@@ -1307,8 +1306,8 @@ func TestARebootThatCannotStartFallsBackToThePreviousSession(t *testing.T) {
 	}
 	previous := reg.BySlug("kraken")
 	dead := reg.Current()
-	term := newTerm(reg, r.Emit)
-	if err := term.Start(dead.terminal, 80, 24); err != nil {
+	term := newTerm(reg, emitFunc(r.Emit))
+	if err := startTerm(term, dead.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
@@ -1335,8 +1334,8 @@ func TestUnloadStopsOwnedResourcesAndRetainsAResumableRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := reg.Current()
-	term := newTerm(reg, r.Emit)
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	term := newTerm(reg, emitFunc(r.Emit))
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	pid := ptyPid(state.process)
@@ -1347,7 +1346,7 @@ func TestUnloadStopsOwnedResourcesAndRetainsAResumableRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := windows.Start(tab, 80, 24); err != nil {
+	if err := attachTab(windows, nil, tab, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	shell, err := windows.terminals.process(tab)
@@ -1387,7 +1386,7 @@ func TestUnloadStopsOwnedResourcesAndRetainsAResumableRow(t *testing.T) {
 	if content, err := os.ReadFile(marker); err != nil || string(content) != "retained" {
 		t.Fatalf("Unload changed session files: %q, %v", content, err)
 	}
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, emitFunc(r.Emit).Chrome)
 	fields := pushedChrome(t, r)
 	if len(fields.Sessions) != 1 || fields.Slug != "" || fields.Terminal != "" ||
 		rowTerminal(t, fields, "octopus") != "" || fields.Sessions[0].Activity != "" {
@@ -1704,14 +1703,14 @@ func TestDelayedRetirementCannotRemoveAReopenedSession(t *testing.T) {
 	arrived, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	var once sync.Once
 	t.Cleanup(func() { once.Do(func() { close(release) }) })
-	term := newTerm(reg, r.Emit)
+	term := newTerm(reg, emitFunc(r.Emit))
 	term.whenChildExits(func(state *SessionState, code int) {
 		close(arrived)
 		<-release
 		reg.retire(state)
 		close(finished)
 	})
-	if err := term.Start(old.terminal, 80, 24); err != nil {
+	if err := startTerm(term, old.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -1784,11 +1783,12 @@ func TestAnIntentionallyStoppedChildDoesNotReportItsExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	replacement := reg.Current()
-	old.childExited(r.Emit, func(*SessionState, int) {
+	old.childExited(emitFunc(r.Emit), func(*SessionState, int) {
 		t.Fatal("an intentional stop invoked the child-exit handler")
 	}, 0)
+
 	r.mu.Lock()
-	_, emitted := r.events[ptyExitEvent+old.terminal]
+	_, emitted := r.events[ptyExitName+old.terminal]
 	r.mu.Unlock()
 	if emitted || reg.Current() != replacement {
 		t.Fatal("an intentional stop emitted an exit or changed selection")
@@ -2025,7 +2025,7 @@ func TestTwoSessionsGetTheirOwnSocketAndSupervisor(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
 	reg, _, r := testSessions(t, root, boot)
-	term := newTerm(reg, r.Emit)
+	term := newTerm(reg, emitFunc(r.Emit))
 
 	booted := map[string]*SessionState{}
 	for _, slug := range []string{"alpha", "beta"} {
@@ -2034,7 +2034,7 @@ func TestTwoSessionsGetTheirOwnSocketAndSupervisor(t *testing.T) {
 			t.Fatal(err)
 		}
 		state := reg.Current()
-		if err := term.Start(state.terminal, 80, 24); err != nil {
+		if err := startTerm(term, state.terminal, 80, 24); err != nil {
 			t.Fatal(err)
 		}
 		booted[slug] = state
@@ -2192,7 +2192,7 @@ func TestBootingASessionRacesTeardownSafely(t *testing.T) {
 
 	for range 40 {
 		reg := newSessions()
-		windows := newWindows(r.Emit, reg)
+		windows := newWindows(emitFunc(r.Emit), reg)
 		release := make(chan struct{})
 		serving := make(chan struct{})
 		var reserved string
@@ -2588,8 +2588,8 @@ func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := reg.Current()
-	term := newTerm(reg, r.Emit)
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	term := newTerm(reg, emitFunc(r.Emit))
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	pid := ptyPid(state.process)
@@ -2767,7 +2767,7 @@ func TestUncommittedAnswersAClickAndNeverATicker(t *testing.T) {
 
 	var pushes atomic.Int64
 	emit := func(event string, _ any) {
-		if event == chromeEvent {
+		if event == chromeName {
 			pushes.Add(1)
 		}
 	}
@@ -2777,7 +2777,7 @@ func TestUncommittedAnswersAClickAndNeverATicker(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, 2*time.Millisecond, counts, newFakePulls())
+	go watch(ctx, reg, root, nil, emitFunc(emit).Chrome, time.Millisecond, 2*time.Millisecond, counts, newFakePulls())
 	waitFor(t, "both tickers to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := checks.Load(); got != 0 {
 		t.Fatalf("the dirty check ran %d times over %d pushes, want none of them", got, pushes.Load())
@@ -2934,7 +2934,7 @@ func TestCleanupRefusesADirectoryHoldingAnotherSessionsManifest(t *testing.T) {
 // does not race the background poller's own tick.
 func polledRail(t *testing.T, r *fakeClient, reg *Sessions, root string) []string {
 	t.Helper()
-	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, emitFunc(r.Emit).Chrome)
 	var slugs []string
 	for _, row := range lastChrome(t, r).Sessions {
 		slugs = append(slugs, row.Slug)
@@ -2946,7 +2946,7 @@ func lastChrome(t *testing.T, r *fakeClient) status.Fields {
 	t.Helper()
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(status.Fields)
+	fields, ok := r.events[chromeName].(status.Fields)
 	if !ok {
 		t.Fatalf("no chrome pushed: %v", r.events)
 	}
@@ -3036,13 +3036,13 @@ func exitedPTY(t *testing.T) *PTY {
 
 // testKernel wires a conversation and a window registry over one session
 // registry, emitting at emit, as New does without booting anything.
-func testKernel(t *testing.T, emit Emitter) (*Sessions, *Term, *Windows) {
+func testKernel(t *testing.T, emit emitFunc) (*Sessions, *Term, *Windows) {
 	t.Helper()
 	reg := newSessions()
-	windows := newWindows(emit, reg)
+	windows := newWindows(emitFunc(emit), reg)
 	t.Cleanup(reg.stopAll)
 	t.Cleanup(windows.stopAll)
-	return reg, newTerm(reg, emit), windows
+	return reg, newTerm(reg, emitFunc(emit)), windows
 }
 
 var errNoAgent = errors.New("no agent command")

@@ -87,6 +87,6 @@ func (r *registry) focusAsset(owner *SessionState, id string, index int) (workbe
 		return workbench.AssetSelection{}, err
 	}
 	r.announce(owner)
-	r.emit(windowContentEvent+id, doc)
+	r.events.WindowContent(id, doc)
 	return selected, nil
 }

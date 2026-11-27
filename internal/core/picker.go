@@ -45,7 +45,7 @@ type Picker struct {
 	cfg       *config.Config
 	sessions  *Sessions
 	repos     *Repositories
-	emit      Emitter
+	events    Events
 	assembler assembly.Assembler
 
 	// ctx ends every add when the core shuts down.
@@ -55,8 +55,8 @@ type Picker struct {
 	running sync.WaitGroup
 }
 
-func newPicker(ctx context.Context, cfg *config.Config, reg *Sessions, repos *Repositories, emit Emitter, signal func(string)) *Picker {
-	return &Picker{cfg: cfg, sessions: reg, repos: repos, emit: emit,
+func newPicker(ctx context.Context, cfg *config.Config, reg *Sessions, repos *Repositories, events Events, signal func(string)) *Picker {
+	return &Picker{cfg: cfg, sessions: reg, repos: repos, events: events,
 		assembler: assembly.Assembler{Cfg: cfg, Signal: signal},
 		ctx:       ctx, adding: map[string]context.CancelCauseFunc{}}
 }
@@ -127,7 +127,7 @@ func (p *Picker) Confirm(ctx context.Context, slug, requestID string, in PickerI
 	}
 	assembler := p.assembler
 	assembler.Cfg = p.cfg.Snapshot()
-	err = assembler.Confirm(ctx, root, draft, escalation != nil, progressTo(p.emit, slug))
+	err = assembler.Confirm(ctx, root, draft, escalation != nil, progressTo(p.events, slug))
 	// A failed or cancelled add can still have kept the repositories it finished.
 	p.sessions.RepositoriesChanged(root)
 	if err != nil {

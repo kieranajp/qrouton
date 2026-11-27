@@ -5,7 +5,6 @@ package core
 // Client is the core's only way to touch a window or run a local tool. A call
 // the client cannot make returns an error matching ErrUnavailable.
 type Client interface {
-	Emit(event string, payload any)
 	Focused() bool
 	Raise()
 	SessionShown(root string)
@@ -19,9 +18,6 @@ type Client interface {
 	// session's own notify script.
 	Chime(sessionRoot string)
 }
-
-// Emitter broadcasts a payload to every page the client shows.
-type Emitter func(event string, payload any)
 
 // Capability names a client call that a client may not support.
 type Capability string

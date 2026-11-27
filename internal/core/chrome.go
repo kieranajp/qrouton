@@ -19,29 +19,18 @@ type Chrome struct {
 	mu          sync.RWMutex
 	fields      status.Fields
 	initialized bool
-	emit        Emitter
+	events      Events
 	tree        func(slug string) status.AgentTree
 }
 
-func newChrome(emit Emitter) *Chrome {
-	return &Chrome{fields: status.EmptyFields(), emit: emit}
+func newChrome(events Events) *Chrome {
+	return &Chrome{fields: status.EmptyFields(), events: events}
 }
 
 func (c *Chrome) Snapshot() status.Fields {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.fields
-}
-
-// publish adapts Chrome to the Emitter seam. A payload that is not chrome state
-// belongs to some other producer sharing the seam, so it goes out untouched.
-func (c *Chrome) publish(event string, payload any) {
-	fields, ok := payload.(status.Fields)
-	if !ok {
-		c.emit(event, payload)
-		return
-	}
-	c.publishFields(fields)
 }
 
 func (c *Chrome) publishFields(fields status.Fields) {
@@ -53,14 +42,14 @@ func (c *Chrome) publishFields(fields status.Fields) {
 	c.fields = fields
 	c.initialized = true
 	c.mu.Unlock()
-	c.emit(chromeEvent, fields)
+	c.events.Chrome(fields)
 }
 
 // watchChrome pushes what the window can observe about the session on screen
 // until the context is cancelled. Escalation rewrites the manifest, so
 // re-reading it on a poll is what keeps the window agreeing with the session.
-func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, pulls pullRequestSource) {
-	watch(ctx, reg, root, cfg, emit, chromeInterval, repoStatInterval,
+func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, publish func(status.Fields), pulls pullRequestSource) {
+	watch(ctx, reg, root, cfg, publish, chromeInterval, repoStatInterval,
 		unseenCounts{all: status.Unseen, in: status.UnseenIn}, pulls)
 }
 
@@ -88,7 +77,7 @@ type measurement struct {
 // watch takes its intervals, its unseen count and its pull requests so a test
 // can drive the tickers apart. Everything a background session costs rides the
 // slow one.
-func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit Emitter, field, slow time.Duration, count unseenCounts, pulls pullRequestSource) {
+func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, publish func(status.Fields), field, slow time.Duration, count unseenCounts, pulls pullRequestSource) {
 	fields := time.NewTicker(field)
 	defer fields.Stop()
 	stats := time.NewTicker(slow)
@@ -128,7 +117,7 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 
 	refresh()
 	request()
-	pushChrome(reg, root, cfg, measured, pulls, unseen, emit)
+	pushChrome(reg, root, cfg, measured, pulls, unseen, publish)
 	for {
 		select {
 		case <-ctx.Done():
@@ -162,7 +151,7 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 			}
 		case <-fields.C:
 		}
-		pushChrome(reg, root, cfg, measured, pulls, unseen, emit)
+		pushChrome(reg, root, cfg, measured, pulls, unseen, publish)
 		if reg.trees != nil {
 			reg.trees.schedule(reg.Current())
 		}
@@ -171,7 +160,7 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 
 // pushChrome emits even with the session-level fields empty: the page cannot
 // attach to a conversation whose terminal id it has not been told.
-func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, pulls pullRequestSource, unseen map[string]int, emit Emitter) {
+func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, pulls pullRequestSource, unseen map[string]int, publish func(status.Fields)) {
 	for _, state := range reg.all() {
 		state.mu.Lock()
 		state.pruneBugReports(reg.now())
@@ -234,7 +223,7 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 		}
 		fields.Sessions[i].Unseen = unseen[row.Slug]
 	}
-	emit(chromeEvent, fields)
+	publish(fields)
 }
 
 func switchableProfiles(cfg *config.Config) []status.RunnerProfiles {

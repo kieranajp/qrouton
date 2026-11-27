@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/api"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/launch"
@@ -18,7 +19,6 @@ import (
 
 type headlessClient struct{}
 
-func (headlessClient) Emit(string, any)                     {}
 func (headlessClient) Focused() bool                        { return false }
 func (headlessClient) Raise()                               {}
 func (headlessClient) SessionShown(string)                  {}
@@ -114,7 +114,7 @@ func TestTheManifestsProfileReachesTheRunnerThroughBootAndRestart(t *testing.T) 
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = os.Remove(socket) })
-			kernel := core.New(core.Options{Root: root, Config: cfg, Launcher: ports}, headlessClient{})
+			kernel := core.New(core.Options{Root: root, Config: cfg, Launcher: ports}, headlessClient{}, api.NewHub())
 			t.Cleanup(kernel.Shutdown)
 			if err := kernel.Start(socket); err != nil {
 				t.Fatal(err)
@@ -131,7 +131,7 @@ func TestTheManifestsProfileReachesTheRunnerThroughBootAndRestart(t *testing.T) 
 				}
 				time.Sleep(10 * time.Millisecond)
 			}
-			if err := kernel.Term.Start(terminal, 80, 24); err != nil {
+			if err := kernel.Term.Attach(terminal, &core.Size{Cols: 80, Rows: 24}, nil, func(core.Output) {}); err != nil {
 				t.Fatal(err)
 			}
 

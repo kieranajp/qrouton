@@ -23,7 +23,7 @@ import (
 func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string) error,
 	validateLaunch func(map[string][]string) error, quit func()) *Settings {
 	t.Helper()
-	s := newSettings(cfg, func(string, any) {}, validateEditor, validateLaunch, []string{
+	s := newSettings(cfg, emitFunc(func(string, any) {}), validateEditor, validateLaunch, []string{
 		"/Applications/qrouton.app/Contents/MacOS/qrouton",
 		"--linear-issue",
 	}, []string{"LINEAR_PROMPT"}, nil, quit, nil, nil,
@@ -552,11 +552,11 @@ func TestSettingsSaveDoesNotWakeChromeWhenConfigWriteFails(t *testing.T) {
 	wakes := 0
 	orgEvents := 0
 	s.wakeChrome = func() { wakes++ }
-	s.emit = func(event string, _ any) {
-		if event == orgsChangedEvent {
+	s.events = emitFunc(func(event string, _ any) {
+		if event == orgsChangedName {
 			orgEvents++
 		}
-	}
+	})
 
 	stickers := defaultStickers()
 	stickers[0].Label = "Priority"
@@ -723,11 +723,11 @@ func TestSettingsSaveAnnouncesOrgsThatChanged(t *testing.T) {
 	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
 	var announced [][]string
 	s := testSettings(t, cfg, nil, nil, nil)
-	s.emit = func(event string, payload any) {
-		if event == orgsChangedEvent {
+	s.events = emitFunc(func(event string, payload any) {
+		if event == orgsChangedName {
 			announced = append(announced, payload.([]string))
 		}
-	}
+	})
 
 	if _, err := s.Save(SettingsInput{
 		Orgs: []string{"acme", "other"}, Root: cfg.Root, Stickers: defaultStickers(),
@@ -755,8 +755,8 @@ func TestOverlappingSettingsSavesAnnounceOrgsInCommitOrder(t *testing.T) {
 	firstEmitting := make(chan struct{})
 	releaseFirst := make(chan struct{})
 	first := testSettings(t, cfg, nil, nil, nil)
-	first.emit = func(event string, payload any) {
-		if event != orgsChangedEvent {
+	first.events = emitFunc(func(event string, payload any) {
+		if event != orgsChangedName {
 			return
 		}
 		mu.Lock()
@@ -764,20 +764,20 @@ func TestOverlappingSettingsSavesAnnounceOrgsInCommitOrder(t *testing.T) {
 		mu.Unlock()
 		close(firstEmitting)
 		<-releaseFirst
-	}
+	})
 	secondValidated := make(chan struct{})
 	second := testSettings(t, cfg, func([]string) error {
 		close(secondValidated)
 		return nil
 	}, nil, nil)
-	second.emit = func(event string, payload any) {
-		if event != orgsChangedEvent {
+	second.events = emitFunc(func(event string, payload any) {
+		if event != orgsChangedName {
 			return
 		}
 		mu.Lock()
 		announced = append(announced, append([]string(nil), payload.([]string)...))
 		mu.Unlock()
-	}
+	})
 
 	firstDone := make(chan error, 1)
 	go func() {
@@ -901,11 +901,11 @@ func TestSettingsSaveAnnouncesTheUIScaleOnlyWhenItChanges(t *testing.T) {
 	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
 	var announced []int
 	s := testSettings(t, cfg, nil, nil, nil)
-	s.emit = func(event string, payload any) {
-		if event == uiScaleEvent {
+	s.events = emitFunc(func(event string, payload any) {
+		if event == uiScaleName {
 			announced = append(announced, payload.(int))
 		}
-	}
+	})
 	input := SettingsInput{Orgs: cfg.Orgs, Root: cfg.Root, Stickers: defaultStickers()}
 	for _, scale := range []int{100, 150, 150, 0} {
 		input.UIScale = scale
@@ -975,11 +975,11 @@ func TestAdjustUIScaleStepsClampsAndResets(t *testing.T) {
 				}
 			}
 			var announced []int
-			s.emit = func(event string, payload any) {
-				if event == uiScaleEvent {
+			s.events = emitFunc(func(event string, payload any) {
+				if event == uiScaleName {
 					announced = append(announced, payload.(int))
 				}
-			}
+			})
 			got, err := s.AdjustUIScale(tc.action)
 			if err != nil || got != tc.want {
 				t.Fatalf("AdjustUIScale = %d, %v; want %d", got, err, tc.want)

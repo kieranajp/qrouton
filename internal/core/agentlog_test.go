@@ -45,7 +45,7 @@ func TestACleanAgentExitIsOneLineWithNoOutput(t *testing.T) {
 // person reads it rather than as the terminal painted it.
 func TestAFailedAgentExitKeepsTheTailWithoutItsEscapes(t *testing.T) {
 	root := sessionRoot(t)
-	tail := NewRing(AgentTailBytes)
+	tail := NewRing(WindowScrollback)
 	tail.Write([]byte("\x1b[31mpanic: nothing\x1b[0m\r\nstack\r\n"))
 
 	RecordAgentExit(root, providerCodex, 3, tail.Text(false))

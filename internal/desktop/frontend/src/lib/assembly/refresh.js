@@ -28,19 +28,20 @@ const STATES = {
 /** @returns {Refresh} */
 export const idle = (repos = []) => ({ generation: 0, active: false, owners: {}, repos });
 
-/** Events can precede their initiating call's response, but older generations are stale.
+/** Events can beat their call's response; only a completing event's repos replace the list.
  * @param {Refresh} refresh
  * @param {Event} event
  * @returns {Refresh} */
 export function apply(refresh, event) {
   const generation = event.generation;
   if (generation < refresh.generation) return refresh;
+  const complete = event.state === REFRESH_STATES.COMPLETE;
   const next = {
     ...refresh,
     generation,
-    repos: Array.isArray(event.repos) ? event.repos : refresh.repos,
+    repos: complete && Array.isArray(event.repos) ? event.repos : refresh.repos,
   };
-  if (event.state === REFRESH_STATES.COMPLETE) return { ...next, active: false };
+  if (complete) return { ...next, active: false };
   const status = STATES[event.state];
   if (!status) return next;
   return {

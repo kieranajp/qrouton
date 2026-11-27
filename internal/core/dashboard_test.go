@@ -104,8 +104,8 @@ func newTestBoard(t *testing.T) *testBoard {
 		root:  t.TempDir(),
 		last:  make(chan DashboardStatus, 1),
 	}
-	b.Dashboard = newDashboard(b.root, func() bool { return false }, func(event string, payload any) {
-		if event != dashboardEvent {
+	b.Dashboard = newDashboard(b.root, func() bool { return false }, emitFunc(func(event string, payload any) {
+		if event != dashboardName {
 			return
 		}
 		b.emits.Add(1)
@@ -114,7 +114,7 @@ func newTestBoard(t *testing.T) *testBoard {
 		default:
 		}
 		b.last <- payload.(DashboardStatus)
-	}, dashboardAPI{
+	}), dashboardAPI{
 		credential: b.gh.credential,
 		pulls:      b.gh.pulls,
 		measure:    func(context.Context, string) []status.RepoStat { return []status.RepoStat{} },

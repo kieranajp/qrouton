@@ -107,7 +107,7 @@ type SaveResult struct {
 
 type Settings struct {
 	cfg            *config.Config
-	emit           Emitter
+	events         Events
 	validateEditor func([]string) error
 	validateLaunch func(map[string][]string) error
 	relaunch       func() error
@@ -121,7 +121,7 @@ type Settings struct {
 	linear         lineartools.Tools
 }
 
-func newSettings(cfg *config.Config, emit Emitter, validateEditor func([]string) error,
+func newSettings(cfg *config.Config, events Events, validateEditor func([]string) error,
 	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, relaunch func() error,
 	quit, wakeChrome func(), reconfigure func(*config.Config) error, runners func() ([]assembly.Runner, error),
 	client Client) *Settings {
@@ -135,7 +135,7 @@ func newSettings(cfg *config.Config, emit Emitter, validateEditor func([]string)
 		},
 		reconfigure:    reconfigure,
 		cfg:            cfg,
-		emit:           emit,
+		events:         events,
 		validateEditor: validateEditor,
 		validateLaunch: validateLaunch,
 		quit:           quit,
@@ -310,13 +310,13 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		labelsChanged := !slices.Equal(current.EffectiveStickers(), stickers)
 		result.RestartRequired = restart
 		if changed {
-			s.emit(orgsChangedEvent, live.Orgs)
+			s.events.OrgsChanged(live.Orgs)
 		}
 		if labelsChanged && s.wakeChrome != nil {
 			s.wakeChrome()
 		}
 		if current.EffectiveUIScale() != uiScale {
-			s.emit(uiScaleEvent, uiScale)
+			s.events.UIScale(uiScale)
 		}
 	})
 	if err != nil {
@@ -400,7 +400,7 @@ func (s *Settings) AdjustUIScale(action string) (int, error) {
 		live := snapshot.Snapshot()
 		live.UIScale = onDisk.UIScale
 		s.cfg.Replace(live)
-		s.emit(uiScaleEvent, scale)
+		s.events.UIScale(scale)
 		return nil
 	})
 	if err != nil {
