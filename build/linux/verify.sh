@@ -73,7 +73,7 @@ grep -Eq 'Class: +ELF64' "$work/elf" || fail 'binary is not ELF64'
 grep -Eq 'Machine: +Advanced Micro Devices X86-64' "$work/elf" || fail 'binary is not amd64'
 desktop="$work/root/usr/share/applications/qrouton.desktop"
 desktop-file-validate "$desktop"
-for entry in Exec=qrouton Icon=qrouton Terminal=false; do
+for entry in Exec=qrouton Icon=qrouton Terminal=false StartupWMClass=org.wails.qrouton; do
 	grep -Fx "$entry" "$desktop" >/dev/null || fail "desktop entry is missing $entry"
 done
 for notice in OFL.txt LICENSE-NerdFonts README.md; do
