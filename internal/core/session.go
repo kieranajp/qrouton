@@ -20,6 +20,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
+	"github.com/kieranajp/qrouton/internal/userscope"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -34,6 +35,7 @@ type SessionState struct {
 	env         []string
 	sessionSlug string
 	sessionRoot string
+	scoped      bool
 	// control is the session's own listener, and nil for a session whose control
 	// arrives on the process socket instead.
 	control io.Closer
@@ -196,7 +198,11 @@ func (s *SessionState) attach(events Events, exited func(*SessionState, int), si
 }
 
 func (s *SessionState) startLocked(events Events, exited func(*SessionState, int), size Size) error {
-	process, err := StartPTY(s.argv, s.env, s.Root(), size.Cols, size.Rows)
+	unit := ""
+	if s.scoped {
+		unit = userscope.SessionUnit(s.Slug())
+	}
+	process, err := StartPTY(s.argv, s.env, s.Root(), unit, size.Cols, size.Rows)
 	if err != nil {
 		return err
 	}
@@ -333,6 +339,8 @@ type booting struct {
 
 type Sessions struct {
 	boot booting
+	// scoped starts each supervisor in a systemd user scope of its own.
+	scoped bool
 	// showMu serialises the check and the boot, so a doubled rail click cannot
 	// put two supervisors on one session.
 	showMu sync.Mutex
@@ -890,6 +898,7 @@ func (s *Sessions) add(root string, argv, env []string) *SessionState {
 		env:         env,
 		sessionSlug: slug,
 		sessionRoot: root,
+		scoped:      s.scoped,
 		output:      newOutputStream(WindowScrollback),
 	}
 	s.slugs[state.Slug()] = state

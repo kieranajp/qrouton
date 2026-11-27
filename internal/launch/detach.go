@@ -33,6 +33,9 @@ type WorkbenchSpec struct {
 	TicketPrompt string `json:"ticket_prompt,omitempty"`
 	// Zero when no editor resolved, which the session runs without.
 	Editor EditorCommand `json:"editor"`
+	// Scoped is the CLI's probe for a systemd user manager; the workbench and every
+	// child it starts are wrapped in scopes or none are.
+	Scoped bool `json:"scoped,omitempty"`
 }
 
 func (s WorkbenchSpec) Marshal() string {

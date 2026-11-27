@@ -19,6 +19,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/ticket"
+	"github.com/kieranajp/qrouton/internal/userscope"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/urfave/cli/v2"
 )
@@ -159,6 +160,7 @@ func detach(spec launch.WorkbenchSpec, env []string) error {
 	if err != nil {
 		return err
 	}
+	spec.Scoped = userscope.Available()
 	log := workbenchLog(spec)
 	if err := launch.Detach(launch.WorkbenchArgv(bin, spec), env, spec.Socket, log); err != nil {
 		return err
@@ -184,6 +186,9 @@ func workbenchProcess(marshalled string) error {
 		return err
 	}
 	warnConfig(cfg)
+	if userscope.Supported && !spec.Scoped {
+		fmt.Fprintln(os.Stderr, logPrefix, unscopedNotice)
+	}
 	ports := workbenchPorts{cfg: cfg, bin: bin, spec: spec, env: os.Environ()}
 	return desktop.Run(desktop.Options{
 		Icon:         applicationIcon,
@@ -193,6 +198,7 @@ func workbenchProcess(marshalled string) error {
 		Root:         cfg.Root,
 		Socket:       spec.Socket,
 		Inspect:      os.Getenv(inspectEnvVar) == "1",
+		Scoped:       spec.Scoped,
 		Ticket:       spec.Ticket,
 		TicketPrompt: spec.TicketPrompt,
 		LinearCommand: []string{

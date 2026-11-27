@@ -15,7 +15,7 @@ import (
 
 func startTestPTY(t *testing.T, argv ...string) *PTY {
 	t.Helper()
-	p, err := StartPTY(argv, os.Environ(), t.TempDir(), 80, 24)
+	p, err := StartPTY(argv, os.Environ(), t.TempDir(), "", 80, 24)
 	if err != nil {
 		t.Fatal(err)
 	}

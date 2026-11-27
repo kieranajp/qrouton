@@ -41,6 +41,8 @@ type Options struct {
 	LinearEnvironment []string
 	// GitHubCredential answers the dashboard's GitHub token; nil asks gh, then the environment.
 	GitHubCredential func(ctx context.Context) (github.Credential, string)
+	// Scoped starts every session and tab in a systemd user scope of its own.
+	Scoped bool
 }
 
 type Core struct {
@@ -75,6 +77,7 @@ func New(opts Options, client Client, events Events) *Core {
 	ctx, cancel := context.WithCancel(context.Background())
 	reg := newSessions()
 	windows := newWindows(events, reg)
+	reg.scoped, windows.terminals.scoped = opts.Scoped, opts.Scoped
 	c := &Core{
 		Sessions:   reg,
 		Term:       newTerm(reg, events),
