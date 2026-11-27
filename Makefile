@@ -94,7 +94,7 @@ proto:
 proto-check:
 	$(BUF) lint
 	@before=$$(find $(PROTOGEN) -type f | sort | xargs sha256sum); \
-	$(MAKE) -s proto; \
+	$(MAKE) -s proto || exit $$?; \
 	after=$$(find $(PROTOGEN) -type f | sort | xargs sha256sum); \
 	test "$$before" = "$$after" || { echo "$(PROTOGEN) is stale: run make proto"; exit 1; }
 
