@@ -1,7 +1,9 @@
 package core
 
 import (
+	"context"
 	"strings"
+	"sync"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -43,12 +45,20 @@ type Picker struct {
 	cfg       *config.Config
 	sessions  *Sessions
 	repos     *Repositories
+	events    Events
 	assembler assembly.Assembler
+
+	// ctx ends every add when the core shuts down.
+	ctx     context.Context
+	mu      sync.Mutex
+	adding  map[string]context.CancelCauseFunc
+	running sync.WaitGroup
 }
 
-func newPicker(cfg *config.Config, reg *Sessions, repos *Repositories, signal func(string)) *Picker {
-	return &Picker{cfg: cfg, sessions: reg, repos: repos,
-		assembler: assembly.Assembler{Cfg: cfg, Signal: signal}}
+func newPicker(ctx context.Context, cfg *config.Config, reg *Sessions, repos *Repositories, events Events, signal func(string)) *Picker {
+	return &Picker{cfg: cfg, sessions: reg, repos: repos, events: events,
+		assembler: assembly.Assembler{Cfg: cfg, Signal: signal},
+		ctx:       ctx, adding: map[string]context.CancelCauseFunc{}}
 }
 
 // Escalate opens a persistent escalation picker from the session header. An
@@ -91,12 +101,22 @@ func (p *Picker) Load(slug string) (PickerFields, error) {
 	return PickerFields{Branch: m.Branch(), Repos: held}, nil
 }
 
-func (p *Picker) Confirm(slug string, in PickerInput) error {
+// Confirm answers the escalation requestID names, or makes a plain add when it
+// is empty, even while an escalation waits on the session.
+func (p *Picker) Confirm(ctx context.Context, slug, requestID string, in PickerInput) error {
 	state, root, err := p.root(slug)
 	if err != nil {
 		return err
 	}
-	escalation := state.PendingPicker()
+	escalation, err := pendingFor(state, requestID)
+	if err != nil {
+		return err
+	}
+	ctx, done, err := p.begin(ctx, root)
+	if err != nil {
+		return err
+	}
+	defer done()
 	m, err := session.Load(root)
 	if err != nil {
 		return err
@@ -107,23 +127,93 @@ func (p *Picker) Confirm(slug string, in PickerInput) error {
 	}
 	assembler := p.assembler
 	assembler.Cfg = p.cfg.Snapshot()
-	if err := assembler.Confirm(root, draft, escalation != nil, nil); err != nil {
+	err = assembler.Confirm(ctx, root, draft, escalation != nil, progressTo(p.events, slug))
+	// A failed or cancelled add can still have kept the repositories it finished.
+	p.sessions.RepositoriesChanged(root)
+	if err != nil {
 		return err
 	}
-	state.ClearPicker()
-	p.sessions.RepositoriesChanged(root)
+	state.ClearPickerIf(requestID)
 	return nil
 }
 
-func (p *Picker) Cancel(slug string) error {
+// pendingFor is the escalation requestID names, nil for a plain add.
+func pendingFor(state *SessionState, requestID string) (*workbench.PickerRequest, error) {
+	if requestID == "" {
+		return nil, nil
+	}
+	pending := state.PendingPicker()
+	if pending == nil || pending.ID != requestID {
+		return nil, ErrPickerStale
+	}
+	return pending, nil
+}
+
+// begin registers an add for root, refusing a second while the first runs. Its
+// context ends with the caller's or the core's, whichever ends first.
+func (p *Picker) begin(ctx context.Context, root string) (context.Context, func(), error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, ok := p.adding[root]; ok {
+		return nil, nil, ErrAddRunning
+	}
+	if err := p.ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	ctx, cancel := context.WithCancelCause(ctx)
+	unlink := context.AfterFunc(p.ctx, func() { cancel(nil) })
+	p.adding[root] = cancel
+	p.running.Add(1)
+	return ctx, func() {
+		unlink()
+		cancel(nil)
+		p.mu.Lock()
+		delete(p.adding, root)
+		p.mu.Unlock()
+		p.running.Done()
+	}, nil
+}
+
+// Abort cancels slug's running add and reports whether one was running. That
+// add's Confirm returns after its cleanup.
+func (p *Picker) Abort(slug string) (bool, error) {
+	_, root, err := p.root(slug)
+	if err != nil {
+		return false, err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	cancel, ok := p.adding[root]
+	if ok {
+		cancel(ErrAddCancelled)
+	}
+	return ok, nil
+}
+
+// stop cancels every running add and waits for each to return.
+func (p *Picker) stop() {
+	p.mu.Lock()
+	for _, cancel := range p.adding {
+		cancel(nil)
+	}
+	p.mu.Unlock()
+	p.running.Wait()
+}
+
+// Cancel records a cancellation for the escalation requestID names. A plain add,
+// or an escalation already gone, leaves nothing to record.
+func (p *Picker) Cancel(slug, requestID string) error {
 	state, root, err := p.root(slug)
 	if err != nil {
 		return err
 	}
-	if err := assembly.Cancel(root, state.PendingPicker() != nil); err != nil {
+	if escalation, _ := pendingFor(state, requestID); escalation == nil {
+		return nil
+	}
+	if err := assembly.Cancel(root, true); err != nil {
 		return err
 	}
-	state.ClearPicker()
+	state.ClearPickerIf(requestID)
 	p.sessions.Touch()
 	return nil
 }

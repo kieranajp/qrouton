@@ -10,6 +10,7 @@ import {
   ASSEMBLY_PREVIEW,
   ASSEMBLY_RUNNERS,
   ORGS_LIST,
+  PICKER_ABORT,
   PICKER_CANCEL,
   PICKER_CONFIRM,
   PICKER_ESCALATE,
@@ -29,13 +30,17 @@ import { Call } from "../wails.js";
  * @property {string} prefix
  * @property {string} mode
  * @property {string} runner
+ * @property {string} profile empty for the runner's default account
  * @property {{id: string, role: string, base: string}[]} repos in the order they were picked
  */
 
 /** prefixes is the branch-prefix vocabulary, which Go owns the only copy of. */
 export const prefixes = () => Call.ByName(ASSEMBLY_PREFIXES);
 
-/** runners are the agents with a resolved path, already filtered. */
+/** @typedef {{id: string, label: string, profile: string, profileLabel: string, installed: boolean}} RunnerRow */
+
+/** runners are the agents with a resolved path, already filtered, one row per account.
+ * @returns {Promise<RunnerRow[]>} */
 export const runners = () => Call.ByName(ASSEMBLY_RUNNERS);
 
 /** @param {Draft} draft */
@@ -90,9 +95,17 @@ export const escalate = (slug) => Call.ByName(PICKER_ESCALATE, slug);
 
 /**
  * @param {string} slug
+ * @param {string} requestID the escalation answered, empty for a plain add
  * @param {{repos: {id: string, role: string, base: string}[], upgrades: string[]}} answer
  */
-export const addRepos = (slug, answer) => Call.ByName(PICKER_CONFIRM, slug, answer);
+export const addRepos = (slug, requestID, answer) => Call.ByName(PICKER_CONFIRM, slug, requestID, answer);
 
-/** @param {string} slug */
-export const cancelPicker = (slug) => Call.ByName(PICKER_CANCEL, slug);
+/** abortAdd cancels the running add, whose own call then answers with the reason.
+ * @param {string} slug
+ * @returns {Promise<boolean>} whether an add was running */
+export const abortAdd = (slug) => Call.ByName(PICKER_ABORT, slug);
+
+/**
+ * @param {string} slug
+ * @param {string} requestID */
+export const cancelPicker = (slug, requestID) => Call.ByName(PICKER_CANCEL, slug, requestID);

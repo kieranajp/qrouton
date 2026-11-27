@@ -23,6 +23,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/lineartools"
 	"github.com/kieranajp/qrouton/internal/placement"
 	"github.com/kieranajp/qrouton/internal/session"
@@ -81,8 +82,8 @@ func TestEachAdapterMethodReachesItsOwnCoreMethod(t *testing.T) {
 }
 
 func adapterRows() [][]adapterRow {
-	return [][]adapterRow{ollamaRows(), sessionsRows(), termRows(), windowsRows(), bugReportRows(), chromeRows(),
-		assemblyRows(), repositoriesRows(), orgsRows(), pickerRows(), settingsRows(), firstRunRows(), placementRows()}
+	return [][]adapterRow{ollamaRows(), dashboardRows(), sessionsRows(), termRows(), windowsRows(), bugReportRows(), chromeRows(),
+		assemblyRows(), repositoriesRows(), orgsRows(), pickerRows(), settingsRows(), profilesRows(), firstRunRows(), placementRows()}
 }
 
 func ollamaRows() []adapterRow {
@@ -132,6 +133,7 @@ func TestTheOllamaAdapterReachesTheCoreAfterHello(t *testing.T) {
 	opts, _ := testOptions(t)
 	opts.Config = &config.Config{Root: opts.Root}
 	options := coreOptions(opts, func() {})
+	options.GitHubCredential = signedOut
 	ollama := newAdapterOllama()
 	defer close(ollama.released)
 	options.Ollama = ollama
@@ -145,6 +147,44 @@ func TestTheOllamaAdapterReachesTheCoreAfterHello(t *testing.T) {
 	got, err := (&Ollama{ollama: in.ollama}).Check()
 	if err != nil || ollama.probes.Load() != 1 || !strings.Contains(string(got), vault.OllamaModel) {
 		t.Fatalf("Check answered %s, %v after %d probes", got, err, ollama.probes.Load())
+	}
+}
+
+func dashboardRows() []adapterRow {
+	return []adapterRow{
+		{"Dashboard.Snapshot", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			if got := (&Dashboard{dashboard: a.kernel.Dashboard}).Snapshot(); got.Sessions[a.slug()].PullRequests == nil {
+				t.Fatalf("Snapshot has no card for %s: %+v", a.slug(), got)
+			}
+		}},
+		// Only Refresh can measure the second manifest: the startup measurement has already answered the first.
+		{"Dashboard.Refresh", func(t *testing.T) {
+			opts, _ := testOptions(t)
+			slug := filepath.Base(opts.SessionRoot)
+			write := func(names ...string) {
+				t.Helper()
+				var repos []session.ManifestRepo
+				for _, name := range names {
+					repos = append(repos, session.ManifestRepo{Org: "acme", Name: name, Role: session.RepoRoleReference, WorktreePath: "src/" + name})
+				}
+				if err := session.WriteManifest(opts.SessionRoot, session.Manifest{Slug: slug, Mode: session.ModeAssistant, Repos: repos}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			measured := func(kernel *core.Core, want int) func() bool {
+				return func() bool { return len(kernel.Dashboard.Snapshot().Sessions[slug].Repos) == want }
+			}
+			write("docs")
+			kernel := testWorkbench(t, newFakeRenderer(), &opts)
+			if err := kernel.Start(opts.Socket); err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, "the startup measurement", measured(kernel, 1))
+			write("docs", "web")
+			(&Dashboard{dashboard: kernel.Dashboard}).Refresh()
+			waitFor(t, "Refresh to measure git", measured(kernel, 2))
+		}},
 	}
 }
 
@@ -295,6 +335,27 @@ func sessionsRows() []adapterRow {
 			}
 			if after, _ := a.boot.counts(); after != before+1 || !a.boot.resumed(a.opts.SessionRoot) {
 				t.Fatalf("Reload of a live session asked for %d supervisors, resumed %v", after-before, a.boot.resumed(a.opts.SessionRoot))
+			}
+		}},
+		{"Sessions.SwitchProfile", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			before, _ := a.boot.counts()
+			err := (&Sessions{sessions: a.kernel.Sessions}).SwitchProfile(a.slug(), "work")
+			if !errors.Is(err, core.ErrProfileUnswitchable) {
+				t.Fatalf("SwitchProfile of a session with no claude runner = %v, want the core's refusal", err)
+			}
+			if after, _ := a.boot.counts(); after != before {
+				t.Fatalf("a refused switch asked for %d supervisors", after-before)
+			}
+		}},
+		{"Sessions.ShowDashboard", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			(&Sessions{sessions: a.kernel.Sessions}).ShowDashboard()
+			if shown := a.kernel.Sessions.Current(); shown != nil {
+				t.Fatalf("ShowDashboard left %q on screen", shown.Slug())
+			}
+			if a.kernel.Sessions.BySlug(a.slug()) == nil {
+				t.Fatal("ShowDashboard unloaded the session it hid")
 			}
 		}},
 		{"Sessions.Unload", func(t *testing.T) {
@@ -857,7 +918,7 @@ func pickerRows() []adapterRow {
 		}},
 		{"Picker.Confirm", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
-			if err := (&Picker{picker: a.kernel.Picker}).Confirm(a.slug(), core.PickerInput{}); !refusedFor(err, assembly.FieldRepos) {
+			if err := (&Picker{picker: a.kernel.Picker}).Confirm(t.Context(), a.slug(), "", core.PickerInput{}); !refusedFor(err, assembly.FieldRepos) {
 				t.Fatalf("confirming no editing repository = %v", err)
 			}
 		}},
@@ -866,11 +927,28 @@ func pickerRows() []adapterRow {
 			if err := a.kernel.Picker.Escalate(a.slug()); err != nil {
 				t.Fatal(err)
 			}
-			if err := (&Picker{picker: a.kernel.Picker}).Cancel(a.slug()); err != nil {
+			id := a.kernel.Sessions.Current().PendingPicker().ID
+			if err := (&Picker{picker: a.kernel.Picker}).Cancel(a.slug(), id); err != nil {
 				t.Fatal(err)
 			}
 			if a.kernel.Sessions.Current().PendingPicker() != nil {
 				t.Fatal("Cancel left the picker pending")
+			}
+		}},
+		{"Picker.Abort", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			if err := (&Picker{picker: a.kernel.Picker}).Escalate(a.slug()); err != nil {
+				t.Fatal(err)
+			}
+			// Abort stops an add and answers nothing, so a waiting escalation survives it.
+			if ran, err := (&Picker{picker: a.kernel.Picker}).Abort(a.slug()); ran || err != nil {
+				t.Fatalf("aborting with no add running = %v, %v", ran, err)
+			}
+			if a.kernel.Sessions.Current().PendingPicker() == nil {
+				t.Fatal("Abort answered the pending escalation")
+			}
+			if _, err := (&Picker{picker: a.kernel.Picker}).Abort("kraken"); err == nil {
+				t.Fatal("aborted an add for a session this workbench is not running")
 			}
 		}},
 	}
@@ -960,6 +1038,95 @@ func settingsRows() []adapterRow {
 	}
 }
 
+// profilesCore is a settings core whose launcher lists Claude Code as installed.
+func profilesCore(t *testing.T) (*core.Core, *config.Config, *stubBoot) {
+	t.Helper()
+	boot := newStubBoot()
+	boot.listed = []assembly.Runner{{ID: "claude", Label: "Claude Code", Installed: true}}
+	kernel, cfg, _ := settingsCore(t, Options{Launcher: boot})
+	return kernel, cfg, boot
+}
+
+func profilesRows() []adapterRow {
+	return []adapterRow{
+		{"Profiles.View", func(t *testing.T) {
+			kernel, _, _ := profilesCore(t)
+			view, err := (&Profiles{profiles: kernel.Profiles}).View()
+			if err != nil || len(view.Runners) != 1 || view.Runners[0].ID != "claude" {
+				t.Fatalf("View = %+v, %v", view, err)
+			}
+		}},
+		{"Profiles.Suggest", func(t *testing.T) {
+			kernel, _, _ := profilesCore(t)
+			if got := (&Profiles{profiles: kernel.Profiles}).Suggest("claude", "Work"); got.Dir != "~/.claude-work" {
+				t.Fatalf("Suggest = %+v", got)
+			}
+		}},
+		{"Profiles.Add", func(t *testing.T) {
+			kernel, cfg, _ := profilesCore(t)
+			if _, err := (&Profiles{profiles: kernel.Profiles}).Add(core.ProfileInput{Runner: "claude", Label: "Work"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := cfg.Profile("claude", "work"); !ok {
+				t.Fatal("Add saved no profile")
+			}
+		}},
+		{"Profiles.Rename", func(t *testing.T) {
+			kernel, cfg, _ := profilesCore(t)
+			if _, err := kernel.Profiles.Add(core.ProfileInput{Runner: "claude", Label: "Work"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := (&Profiles{profiles: kernel.Profiles}).Rename("claude", "work", "Day job"); err != nil {
+				t.Fatal(err)
+			}
+			if got, _ := cfg.Profile("claude", "work"); got.Label != "Day job" {
+				t.Fatalf("Rename left %+v", got)
+			}
+		}},
+		{"Profiles.Delete", func(t *testing.T) {
+			kernel, cfg, _ := profilesCore(t)
+			if _, err := kernel.Profiles.Add(core.ProfileInput{Runner: "claude", Label: "Work"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := (&Profiles{profiles: kernel.Profiles}).Delete("claude", "work"); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := cfg.Profile("claude", "work"); ok {
+				t.Fatal("Delete left the profile")
+			}
+		}},
+		{"Profiles.Status", func(t *testing.T) {
+			kernel, _, boot := profilesCore(t)
+			boot.probe = func(string, config.RunnerProfile) launch.SignIn {
+				return launch.SignIn{State: launch.SignInSignedIn}
+			}
+			got, err := (&Profiles{profiles: kernel.Profiles}).Status()
+			if err != nil || len(got) != 1 || got[0].State != launch.SignInSignedIn {
+				t.Fatalf("Status = %+v, %v", got, err)
+			}
+		}},
+		{"Profiles.ChooseFolder", func(t *testing.T) {
+			t.Setenv("XDG_CACHE_HOME", t.TempDir())
+			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
+				newLocalClient(newFakeRenderer(), newStubBoot(), func(bool) (string, error) { return "/picked", nil }), api.NewHub())
+			t.Cleanup(kernel.Shutdown)
+			if got, err := (&Profiles{profiles: kernel.Profiles}).ChooseFolder(); err != nil || got != "/picked" {
+				t.Fatalf("ChooseFolder = %q, %v", got, err)
+			}
+		}},
+		{"Profiles.SignIn", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			a.boot.signIn = func(string, config.RunnerProfile) ([]string, error) {
+				return []string{"/bin/sh", "-c", `printf signed > "$1"`, "sh", a.marker}, nil
+			}
+			if _, err := (&Profiles{profiles: a.kernel.Profiles}).SignIn("claude", ""); err != nil {
+				t.Fatal(err)
+			}
+			a.marked(t, "signed")
+		}},
+	}
+}
+
 func firstRunRows() []adapterRow {
 	return []adapterRow{
 		{"FirstRun.Login", func(t *testing.T) {
@@ -970,8 +1137,9 @@ func firstRunRows() []adapterRow {
 			markedFile(t, marker, "ran")
 		}},
 		{"FirstRun.ChooseRoot", func(t *testing.T) {
+			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
-				newLocalClient(newFakeRenderer(), newStubBoot(), func() (string, error) { return "/picked", nil }), api.NewHub())
+				newLocalClient(newFakeRenderer(), newStubBoot(), func(bool) (string, error) { return "/picked", nil }), api.NewHub())
 			t.Cleanup(kernel.Shutdown)
 			if got, err := (&FirstRun{firstRun: kernel.FirstRun}).ChooseRoot(); err != nil || got != "/picked" {
 				t.Fatalf("ChooseRoot = %q, %v", got, err)

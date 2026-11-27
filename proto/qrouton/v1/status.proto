@@ -31,6 +31,8 @@ message ChromeFields {
   SessionSummary session_summary = 21;
   PullRequestList pull_requests = 22;
   SessionDigest session_digest = 23;
+  string picker_id = 24 [json_name = "pickerID"];
+  repeated RunnerProfiles profiles = 25;
 }
 
 message SessionSummary {
@@ -55,6 +57,10 @@ message GitHubPullRequest {
   string title = 3;
   string url = 4;
   string state = 5;
+  string author = 6;
+  string review = 7;
+  bool checks_failing = 8;
+  google.protobuf.Timestamp updated_at = 9;
 }
 
 message SessionRow {
@@ -69,6 +75,19 @@ message SessionRow {
   int32 unseen = 9;
   google.protobuf.Timestamp opened = 10;
   string sticker = 11;
+  string runner = 12;
+  string profile = 13;
+}
+
+// RunnerProfiles is one runner's named profiles, for the sessions that can switch between them.
+message RunnerProfiles {
+  string runner = 1;
+  repeated Profile profiles = 2;
+}
+
+message Profile {
+  string id = 1;
+  string label = 2;
 }
 
 message Sticker {
@@ -132,6 +151,7 @@ message AgentTree {
   string coverage = 3;
   bool tools = 4;
   repeated AgentNode nodes = 5;
+  string profile_label = 6;
 }
 
 message AgentNode {

@@ -37,6 +37,12 @@ func (o *Ollama) CancelPull() error {
 	return api.FromStatus(err)
 }
 
+type Dashboard struct{ dashboard *core.Dashboard }
+
+func (d *Dashboard) Snapshot() core.DashboardStatus { return d.dashboard.Snapshot() }
+
+func (d *Dashboard) Refresh() { d.dashboard.Refresh() }
+
 type Sessions struct{ sessions *core.Sessions }
 
 func (s *Sessions) Show(slug string) error { return s.sessions.Show(slug) }
@@ -44,6 +50,12 @@ func (s *Sessions) Show(slug string) error { return s.sessions.Show(slug) }
 func (s *Sessions) Reload(slug string) error { return s.sessions.Reload(slug) }
 
 func (s *Sessions) Unload(slug string) error { return s.sessions.Unload(slug) }
+
+func (s *Sessions) ShowDashboard() { s.sessions.ShowDashboard() }
+
+func (s *Sessions) SwitchProfile(slug, profile string) error {
+	return s.sessions.SwitchProfile(slug, profile)
+}
 
 func (s *Sessions) Reorder(slug, targetSlug string) error {
 	return s.sessions.Reorder(slug, targetSlug)
@@ -213,9 +225,13 @@ func (p *Picker) Escalate(slug string) error { return p.picker.Escalate(slug) }
 
 func (p *Picker) Load(slug string) (core.PickerFields, error) { return p.picker.Load(slug) }
 
-func (p *Picker) Confirm(slug string, in core.PickerInput) error { return p.picker.Confirm(slug, in) }
+func (p *Picker) Confirm(ctx context.Context, slug, requestID string, in core.PickerInput) error {
+	return p.picker.Confirm(ctx, slug, requestID, in)
+}
 
-func (p *Picker) Cancel(slug string) error { return p.picker.Cancel(slug) }
+func (p *Picker) Cancel(slug, requestID string) error { return p.picker.Cancel(slug, requestID) }
+
+func (p *Picker) Abort(slug string) (bool, error) { return p.picker.Abort(slug) }
 
 type Settings struct{ settings *core.Settings }
 
@@ -232,6 +248,30 @@ func (s *Settings) Relaunch() error { return s.settings.Relaunch() }
 func (s *Settings) OpenConfig() error { return s.settings.OpenConfig() }
 
 func (s *Settings) InstallLinear() (core.LinearView, error) { return s.settings.InstallLinear() }
+
+type Profiles struct{ profiles *core.Profiles }
+
+func (p *Profiles) View() (core.ProfilesView, error) { return p.profiles.View() }
+
+func (p *Profiles) Suggest(runner, label string) core.ProfileSuggestion {
+	return p.profiles.Suggest(runner, label)
+}
+
+func (p *Profiles) Add(in core.ProfileInput) (core.ProfilesView, error) { return p.profiles.Add(in) }
+
+func (p *Profiles) Rename(runner, id, label string) (core.ProfilesView, error) {
+	return p.profiles.Rename(runner, id, label)
+}
+
+func (p *Profiles) Delete(runner, id string) (core.ProfilesView, error) {
+	return p.profiles.Delete(runner, id)
+}
+
+func (p *Profiles) Status() ([]core.ProfileStatus, error) { return p.profiles.Status() }
+
+func (p *Profiles) SignIn(runner, id string) (string, error) { return p.profiles.SignIn(runner, id) }
+
+func (p *Profiles) ChooseFolder() (string, error) { return p.profiles.ChooseFolder() }
 
 type FirstRun struct{ firstRun *core.FirstRun }
 

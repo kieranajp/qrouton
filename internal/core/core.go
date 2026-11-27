@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/vault"
@@ -37,6 +39,8 @@ type Options struct {
 	// LinearCommand and LinearEnvironment are what Settings installs for Linear.
 	LinearCommand     []string
 	LinearEnvironment []string
+	// GitHubCredential answers the dashboard's GitHub token; nil asks gh, then the environment.
+	GitHubCredential func(ctx context.Context) (github.Credential, string)
 }
 
 type Core struct {
@@ -45,6 +49,7 @@ type Core struct {
 	Windows    *Windows
 	BugReports *BugReports
 	Chrome     *Chrome
+	Dashboard  *Dashboard
 	Ollama     *Ollama
 	Vault      *vault.Set
 
@@ -54,6 +59,7 @@ type Core struct {
 	Picker       *Picker
 
 	Settings  *Settings
+	Profiles  *Profiles
 	FirstRun  *FirstRun
 	Placement *Placement
 
@@ -90,13 +96,20 @@ func New(opts Options, client Client, events Events) *Core {
 		signal, runners = opts.Launcher.Signal, opts.Launcher.Runners
 	}
 	c.Repositories = newRepositories(opts.Config, events)
+	dashboardAPI := liveDashboardAPI()
+	if opts.GitHubCredential != nil {
+		dashboardAPI.credential = opts.GitHubCredential
+	}
+	c.Dashboard = newDashboard(opts.Root, func() bool { return reg.Current() != nil }, events,
+		dashboardAPI, time.Now, config.PullsCachePath())
 	c.Orgs = &Orgs{cfg: opts.Config}
 	c.Assembly = newAssembly(opts.Config, c.Repositories, reg, events, signal, runners)
-	c.Picker = newPicker(opts.Config, reg, c.Repositories, signal)
+	c.Picker = newPicker(ctx, opts.Config, reg, c.Repositories, events, signal)
 	c.Settings = newSettings(opts.Config, events, opts.ValidateEditor, opts.ValidateLaunch, opts.LinearCommand,
 		opts.LinearEnvironment, withoutTicket(opts.Relaunch), opts.Quit, reg.Touch, ReconfigureVault(c.Vault), runners, client)
+	c.Profiles = newProfiles(opts.Config, ReconfigureVault(c.Vault), runners, opts.Launcher, reg, windows, client)
 	c.FirstRun = newFirstRun(opts.Config, reg.Touch, pendingRelaunch(opts.Relaunch, c.PendingTicket), opts.Quit,
-		client.ChooseDirectory, ReconfigureVault(c.Vault))
+		func() (string, error) { return client.ChooseDirectory(false) }, ReconfigureVault(c.Vault))
 	c.Placement = newPlacement(opts.Config, reg)
 	c.FirstRun.onWelcomed = c.Placement.CheckInBackground
 	c.wire(events)
@@ -150,6 +163,7 @@ func (c *Core) wire(events Events) {
 					if req.PullRequestCreated {
 						reg.pullRequestsChanged(state.Root())
 					}
+					state.keepConversation(req)
 					notify(state.agents.apply(req))
 				},
 				picker: reg.QueuePicker,
@@ -173,13 +187,21 @@ func (c *Core) wire(events Events) {
 		reveal:      client.Reveal,
 		copyImage:   client.CopyImage,
 		copyFile:    client.CopyFile,
+		profile: func(runnerID, profileID string) (config.RunnerProfile, bool) {
+			if opts.Config == nil {
+				return config.RunnerProfile{}, false
+			}
+			return opts.Config.Profile(runnerID, profileID)
+		},
+		environ: os.Environ,
 	}
-	reg.trees = newAgentTrees(events, agentTreeInterval, reg.Current, sessionTree)
+	tree := func(state *SessionState) status.AgentTree { return sessionTree(opts.Config, state) }
+	reg.trees = newAgentTrees(events, agentTreeInterval, reg.Current, tree)
 	c.Chrome.answerTrees(func(slug string) status.AgentTree {
 		if state := reg.BySlug(slug); state != nil {
-			return sessionTree(state)
+			return tree(state)
 		}
-		return agentTree(agentActivitySnapshot{}, manifestRunner(session.Resumable(opts.Root, slug)), "")
+		return coldTree(opts.Config, session.Resumable(opts.Root, slug))
 	})
 
 	// A supervisor exiting ends only its own session, and a failed one keeps its
@@ -211,7 +233,8 @@ func (c *Core) Start(socket string) error {
 		return err
 	}
 	c.server = server
-	go watchChrome(c.ctx, c.Sessions, c.opts.Root, c.opts.Config, c.Chrome.publishFields)
+	c.Dashboard.start(c.ctx)
+	go watchChrome(c.ctx, c.Sessions, c.opts.Root, c.opts.Config, c.Chrome.publishFields, c.Dashboard)
 	if c.Vault != nil {
 		c.Vault.Warm(c.ctx)
 	}
@@ -230,7 +253,7 @@ func (c *Core) PendingTicket() (string, string) { return c.Assembly.pendingTicke
 
 // OpenSession boots the session at root and puts it on screen.
 func (c *Core) OpenSession(root string, resume bool) error {
-	opened, err := c.Sessions.start(root, "", resume)
+	opened, err := c.Sessions.start(root, "", "", resume)
 	if err != nil {
 		return err
 	}
@@ -249,7 +272,9 @@ func (c *Core) Shutdown() {
 			_ = c.server.Close()
 		}
 		c.cancel()
+		c.Picker.stop()
 		c.Repositories.stop()
+		c.Dashboard.stop()
 		c.Placement.wait()
 		if c.Vault != nil {
 			c.Vault.Wait()
@@ -297,24 +322,34 @@ func attend(state *SessionState, shown func() *SessionState, touch, ring func())
 	}
 }
 
-func sessionTree(state *SessionState) status.AgentTree {
+// sessionTree names the profile the session booted on rather than the manifest's.
+func sessionTree(cfg *config.Config, state *SessionState) status.AgentTree {
 	snapshot := state.agents.snapshot()
 	fallback := ""
 	if snapshot.Provider == "" {
-		fallback = manifestRunner(state.Root())
+		fallback, _ = manifestAgent(state.Root())
 	}
-	return agentTree(snapshot, fallback, state.Root())
+	tree := agentTree(snapshot, fallback, state.Root())
+	tree.ProfileLabel = profileLabel(cfg, tree.Provider, state.profile)
+	return tree
 }
 
-func manifestRunner(root string) string {
+func coldTree(cfg *config.Config, root string) status.AgentTree {
+	runner, profile := manifestAgent(root)
+	tree := agentTree(agentActivitySnapshot{}, runner, "")
+	tree.ProfileLabel = profileLabel(cfg, runner, profile)
+	return tree
+}
+
+func manifestAgent(root string) (runner, profile string) {
 	if root == "" {
-		return ""
+		return "", ""
 	}
 	m, err := session.Load(root)
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	return m.Runner
+	return m.Runner, m.Profile
 }
 
 // overviewWindow opens the session's Overview tab. Adoption may call it again once

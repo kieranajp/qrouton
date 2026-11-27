@@ -88,10 +88,7 @@ func branchTitleClause(title string) string {
 	return strings.TrimSpace(title[cut+len(separator):])
 }
 
-// Assembler carries what the rules cannot reach for themselves. Signal asks the
-// supervisor to relaunch after a mode or repository-context change; this package
-// must not import launch, because everything it imports is linked into the
-// workbench with it.
+// Assembler reaches the supervisor through Signal to avoid linking launch into the workbench.
 type Assembler struct {
 	Cfg    *config.Config
 	Signal func(root string)

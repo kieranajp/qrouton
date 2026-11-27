@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { relative } from "./relative.js";
+import { clock, relative, stamp } from "./relative.js";
+
+// Half an hour off UTC, so a formatter reading UTC hours or minutes cannot pass here.
+process.env.TZ = "Asia/Kolkata";
 
 const NOW = Date.parse("2026-08-12T12:00:00Z");
 const ago = (ms) => new Date(NOW - ms).toISOString();
@@ -61,4 +64,30 @@ test("an ago age says just now, then counts minutes up to weeks and months", () 
   assert.equal(relative(ago(7 * DAY), "ago", NOW), "1w ago");
   assert.equal(relative(ago(61 * DAY), "ago", NOW), "2mo ago");
   assert.equal(relative("", "ago", NOW), "");
+});
+
+// A twelve-hour or UTC clock would show a time the user's wall clock never read.
+test("a clock time is the local hour and minute, padded, on a 24-hour face", () => {
+  assert.equal(clock(Date.UTC(2026, 7, 12, 3, 11, 59)), "08:41");
+  assert.equal(clock(Date.UTC(2026, 7, 12, 17, 35)), "23:05");
+});
+
+// A clock time for never would read as "05:53", the year-one instant in this zone.
+test("a clock time for never says nothing", () => {
+  assert.equal(clock("0001-01-01T00:00:00Z"), "");
+  assert.equal(clock(""), "");
+  assert.equal(stamp("0001-01-01T00:00:00Z"), "");
+});
+
+// A cache kept overnight would otherwise say "As of 17:30" the next morning, as if it were today's.
+test("a stamp is the clock time today and carries a short date on any other local day", () => {
+  const noon = Date.UTC(2026, 10, 20, 6, 30);
+  assert.equal(stamp(Date.UTC(2026, 10, 20, 3, 11), noon), "08:41");
+  assert.equal(stamp(Date.UTC(2026, 10, 18, 12, 0), noon), "18 Nov 17:30");
+  assert.equal(stamp(Date.UTC(2026, 10, 20, 19, 0), noon), "21 Nov 00:30");
+});
+
+// Comparing UTC days would date a time that is already today on the user's wall clock.
+test("a stamp compares local days, not UTC ones", () => {
+  assert.equal(stamp(Date.UTC(2026, 10, 19, 19, 0), Date.UTC(2026, 10, 20, 6, 30)), "00:30");
 });

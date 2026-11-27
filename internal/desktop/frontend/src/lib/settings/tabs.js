@@ -7,6 +7,7 @@ export const TABS = Object.freeze([
   Object.freeze({ key: "folders", label: "Folders", restart: true }),
   Object.freeze({ key: "search", label: "Search" }),
   Object.freeze({ key: "stickers", label: "Stickers" }),
+  Object.freeze({ key: "agents", label: "Agents" }),
   Object.freeze({ key: "advanced", label: "Advanced" }),
 ]);
 

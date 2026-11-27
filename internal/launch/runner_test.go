@@ -135,6 +135,36 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 	}
 }
 
+// Catches claude resuming by --continue, which starts afresh without error when
+// the conversation is missing, once qrouton knows the conversation's ID.
+func TestRunnerResumeNamesTheRecordedConversation(t *testing.T) {
+	const id = "b8aaffa4-120a-4a6d-bf40-cc703dc147b8"
+	dir := sessionWithOwnHome(t)
+	if err := session.RecordConversation(dir, session.Conversation{ID: id, Transcript: "/p/-s/" + id + ".jsonl"}); err != nil {
+		t.Fatal(err)
+	}
+	wants := map[string][]string{
+		runnerIDClaude: {claudeResumeFlag, id},
+		runnerIDCodex:  {codexResumeCmd, codexResumeLast},
+	}
+	for _, runner := range builtinRunners {
+		want, ok := wants[runner.ID]
+		if !ok {
+			continue
+		}
+		argv, _, err := runnerLaunch(runner, "/bin/qrouton", dir, EditorCommand{}, testHandle(), 1, true, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(argv, want[0]) || argv[slices.Index(argv, want[0])+1] != want[1] {
+			t.Errorf("%s resume argv = %v, want %v", runner.ID, argv, want)
+		}
+		if runner.ID == runnerIDClaude && slices.Contains(argv, claudeContinueFlag) {
+			t.Errorf("claude resume argv = %v, carries %s beside the ID", argv, claudeContinueFlag)
+		}
+	}
+}
+
 func TestRunnerResumeArgvCarriesARepositoryNoticeWithoutAFreshOpening(t *testing.T) {
 	const notice = "qrouton: session repositories changed"
 	for _, runner := range builtinRunners {
@@ -283,8 +313,8 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	}
 }
 
-// Every Claude hook runs async, so no tool call waits on the workbench, and the
-// hooks wired are exactly the ones the tracker reads capabilities from.
+// Every Claude event hook runs async, so no tool call waits on the workbench, and
+// the hooks wired are exactly the ones the tracker reads capabilities from.
 func TestClaudeHooksAreAsyncAndMatchRunnerHooks(t *testing.T) {
 	r := Runner{ID: "claude", Command: []string{"claude"}}
 	argv, _, err := runnerLaunch(r, "/bin/qrouton", "/work/s", EditorCommand{}, workbench.Handle{Socket: "/tmp/s.sock"}, 1, false, "")
@@ -295,7 +325,8 @@ func TestClaudeHooksAreAsyncAndMatchRunnerHooks(t *testing.T) {
 	var settings struct {
 		Hooks map[string][]struct {
 			Hooks []struct {
-				Async bool `json:"async"`
+				Command string `json:"command"`
+				Async   bool   `json:"async"`
 			} `json:"hooks"`
 		} `json:"hooks"`
 	}
@@ -307,7 +338,7 @@ func TestClaudeHooksAreAsyncAndMatchRunnerHooks(t *testing.T) {
 		wired = append(wired, hook)
 		for _, group := range groups {
 			for _, entry := range group.Hooks {
-				if !entry.Async {
+				if strings.Contains(entry.Command, AgentEventSubcommand) && !entry.Async {
 					t.Errorf("%s hook is not async", hook)
 				}
 			}
@@ -766,7 +797,7 @@ func codexArgv(t *testing.T, command []string, config string) []string {
 // launch has to raise it before the runner starts.
 func TestCodexIsLaunchedAtTheDepthALeadNeeds(t *testing.T) {
 	argv := codexArgv(t, []string{runnerIDCodex, codexBypassSandboxFlag}, "")
-	if got := codex.MaxDepth(argv); got != codex.RequiredMaxDepth {
+	if got := codex.MaxDepth("", argv); got != codex.RequiredMaxDepth {
 		t.Fatalf("codex would run at depth %d, want %d\nargv: %v", got, codex.RequiredMaxDepth, argv)
 	}
 }
@@ -776,7 +807,7 @@ func TestCodexIsLaunchedAtTheDepthALeadNeeds(t *testing.T) {
 func TestCodexKeepsADeeperConfiguredDepth(t *testing.T) {
 	deeper := codex.RequiredMaxDepth + 2
 	argv := codexArgv(t, []string{runnerIDCodex}, fmt.Sprintf("[agents]\nmax_depth = %d\n", deeper))
-	if got := codex.MaxDepth(argv); got != deeper {
+	if got := codex.MaxDepth("", argv); got != deeper {
 		t.Fatalf("configured depth %d became %d\nargv: %v", deeper, got, argv)
 	}
 }
@@ -787,7 +818,7 @@ func TestCodexKeepsADeeperDepthFromALaunchOverride(t *testing.T) {
 	deeper := codex.RequiredMaxDepth + 1
 	argv := codexArgv(t,
 		[]string{runnerIDCodex, codex.ConfigFlag, codex.MaxDepthSetting(deeper)}, "")
-	if got := codex.MaxDepth(argv); got != deeper {
+	if got := codex.MaxDepth("", argv); got != deeper {
 		t.Fatalf("overridden depth %d became %d\nargv: %v", deeper, got, argv)
 	}
 }
@@ -820,7 +851,7 @@ func argvFor(t *testing.T, r Runner, resume bool, mode, initialPrompt string) []
 	if !ok {
 		t.Fatalf("no spec for runner %q", r.ID)
 	}
-	return runnerArgv(spec, r, resume, mode, "", initialPrompt)
+	return runnerArgv(spec, r, resume, "", mode, "", initialPrompt)
 }
 
 // ByID answers the runner the caller named, whether that is the identifier, the
@@ -923,5 +954,112 @@ func TestEachRunnerWiresExactlyTheHooksItDeclares(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The notice hook has to finish before the turn carries on, or its context
+// misses the turn; the event hooks beside it must stay async.
+func TestClaudeNoticeHookIsSynchronousBesideAsyncEventHooks(t *testing.T) {
+	r := Runner{ID: runnerIDClaude, Command: []string{runnerIDClaude}}
+	dir := "/work/kieran's session"
+	argv, _, err := runnerLaunch(r, "/opt/qr uton/qrouton", dir, EditorCommand{}, testHandle(), 7, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+				Async   bool   `json:"async"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(argv[slices.Index(argv, "--settings")+1]), &settings); err != nil {
+		t.Fatal(err)
+	}
+	notice := noticeHookCommand("/opt/qr uton/qrouton", dir)
+	for hook, groups := range settings.Hooks {
+		var events, notices int
+		for _, entry := range groups[0].Hooks {
+			switch {
+			case entry.Command == notice && !entry.Async:
+				notices++
+			case strings.Contains(entry.Command, AgentEventSubcommand) && entry.Async:
+				events++
+			default:
+				t.Errorf("%s hook entry = %+v", hook, entry)
+			}
+		}
+		wantNotices := 0
+		if hook == agentevent.HookPostToolUse || hook == agentevent.HookUserPromptSubmit {
+			wantNotices = 1
+		}
+		if events != 1 || notices != wantNotices {
+			t.Errorf("%s: %d event and %d notice entries, want 1 and %d", hook, events, notices, wantNotices)
+		}
+	}
+}
+
+// The guard keeps qrouton unstarted while the queue is empty, and hands a queued
+// notice to it with paths that survive shell metacharacters.
+func TestTheNoticeHookStartsQroutonOnlyForAQueuedNotice(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "kieran's $session")
+	bin := filepath.Join(t.TempDir(), "qr uton")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := noticeHookCommand(bin, dir)
+	if out, err := exec.Command("/bin/sh", "-c", command).CombinedOutput(); err != nil || len(out) != 0 {
+		t.Fatalf("empty queue: output %q, %v; want a silent exit 0", out, err)
+	}
+	if err := session.QueueAgentNotice(dir, "added org/svc"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("/bin/sh", "-c", command).Output()
+	want := AgentNoticeSubcommand + "\n" + sessionRootFlag + "\n" + dir + "\n"
+	if err != nil || string(out) != want {
+		t.Fatalf("queued notice: qrouton got %q, %v; want %q", out, err, want)
+	}
+}
+
+// Codex takes notices on the same two events, through the same guarded command.
+func TestCodexInjectsTheNoticeHooks(t *testing.T) {
+	r := Runner{ID: runnerIDCodex, Command: []string{runnerIDCodex, codexBypassSandboxFlag}}
+	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, testHandle(), 7, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := fmt.Sprintf(codexCommandHookFormat, quotedConfigString(noticeHookCommand("/tmp/qrouton", "/tmp/session")), codexHookTimeoutSeconds)
+	for _, want := range []string{codexPostToolUseHook + hook, codexUserPromptSubmitHook + hook} {
+		if !slices.Contains(argv, want) {
+			t.Fatalf("Codex launch missing %q: %v", want, argv)
+		}
+	}
+	if slices.Contains(RunnerHooks(runnerIDCodex), agentevent.HookPostToolUse) {
+		t.Fatal("the notice hook made Codex declare PostToolUse events it never reports")
+	}
+}
+
+// Catches /resume inside Claude going unrecorded until the next prompt, so a
+// Reload or a profile switch in between would still resume the old conversation.
+func TestClaudeReportsAConversationChangeAsItStarts(t *testing.T) {
+	argv, _, err := runnerLaunch(Runner{ID: runnerIDClaude, Command: []string{runnerIDClaude}}, "/bin/qrouton", t.TempDir(),
+		EditorCommand{}, testHandle(), 1, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(argv[slices.Index(argv, "--settings")+1]), &settings); err != nil {
+		t.Fatal(err)
+	}
+	groups := settings.Hooks["SessionStart"]
+	if len(groups) == 0 || len(groups[0].Hooks) == 0 || !strings.Contains(groups[0].Hooks[0].Command, AgentEventSubcommand) {
+		t.Fatalf("SessionStart hooks = %+v, want the agent-event callback", groups)
 	}
 }

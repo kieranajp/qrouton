@@ -63,7 +63,7 @@ func TestEveryEventPageJSONMatchesTheCoreType(t *testing.T) {
 	hub, r := translated(t)
 	ollama, fields, tree := filled[core.OllamaStatus](), filled[status.Fields](), filled[status.AgentTree]()
 	surfaces, doc, diagram := filled[core.Surfaces](), filled[core.Document](), filled[core.RenderedDiagram]()
-	refresh, progress := filled[core.RefreshEvent](), filled[core.ProgressEvent]()
+	refresh, progress, dashboard := filled[core.RefreshEvent](), filled[core.ProgressEvent](), filled[core.DashboardStatus]()
 	for _, tc := range []struct {
 		name    string
 		publish func()
@@ -71,6 +71,7 @@ func TestEveryEventPageJSONMatchesTheCoreType(t *testing.T) {
 	}{
 		{ollamaEvent, func() { hub.Ollama(ollama) }, ollama},
 		{chromeEvent, func() { hub.Chrome(fields) }, fields},
+		{dashboardEvent, func() { hub.Dashboard(dashboard) }, dashboard},
 		{agentTreeEvent + "octopus", func() { hub.AgentTree("octopus", tree) }, tree},
 		{windowsEvent, func() { hub.WindowsOpened(surfaces) }, surfaces},
 		{windowContentEvent + "window-3", func() { hub.WindowContent("window-3", doc) }, doc},

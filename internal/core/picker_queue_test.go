@@ -40,8 +40,12 @@ func TestAPendingPickerReachesTheChromeOfTheSessionItNames(t *testing.T) {
 		t.Fatal("another session's escalation drew a picker over the one on screen")
 	}
 	reg.reveal(reg.BySlug("background"))
-	if fields := chromeOf(t, reg); !fields.Picker {
+	fields := chromeOf(t, reg)
+	if !fields.Picker {
 		t.Fatal("arriving at the session did not draw its picker")
+	}
+	if pending := reg.BySlug("background").PendingPicker(); fields.PickerID == "" || fields.PickerID != pending.ID {
+		t.Fatalf("chrome names escalation %q, pending is %+v; an answer could not say which it answers", fields.PickerID, pending)
 	}
 }
 

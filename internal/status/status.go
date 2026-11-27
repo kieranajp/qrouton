@@ -49,15 +49,19 @@ type Fields struct {
 	// Picker means the shown session has an escalation waiting on it. It is
 	// workbench-side knowledge, so a file read never sets it.
 	Picker bool `json:"picker"`
+	// PickerID names the waiting escalation, so an answer reaches only that one.
+	PickerID string `json:"pickerID"`
 	// Welcoming means this window is asking the first-run questions, which only a
-	// window holding no session does. Workbench-side knowledge too, so a file read
-	// never sets it.
+	// window in an install with no sessions does. Workbench-side knowledge too, so
+	// a file read never sets it.
 	Welcoming bool `json:"welcoming"`
 	// Placing means the placement check has misplaced or skipped sessions to
 	// show, or the user ran it. Never set while Welcoming.
-	Placing        bool           `json:"placing"`
-	Stickers       []Sticker      `json:"stickers"`
-	SessionSummary SessionSummary `json:"sessionSummary"`
+	Placing  bool      `json:"placing"`
+	Stickers []Sticker `json:"stickers"`
+	// Profiles are the named profiles of each runner whose sessions can switch profile.
+	Profiles       []RunnerProfiles `json:"profiles"`
+	SessionSummary SessionSummary   `json:"sessionSummary"`
 	// PullRequests is workbench-side knowledge fetched from GitHub, so a file
 	// read never sets it.
 	PullRequests  PullRequestList `json:"pullRequests"`
@@ -88,11 +92,15 @@ type PullRequestList struct {
 
 // PullRequest is one row. Repo is org/name.
 type PullRequest struct {
-	Repo   string `json:"repo"`
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	URL    string `json:"url"`
-	State  string `json:"state"`
+	Repo          string    `json:"repo"`
+	Number        int       `json:"number"`
+	Title         string    `json:"title"`
+	URL           string    `json:"url"`
+	State         string    `json:"state"`
+	Author        string    `json:"author"`
+	Review        string    `json:"review"`
+	ChecksFailing bool      `json:"checksFailing"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 // EmptyFields is the value every producer starts from. No slice reaching the
@@ -106,6 +114,7 @@ func EmptyFields() Fields {
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
 		Stickers:            []Sticker{},
+		Profiles:            []RunnerProfiles{},
 		PullRequests:        PullRequestList{Items: []PullRequest{}},
 	}
 }
@@ -125,6 +134,18 @@ type SessionRow struct {
 	Unseen   int           `json:"unseen"`
 	Opened   time.Time     `json:"opened"`
 	Sticker  string        `json:"sticker"`
+	Runner   string        `json:"runner"`
+	Profile  string        `json:"profile"`
+}
+
+type RunnerProfiles struct {
+	Runner   string    `json:"runner"`
+	Profiles []Profile `json:"profiles"`
+}
+
+type Profile struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
 }
 
 // Sticker is one of the user's configured stickers, in rail cycle order.
@@ -165,6 +186,8 @@ type AgentSummary struct {
 type AgentTree struct {
 	Provider      string `json:"provider"`
 	ProviderLabel string `json:"providerLabel"`
+	// ProfileLabel is empty for the runner's default account.
+	ProfileLabel string `json:"profileLabel"`
 	// Coverage is an optional note about what the runner can report.
 	Coverage string `json:"coverage"`
 	// Tools means the runner reports its tool calls, so an agent between
@@ -336,7 +359,7 @@ func Sessions(root string) []SessionRow {
 		rows = append(rows, SessionRow{
 			Name: name, Slug: m.Slug, Initials: initials(name), Mode: modeLabel(m),
 			Repos: sessionRepos(m), Opened: opened,
-			Sticker: string(m.Sticker),
+			Sticker: string(m.Sticker), Runner: m.Runner, Profile: m.Profile,
 			Summary: AgentSummary{Attention: AgentAttentionNone, Coverage: AgentCoverageNone},
 		})
 	}

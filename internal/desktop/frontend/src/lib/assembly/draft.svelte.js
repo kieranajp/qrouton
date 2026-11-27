@@ -1,9 +1,11 @@
 import { debounced } from "../async.js";
-import { ASSEMBLY_PROGRESS_EVENT, SESSION_MODES } from "../bridge/generated.js";
-import { call, Events } from "../wails.js";
+import { SESSION_MODES } from "../bridge/generated.js";
+import { profileStatus } from "../settings/calls.js";
+import { byProfile } from "../settings/profiles.js";
+import { call } from "../wails.js";
 import { browsing } from "./browse.svelte.js";
 import * as go from "./calls.js";
-import { record } from "./progress.js";
+import { following } from "./following.svelte.js";
 import { blocks, folder, last, refusal } from "./steps.js";
 import { loader } from "./ticket.js";
 
@@ -27,11 +29,13 @@ export function assembling(done) {
     prefix: "",
     mode: SESSION_MODES.RPI,
     runner: "",
+    profile: "",
   });
 
   let step = $state(0);
   let prefixes = $state(/** @type {string[]} */ ([]));
-  let runners = $state(/** @type {{id: string, label: string}[]} */ ([]));
+  let runners = $state(/** @type {go.RunnerRow[]} */ ([]));
+  let statuses = $state(/** @type {Record<string, import("../settings/calls.js").ProfileStatus> | null} */ (null));
   let branch = $state("");
   let status = $state("");
   let failure = $state("");
@@ -39,7 +43,6 @@ export function assembling(done) {
   let hint = $state({ text: "", tone: "success" });
   let fetching = $state(false);
   let creating = $state(false);
-  let progress = $state(/** @type {import("./progress.js").Row[]} */ ([]));
 
   /** @param {string} text */
   const report = (text) => (failure ||= text);
@@ -51,12 +54,26 @@ export function assembling(done) {
     prefixes = answer.value ?? [];
     form.prefix = form.prefix || prefixes[0] || "";
   });
-  call(go.runners()).then((answer) => {
+  // Settings can add or delete a profile while the wizard sits beneath it, so a
+  // choice that has gone falls back to the first row.
+  async function readRunners() {
+    const answer = await call(go.runners());
     if (!answer.ok) return report(refusal(answer.error));
     runners = answer.value ?? [];
-    form.runner = form.runner || runners[0]?.id || "";
+    if (!runners.some((row) => row.id === form.runner && row.profile === form.profile)) {
+      form.runner = runners[0]?.id ?? "";
+      form.profile = runners[0]?.profile ?? "";
+    }
     if (!runners.length) report(NO_RUNNERS);
-  });
+    if (runners.some((row) => row.profile)) probe();
+  }
+
+  async function probe() {
+    const answer = await call(profileStatus());
+    if (answer.ok) statuses = byProfile(answer.value);
+  }
+
+  readRunners();
 
   const payload = () => ({ ...form, repos: repos.ordered });
 
@@ -77,15 +94,8 @@ export function assembling(done) {
     return branches.cancel;
   });
 
-  // Every page in the process hears this, and the slug the session will have is
-  // the folder the previewed branch names.
-  $effect(() =>
-    Events.On(ASSEMBLY_PROGRESS_EVENT, (event) => {
-      const advance = event.data ?? {};
-      if (advance.session !== folder(branch)) return;
-      progress = record(progress, advance);
-    }),
-  );
+  // The slug the session will have is the folder the previewed branch names.
+  const progress = following(() => folder(branch));
 
   const tickets = loader(form, go.fetchTicket, {
     fetching(active) {
@@ -164,6 +174,9 @@ export function assembling(done) {
     get runners() {
       return runners;
     },
+    get statuses() {
+      return statuses;
+    },
     get branch() {
       return branch;
     },
@@ -182,11 +195,12 @@ export function assembling(done) {
       return creating;
     },
     get progress() {
-      return progress;
+      return progress.rows;
     },
     back,
     next,
     load,
     seed,
+    readRunners,
   };
 }

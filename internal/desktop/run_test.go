@@ -19,6 +19,8 @@ import (
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
+	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/vault"
@@ -136,16 +138,21 @@ type stubBoot struct {
 	openText func(path string) []string
 	// booting runs inside each supervisor request, while the session boots.
 	booting func(core.AgentRequest)
+	signIn  func(runnerID string, profile config.RunnerProfile) ([]string, error)
+	probe   func(runnerID string, profile config.RunnerProfile) launch.SignIn
+	listed  []assembly.Runner
 
-	mu      sync.Mutex
-	sockets map[string]string
-	resumes map[string]bool
-	runners map[string]string
-	agents  int
+	mu       sync.Mutex
+	sockets  map[string]string
+	resumes  map[string]bool
+	runners  map[string]string
+	profiles map[string]string
+	agents   int
 }
 
 func newStubBoot(argv ...string) *stubBoot {
-	return &stubBoot{argv: argv, sockets: map[string]string{}, resumes: map[string]bool{}, runners: map[string]string{}}
+	return &stubBoot{argv: argv, sockets: map[string]string{}, resumes: map[string]bool{},
+		runners: map[string]string{}, profiles: map[string]string{}}
 }
 
 func (b *stubBoot) Agent(req core.AgentRequest) (core.AgentCommand, error) {
@@ -158,11 +165,12 @@ func (b *stubBoot) Agent(req core.AgentRequest) (core.AgentCommand, error) {
 	b.sockets[req.SessionRoot] = req.Socket
 	b.resumes[req.SessionRoot] = req.Resume
 	b.runners[req.SessionRoot] = req.RunnerID
+	b.profiles[req.SessionRoot] = req.ProfileID
 	resolved := req.RunnerID
 	if resolved == "" {
 		resolved = "codex"
 	}
-	return core.AgentCommand{Argv: b.argv, Env: os.Environ(), RunnerID: resolved}, nil
+	return core.AgentCommand{Argv: b.argv, Env: os.Environ(), RunnerID: resolved, ProfileID: req.ProfileID}, nil
 }
 
 func (b *stubBoot) Shell(sessionRoot string) []string {
@@ -204,7 +212,21 @@ func (b *stubBoot) Document(string, string) (workbench.WindowOptions, error) {
 	return workbench.WindowOptions{}, core.ErrNoEditorCommand
 }
 
-func (b *stubBoot) Runners() ([]assembly.Runner, error) { return nil, nil }
+func (b *stubBoot) Runners() ([]assembly.Runner, error) { return b.listed, nil }
+
+func (b *stubBoot) SignInCommand(runnerID string, profile config.RunnerProfile) ([]string, error) {
+	if b.signIn == nil {
+		return nil, launch.ErrRunnerUnavailable
+	}
+	return b.signIn(runnerID, profile)
+}
+
+func (b *stubBoot) ProbeSignIn(_ context.Context, runnerID string, profile config.RunnerProfile) launch.SignIn {
+	if b.probe == nil {
+		return launch.SignIn{State: launch.SignInUnknown}
+	}
+	return b.probe(runnerID, profile)
+}
 
 func (b *stubBoot) Signal(string) {}
 
@@ -246,8 +268,10 @@ func testOptions(t *testing.T) (Options, *stubBoot) {
 func testWorkbench(t *testing.T, r *fakeRenderer, opts *Options) *core.Core {
 	t.Helper()
 	var quit func()
+	coreOpts := coreOptions(*opts, func() { quit() })
+	coreOpts.GitHubCredential = signedOut
 	opts.hub = api.NewHub()
-	kernel := core.New(coreOptions(*opts, func() { quit() }), newLocalClient(r, opts.Launcher, nil), opts.hub)
+	kernel := core.New(coreOpts, newLocalClient(r, opts.Launcher, nil), opts.hub)
 	quit = quitter(kernel.Shutdown, r)
 	t.Cleanup(kernel.Shutdown)
 	return kernel
@@ -372,6 +396,32 @@ func TestRunOpensOneConversationWindowAtTheFrontendRoot(t *testing.T) {
 	}
 	if len(r.opened) != 0 {
 		t.Fatalf("%d further windows opened; the workbench opens one", len(r.opened))
+	}
+}
+
+// Breaks if the session the command line opens on boots the workbench's default
+// account rather than its manifest's profile.
+func TestRunOpensTheLastSessionOnItsManifestsProfile(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	opts.Resume = true
+	if err := session.UpdateManifest(opts.SessionRoot, func(m session.Manifest) (session.Manifest, error) {
+		m.Runner, m.Profile = "claude", "work"
+		return m, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	kernel := testWorkbench(t, r, &opts)
+
+	startWorkbench(t, r, kernel, opts)
+
+	<-r.opened
+	shownSession(t, kernel.Sessions)
+	boot.mu.Lock()
+	runner, profile, resumed := boot.runners[opts.SessionRoot], boot.profiles[opts.SessionRoot], boot.resumes[opts.SessionRoot]
+	boot.mu.Unlock()
+	if runner != "claude" || profile != "work" || !resumed {
+		t.Fatalf("opened %q on profile %q, resuming %v; want claude on the manifest's work, resuming", runner, profile, resumed)
 	}
 }
 
@@ -878,3 +928,6 @@ func TestARunWhoseStartFailsWaitsForThePlacementCheck(t *testing.T) {
 		t.Fatalf("placement check unfinished when run returned: %+v, %v", file, err)
 	}
 }
+
+// signedOut keeps a test's dashboard off GitHub when a session it writes has a branch.
+func signedOut(context.Context) (github.Credential, string) { return github.CredentialSignedOut, "" }

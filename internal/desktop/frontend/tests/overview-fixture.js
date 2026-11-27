@@ -38,6 +38,7 @@ const done = (finished) => ({ state: "done", finished });
 const session = {
   provider: "claude",
   providerLabel: "Claude Code",
+  profileLabel: "",
   coverage: "",
   tools: true,
   nodes: [
@@ -117,7 +118,8 @@ const codex = {
   ],
 };
 
-const trees = { default: session, opencode, codex };
+const profiled = { ...session, profileLabel: "Lifesum" };
+const trees = { default: session, opencode, codex, profiled };
 const params = new URLSearchParams(location.search);
 const tree = trees[params.get("tree") ?? "default"];
 if (params.has("longdoing")) {

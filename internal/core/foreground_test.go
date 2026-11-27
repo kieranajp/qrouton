@@ -1,6 +1,8 @@
 package core
 
 import (
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -131,9 +133,16 @@ func TestAShellSpinsOnlyWhileAForegroundJobRuns(t *testing.T) {
 		})
 	}
 
+	// The job holds the terminal from before its exec, when a shell's child can
+	// still swallow the interrupt, so ^C waits for the job to say it is running.
+	ready := filepath.Join(t.TempDir(), "ready")
 	settle(tabStatusIdle)
-	typed("set -m\nsleep 30\n")
+	typed("set -m\n/bin/sh -c 'touch " + ready + "; exec sleep 30'\n")
 	settle(tabStatusRunning)
+	waitFor(t, "the job to start", func() bool {
+		_, err := os.Stat(ready)
+		return err == nil
+	})
 	typed("\x03")
 	settle(tabStatusIdle)
 }

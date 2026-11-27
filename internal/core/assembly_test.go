@@ -18,6 +18,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/gittest"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/ticket"
 )
@@ -539,5 +540,59 @@ func TestFetchTurnsATicketIntoItsFieldsAndPassesAFetchErrorThrough(t *testing.T)
 	a.fetch = func(context.Context, string) (ticket.Ticket, error) { return ticket.Ticket{}, ticket.ErrTicketNotFound }
 	if got, err := a.Fetch("https://linear.app/issue/LIF-2841"); !errors.Is(err, ticket.ErrTicketNotFound) || got != (TicketFields{}) {
 		t.Fatalf("a failed fetch = %+v, %v", got, err)
+	}
+}
+
+// A session written against a profile config lacks could never boot, so the
+// draft is refused before anything reaches the disk.
+func TestCreateRefusesAnUnknownProfile(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{Root: root, Profiles: map[string][]config.RunnerProfile{
+		"claude": {{ID: "lifesum", Label: "Lifesum", Dir: "/tmp/claude-lifesum"}},
+	}}
+	repos := &Repositories{cfg: cfg, errs: map[string]error{},
+		repos: []github.Repo{{Org: "acme", Name: "api", DefaultBranch: "main"}}}
+	a := newAssembly(cfg, repos, nil, emitFunc(func(string, any) {}), nil, nil)
+	err := a.Create(DraftInput{Name: "Cleanup", Entropy: "4f3a", Prefix: "feat", Mode: "rpi",
+		Runner: "claude", Profile: "gone", Repos: []RepoPick{{ID: "acme/api", Role: "editing"}}})
+	if !errors.Is(err, launch.ErrProfileUnavailable) {
+		t.Fatalf("Create on a missing profile answered %v, want %v", err, launch.ErrProfileUnavailable)
+	}
+	if !strings.Contains(err.Error(), "claude") || !strings.Contains(err.Error(), "gone") {
+		t.Fatalf("refusal %q does not name the runner and profile", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "cleanup-4f3a")); !os.IsNotExist(err) {
+		t.Fatalf("a refused profile still left a session directory: %v", err)
+	}
+}
+
+func TestCreateRecordsTheProfileInTheManifest(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	cfg := &config.Config{Root: root, Orgs: []string{"acme"}, Profiles: map[string][]config.RunnerProfile{
+		"claude": {{ID: "lifesum", Label: "Lifesum", Dir: "/tmp/claude-lifesum"}},
+	}}
+	repo := github.Repo{Org: "acme", Name: "api", SSHURL: gittest.Origin(t, "api"), DefaultBranch: "main"}
+	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
+	a := newAssembly(cfg, repos, reg, emitFunc(func(string, any) {}), nil, nil)
+
+	if err := a.Create(DraftInput{Name: "API Cleanup", Entropy: "4f3a", Prefix: "fix", Mode: "rpi",
+		Runner: "claude", Profile: "lifesum", Repos: []RepoPick{{ID: "acme/api", Role: "editing"}}}); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "api-cleanup-4f3a")
+	m, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Runner != "claude" || m.Profile != "lifesum" {
+		t.Fatalf("manifest records %q on profile %q, want claude on lifesum", m.Runner, m.Profile)
+	}
+	boot.mu.Lock()
+	runner, profile := boot.runners[dir], boot.profiles[dir]
+	boot.mu.Unlock()
+	if runner != "claude" || profile != "lifesum" {
+		t.Fatalf("the session booted %q on profile %q, want claude on lifesum", runner, profile)
 	}
 }

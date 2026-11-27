@@ -1,16 +1,16 @@
 <script>
   import { onMount } from "svelte";
-  import AssemblyStep from "./AssemblyStep.svelte";
   import AgentStep from "./AgentStep.svelte";
   import DescribeStep from "./DescribeStep.svelte";
   import Dialog from "./Dialog.svelte";
+  import ProgressRows from "./ProgressRows.svelte";
   import RepositoriesStep from "./RepositoriesStep.svelte";
   import { assembling } from "./draft.svelte.js";
   import { begin, end } from "./calls.js";
   import { destination, labels, last, primary, stepKey } from "./steps.js";
 
-  /** @type {{onClose: () => void, gated?: boolean}} */
-  let { onClose, gated = false } = $props();
+  /** @type {{onClose: () => void, gated?: boolean, settingsOpen?: boolean, onSettings?: (tab: import("../settings/tabs.js").SettingsTab) => void}} */
+  let { onClose, gated = false, settingsOpen = false, onSettings } = $props();
 
   const wizard = assembling(() => onClose());
   const repos = wizard.repos;
@@ -21,11 +21,18 @@
   let footer = $derived(
     wizard.status || (wizard.step === last ? destination(wizard.branch, picked) : ""),
   );
-  // Cancelling on step 0 of a gated overlay lands the user on a populated rail
-  // over an empty middle, so there is nothing to cancel to. Back on the later
-  // steps is unaffected: a user who can go back is not at a dead end.
+  // A gated overlay is all an install with no sessions has, so step 0 has nothing
+  // to cancel to. Back on the later steps is unaffected: a user who can go back is
+  // not at a dead end.
   let trapped = $derived(gated && wizard.step === 0);
   let owned = $state(false);
+
+  // A profile added or signed in while Settings covered the wizard shows once it closes.
+  let covered = false;
+  $effect(() => {
+    if (covered && !settingsOpen) wizard.readRunners();
+    covered = settingsOpen;
+  });
 
   onMount(() => {
     let live = true;
@@ -86,6 +93,9 @@
   <AgentStep
     runners={wizard.runners}
     bind:runner={wizard.form.runner}
+    bind:profile={wizard.form.profile}
+    statuses={wizard.statuses}
+    onManage={onSettings ? () => onSettings("agents") : undefined}
     bind:mode={wizard.form.mode} />
 {/snippet}
 
@@ -103,24 +113,9 @@
   onPrimary={wizard.next}
   onEscape={trapped ? undefined : onClose}>
   {#if wizard.creating}
-    <div class="progress">
-      {#each wizard.progress as row, i (i)}
-        <AssemblyStep
-          state={row.state}
-          label={row.label}
-          detail={row.detail}
-          percent={row.percent} />
-      {/each}
-    </div>
+    <ProgressRows rows={wizard.progress} />
   {:else}
     {@render renderers[stepKey(wizard.step)]()}
   {/if}
 </Dialog>
 {/if}
-
-<style>
-  .progress {
-    display: flex;
-    flex-direction: column;
-  }
-</style>

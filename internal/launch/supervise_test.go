@@ -168,22 +168,12 @@ func TestSuperviseConsumesTheExternalPromptOnTheFirstLaunchOnly(t *testing.T) {
 	}
 }
 
-// A second trip through the picker on a session already in RPI adds
-// repositories; it is not a handoff, so the conversation must survive it.
-// Reading the mode alone cannot tell the two apart — only the change can.
-func TestSuperviseKeepsConversationWhenModeIsUnchanged(t *testing.T) {
+func TestSuperviseKeepsConversationOnADeliberateReloadWithUnchangedMode(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeRPI)
 	var argvs [][]string
 	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
 		argvs = append(argvs, argv)
-		if len(argvs) == 1 {
-			// The picker's confirm rewrites the manifest with the same mode.
-			if err := session.SetMode(dir, session.ModeRPI); err != nil {
-				t.Fatal(err)
-			}
-			return true, nil
-		}
-		return false, nil
+		return len(argvs) == 1, nil
 	})
 
 	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err != nil {
@@ -193,39 +183,38 @@ func TestSuperviseKeepsConversationWhenModeIsUnchanged(t *testing.T) {
 		t.Fatalf("expected the runner relaunched once, got %d launches", len(argvs))
 	}
 	if !strings.Contains(strings.Join(argvs[1], " "), claudeContinueFlag) {
-		t.Fatalf("adding repos within RPI dropped %s and discarded the conversation: %v", claudeContinueFlag, argvs[1])
+		t.Fatalf("deliberate reload dropped %s and discarded the conversation: %v", claudeContinueFlag, argvs[1])
 	}
 }
 
-func TestSuperviseDeliversARepositoryNoticeOnTheResumedConversationOnce(t *testing.T) {
+func TestSuperviseDeliversAnEarlierRepositoryNoticeOnALaterDeliberateLaunchOnce(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeAssistant)
-	const notice = "qrouton: session repositories changed — added org/svc for editing at src/svc."
+	const notice = "qrouton: session repositories changed — added org/svc for editing at src/svc. Re-read qrouton.json before continuing with the updated workspace."
+	if err := session.QueueAgentNotice(dir, notice); err != nil {
+		t.Fatal(err)
+	}
 	var argvs [][]string
 	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
 		argvs = append(argvs, argv)
-		if len(argvs) == 1 {
-			if err := session.QueueAgentNotice(dir, notice); err != nil {
-				t.Fatal(err)
-			}
-			return true, nil
+		if _, err := os.Stat(sessionpaths.AgentNotice(dir)); !os.IsNotExist(err) {
+			t.Fatalf("launch did not consume the queued notice: %v", err)
 		}
 		return false, nil
 	})
 
-	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err != nil {
-		t.Fatal(err)
+	for range 2 {
+		if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if len(argvs) != 2 {
-		t.Fatalf("expected two launches, got %d", len(argvs))
+		t.Fatalf("expected two deliberate launches, got %d", len(argvs))
 	}
-	if first := strings.Join(argvs[0], " "); strings.Contains(first, notice) {
-		t.Fatalf("notice reached the launch before it was queued: %v", argvs[0])
+	if first := strings.Join(argvs[0], " "); !strings.Contains(first, claudeContinueFlag) || !strings.Contains(first, notice) {
+		t.Fatalf("later launch = %v, want continue with notice", argvs[0])
 	}
-	if second := strings.Join(argvs[1], " "); !strings.Contains(second, claudeContinueFlag) || !strings.Contains(second, notice) {
-		t.Fatalf("resumed launch = %v, want continue with notice", argvs[1])
-	}
-	if _, err := os.Stat(sessionpaths.AgentNotice(dir)); !os.IsNotExist(err) {
-		t.Fatalf("consumed agent notice remains on disk: %v", err)
+	if second := strings.Join(argvs[1], " "); !strings.Contains(second, claudeContinueFlag) || strings.Contains(second, notice) {
+		t.Fatalf("following launch repeated notice or lost continue: %v", argvs[1])
 	}
 }
 
@@ -548,5 +537,188 @@ func TestSuperviseCarriesTheNoticeOntoTheFreshStart(t *testing.T) {
 	}
 	if second := strings.Join(argvs[1], " "); !strings.Contains(second, notice) {
 		t.Fatalf("fallback launch dropped the notice: %v", argvs[1])
+	}
+}
+
+const supervisedConversation = "b8aaffa4-120a-4a6d-bf40-cc703dc147b8"
+
+// recordSupervisedConversation records a conversation whose transcript is in the
+// folder the default profile's runner reads, and returns that transcript.
+func recordSupervisedConversation(t *testing.T, dir string) string {
+	t.Helper()
+	state := t.TempDir()
+	t.Setenv(claudeConfigDirEnvVar, state)
+	transcript := filepath.Join(state, claudeProjectsDirName, "-s", supervisedConversation+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(transcript, []byte("root\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := session.RecordConversation(dir, session.Conversation{ID: supervisedConversation, Transcript: transcript})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return transcript
+}
+
+func resumesRecorded(argv []string) bool {
+	return strings.Contains(strings.Join(argv, " "), claudeResumeFlag+" "+supervisedConversation)
+}
+
+// Catches a fresh conversation leaving the old ID behind, so a Reload before its
+// first hook would resume the conversation the fresh start replaced.
+func TestSuperviseClearsTheRecordOnEveryFreshLaunch(t *testing.T) {
+	for name, prepare := range map[string]func(t *testing.T, dir string){
+		"initial prompt": func(t *testing.T, dir string) {
+			if err := os.WriteFile(sessionpaths.InitialPrompt(dir), []byte("Fix it."), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"handoff": func(t *testing.T, dir string) {
+			if err := session.SetMode(dir, session.ModeRPI); err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := superviseTestDir(t, session.ModeAssistant)
+			recordSupervisedConversation(t, dir)
+			prepare(t, dir)
+			var launches int
+			swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+				launches++
+				if _, ok := session.ReadConversation(dir); ok || resumesRecorded(argv) {
+					t.Fatalf("fresh launch kept the old conversation: %v", argv)
+				}
+				return false, nil
+			})
+			if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, true); err != nil {
+				t.Fatal(err)
+			}
+			if launches != 1 {
+				t.Fatalf("launches = %d, want 1", launches)
+			}
+		})
+	}
+}
+
+// Catches a conversation whose transcript has gone being sent to a resume that
+// cannot find it, or the fresh start that replaces it keeping its ID.
+func TestSuperviseStartsFreshWhenTheRecordedTranscriptHasGone(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	transcript := recordSupervisedConversation(t, dir)
+	if err := os.Remove(transcript); err != nil {
+		t.Fatal(err)
+	}
+	const notice = "qrouton: session repositories changed — added org/svc for editing at src/svc."
+	if err := session.QueueAgentNotice(dir, notice); err != nil {
+		t.Fatal(err)
+	}
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		if _, ok := session.ReadConversation(dir); ok {
+			t.Fatal("the fresh start launched with the lost conversation still recorded")
+		}
+		return false, nil
+	})
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(argvs) != 1 || resumesRecorded(argvs[0]) || !strings.Contains(strings.Join(argvs[0], " "), notice) {
+		t.Fatalf("launches = %v, want one fresh start carrying the notice", argvs)
+	}
+}
+
+// Catches a resume, or a signal-driven relaunch, dropping the conversation it resumes.
+func TestSuperviseKeepsTheRecordAcrossResumedLaunches(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	recordSupervisedConversation(t, dir)
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		return len(argvs) == 1, nil
+	})
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(argvs) != 2 || !resumesRecorded(argvs[0]) || !resumesRecorded(argvs[1]) {
+		t.Fatalf("launches = %v, want both to resume %s", argvs, supervisedConversation)
+	}
+	if _, ok := session.ReadConversation(dir); !ok {
+		t.Fatal("a resumed launch cleared the record")
+	}
+}
+
+// Catches the clear moving ahead of the announcement, which reopens the window
+// in which the replaced runner's late hook rewrites the record.
+func TestSuperviseClearsTheRecordOnlyAfterAnnouncingTheGeneration(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	recordSupervisedConversation(t, dir)
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) { return false, nil })
+	var recordedAtAnnounce bool
+	announceRunnerGeneration = func(workbench.Handle, string, uint64) error {
+		_, recordedAtAnnounce = session.ReadConversation(dir)
+		return nil
+	}
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, false); err != nil {
+		t.Fatal(err)
+	}
+	if !recordedAtAnnounce {
+		t.Fatal("the record was cleared before the new generation was announced")
+	}
+	if _, ok := session.ReadConversation(dir); ok {
+		t.Fatal("a fresh launch kept the record")
+	}
+}
+
+// Catches a failed resume of a conversation the runner can still find dropping
+// it for a fresh start, which loses qrouton's only reference to it. The record
+// names the profile the session left, so the check has to look where this
+// launch's runner reads.
+func TestSuperviseKeepsTheConversationWhenItsRunnerFails(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	transcript := recordSupervisedConversation(t, dir)
+	left := session.Conversation{ID: supervisedConversation, Transcript: "/gone/.claude/projects/-s/" + supervisedConversation + ".jsonl"}
+	if err := session.RecordConversation(dir, left); err != nil {
+		t.Fatal(err)
+	}
+	const notice = "qrouton: session repositories changed — added org/svc for editing at src/svc."
+	for name, tc := range map[string]struct {
+		took    bool
+		requeue string
+	}{
+		"before the conversation took the notice": {false, notice},
+		"after the conversation took the notice":  {true, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := session.QueueAgentNotice(dir, notice); err != nil {
+				t.Fatal(err)
+			}
+			var argvs [][]string
+			swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+				argvs = append(argvs, argv)
+				if tc.took {
+					if err := os.WriteFile(transcript, []byte("root\nnotice\n"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return false, errors.New("exit status 1")
+			})
+			if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, true); !errors.Is(err, ErrKeptForReload) {
+				t.Fatalf("Supervise = %v, want %v", err, ErrKeptForReload)
+			}
+			if len(argvs) != 1 || !resumesRecorded(argvs[0]) {
+				t.Fatalf("launches = %v, want the one resume by ID and no fresh start", argvs)
+			}
+			if got, ok := session.ReadConversation(dir); !ok || got != left {
+				t.Fatalf("record = %+v, %v, want %+v kept", got, ok, left)
+			}
+			notices, err := session.TakeAgentNotices(dir)
+			if err != nil || session.JoinAgentNotices(notices) != tc.requeue {
+				t.Fatalf("notices left = %v, %v, want %q", notices, err, tc.requeue)
+			}
+		})
 	}
 }

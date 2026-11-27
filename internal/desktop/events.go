@@ -73,6 +73,8 @@ func (t *translator) deliver(event *qroutonv1.Event) {
 	switch payload := event.GetPayload().(type) {
 	case *qroutonv1.Event_Ollama:
 		t.emit(ollamaEvent, pagejson.Marshal(payload.Ollama))
+	case *qroutonv1.Event_Dashboard:
+		t.emit(dashboardEvent, pagejson.Marshal(payload.Dashboard))
 	case *qroutonv1.Event_Chrome:
 		t.emit(chromeEvent, pagejson.Marshal(payload.Chrome))
 	case *qroutonv1.Event_AgentTree:

@@ -41,7 +41,7 @@
 
 <div class="controls">
   <div class="search">
-    <TextField icon="search" valueVoice="literal" bind:value={query} />
+    <TextField aria-label="Search repositories" clearLabel="Clear repository search" icon="search" valueVoice="literal" bind:value={query} />
   </div>
   <SegmentedControl {segments} value={owners} multiple onSelect={onOwner} />
   <Button variant="secondary" icon="refresh" onclick={onRefresh} disabled={refreshing}

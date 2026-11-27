@@ -22,6 +22,7 @@ const (
 
 	sessionRootFlag   = flagPrefix + SessionRootFlag
 	runnerFlag        = flagPrefix + RunnerFlag
+	profileFlag       = flagPrefix + ProfileFlag
 	editorJSONFlag    = flagPrefix + EditorJSONFlag
 	workbenchJSONFlag = flagPrefix + WorkbenchJSONFlag
 	generationFlag    = flagPrefix + GenerationFlag
@@ -33,13 +34,15 @@ const (
 // The command line qrouton launches itself with. The commands that parse it
 // take their names from here.
 const (
-	MCPSubcommand        = "mcp"
-	AgentEventSubcommand = "agent-event"
-	AgentSubcommand      = "agent"
-	ShellSubcommand      = "shell"
+	MCPSubcommand         = "mcp"
+	AgentEventSubcommand  = "agent-event"
+	AgentNoticeSubcommand = "agent-notice"
+	AgentSubcommand       = "agent"
+	ShellSubcommand       = "shell"
 
 	SessionRootFlag   = "session-root"
 	RunnerFlag        = "runner"
+	ProfileFlag       = "profile"
 	EditorJSONFlag    = "editor-json"
 	WorkbenchJSONFlag = "workbench-json"
 	GenerationFlag    = "generation"
@@ -119,6 +122,7 @@ const (
 	agySkipPermissionsFlag    = "--dangerously-skip-permissions"
 
 	claudeContinueFlag = "--continue"
+	claudeResumeFlag   = "--resume"
 	claudeNameFlag     = "--name"
 	codexResumeCmd     = "resume"
 	codexResumeLast    = "--last"
@@ -135,6 +139,44 @@ const (
 
 	claudeMaintainProjectWorkingDirEnvVar = "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR"
 	claudeMaintainProjectWorkingDirValue  = "1"
+
+	// claudeConfigDirEnvVar moves Claude's whole state, its stored login included.
+	claudeConfigDirEnvVar = "CLAUDE_CONFIG_DIR"
+	claudeHomeDirName     = ".claude"
+	claudeProjectsDirName = "projects"
+	homeEnvVar            = "HOME"
+	stagedDirPattern      = ".*.staged"
+	retiredDirPattern     = ".*.retired"
+)
+
+const (
+	profileDirMode           = 0o700
+	profileUnavailableFormat = "%w: runner %q has no profile %q"
+
+	envCommand         = "env"
+	envSep             = "="
+	profileDirHome     = "~"
+	profileDirFormat   = ".%s-%s"
+	codexSignedOutExit = 1
+	statusWaitDelay    = time.Second
+)
+
+const (
+	claudeAuthCmd   = "auth"
+	claudeLoginCmd  = "login"
+	claudeStatusCmd = "status"
+	claudeJSONFlag  = "--json"
+	codexLoginCmd   = "login"
+	codexStatusCmd  = "status"
+
+	claudeUseBedrockEnvVar   = "CLAUDE_CODE_USE_BEDROCK"
+	claudeUseVertexEnvVar    = "CLAUDE_CODE_USE_VERTEX"
+	claudeUseFoundryEnvVar   = "CLAUDE_CODE_USE_FOUNDRY"
+	anthropicAuthTokenEnvVar = "ANTHROPIC_AUTH_TOKEN"
+	anthropicAPIKeyEnvVar    = "ANTHROPIC_API_KEY"
+	claudeOAuthTokenEnvVar   = "CLAUDE_CODE_OAUTH_TOKEN"
+	codexAPIKeyEnvVar        = "CODEX_API_KEY"
+	codexAccessTokenEnvVar   = "CODEX_ACCESS_TOKEN"
 )
 
 // Keys in the runner configuration qrouton injects. Each runner accepts MCP
@@ -159,6 +201,12 @@ const (
 	codexCommandHookFormat       = `[{hooks=[{type="command",command=%s,timeout=%d}]}]`
 	codexHookTimeoutSeconds      = int(agentevent.SignalTimeout/time.Second) + 1
 	codexAgentEventCommandFormat = `"$%s" %s`
+	codexPostToolUseHook         = "hooks." + agentevent.HookPostToolUse + "="
+	codexUserPromptSubmitHook    = "hooks." + agentevent.HookUserPromptSubmit + "="
+
+	// noticeHookFormat leaves the qrouton binary unstarted while the queue is
+	// empty, which it is on almost every tool call.
+	noticeHookFormat = "[ -s %s ] || exit 0; exec %s " + AgentNoticeSubcommand + " " + sessionRootFlag + " %s"
 
 	openCodeMCPKey        = "mcp"
 	openCodeLocalType     = "local"

@@ -13,12 +13,12 @@ import (
 type localClient struct {
 	r        renderer
 	launcher Launcher
-	choose   func() (string, error)
+	choose   func(showHidden bool) (string, error)
 }
 
 var _ core.Client = (*localClient)(nil)
 
-func newLocalClient(r renderer, launcher Launcher, choose func() (string, error)) *localClient {
+func newLocalClient(r renderer, launcher Launcher, choose func(showHidden bool) (string, error)) *localClient {
 	return &localClient{r: r, launcher: launcher, choose: choose}
 }
 
@@ -78,11 +78,11 @@ func (c *localClient) CopyFile(path string) error {
 }
 
 // ChooseDirectory answers "" on a cancel.
-func (c *localClient) ChooseDirectory() (string, error) {
+func (c *localClient) ChooseDirectory(showHidden bool) (string, error) {
 	if c.choose == nil {
 		return "", core.ErrNoDirectoryPicker
 	}
-	return c.choose()
+	return c.choose(showHidden)
 }
 
 func (c *localClient) Chime(sessionRoot string) {

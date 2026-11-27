@@ -48,11 +48,32 @@ func chromeFields(f status.Fields) *qroutonv1.ChromeFields {
 		SessionSummary:      &qroutonv1.SessionSummary{Text: f.SessionSummary.Text, Stage: f.SessionSummary.Stage, At: f.SessionSummary.At},
 		PullRequests:        &qroutonv1.PullRequestList{Items: each(f.PullRequests.Items, pullRequest), SignedOut: f.PullRequests.SignedOut},
 		SessionDigest:       &qroutonv1.SessionDigest{Text: f.SessionDigest.Text, At: f.SessionDigest.At},
+		PickerId:            f.PickerID,
+		Profiles:            each(f.Profiles, runnerProfiles),
 	}
 }
 
 func pullRequest(p status.PullRequest) *qroutonv1.GitHubPullRequest {
-	return &qroutonv1.GitHubPullRequest{Repo: p.Repo, Number: int32(p.Number), Title: p.Title, Url: p.URL, State: p.State}
+	return &qroutonv1.GitHubPullRequest{
+		Repo:          p.Repo,
+		Number:        int32(p.Number),
+		Title:         p.Title,
+		Url:           p.URL,
+		State:         p.State,
+		Author:        p.Author,
+		Review:        p.Review,
+		ChecksFailing: p.ChecksFailing,
+		UpdatedAt:     timestamp(p.UpdatedAt),
+	}
+}
+
+func runnerProfiles(r status.RunnerProfiles) *qroutonv1.RunnerProfiles {
+	return &qroutonv1.RunnerProfiles{
+		Runner: r.Runner,
+		Profiles: each(r.Profiles, func(p status.Profile) *qroutonv1.Profile {
+			return &qroutonv1.Profile{Id: p.ID, Label: p.Label}
+		}),
+	}
 }
 
 func sessionRow(r status.SessionRow) *qroutonv1.SessionRow {
@@ -70,6 +91,8 @@ func sessionRow(r status.SessionRow) *qroutonv1.SessionRow {
 		Unseen:   int32(r.Unseen),
 		Opened:   timestamp(r.Opened),
 		Sticker:  r.Sticker,
+		Runner:   r.Runner,
+		Profile:  r.Profile,
 	}
 }
 
@@ -122,6 +145,7 @@ func agentTree(t status.AgentTree) *qroutonv1.AgentTree {
 		Coverage:      t.Coverage,
 		Tools:         t.Tools,
 		Nodes:         each(t.Nodes, agentNode),
+		ProfileLabel:  t.ProfileLabel,
 	}
 }
 

@@ -7,6 +7,7 @@ import "github.com/kieranajp/qrouton/internal/status"
 // for delivery, which lets a caller hold a lock that orders its events.
 type Events interface {
 	Ollama(OllamaStatus)
+	Dashboard(DashboardStatus)
 	Chrome(status.Fields)
 	AgentTree(slug string, tree status.AgentTree)
 	WindowsOpened(Surfaces)

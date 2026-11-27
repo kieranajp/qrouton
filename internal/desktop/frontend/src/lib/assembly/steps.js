@@ -44,17 +44,32 @@ export function destination(branch, repos) {
 /** @param {string} branch */
 export const joining = (branch) => (branch ? `Added repositories join ${branch}` : "");
 
-/** The empty-session fallback waits until the first payload settles.
- * @param {boolean} requested
- * @param {boolean} settled
- * @param {string} slug */
-export const assemblyOpen = (requested, settled, slug) => !!settled && (!!requested || !slug);
+/** An install with no sessions has nothing to cancel back to, so the dialog is all it shows.
+ * A shown session counts before the rail lists it.
+ * @param {string} slug @param {number} sessions */
+export const assemblyGated = (slug, sessions) => !slug && !sessions;
+
+/** The empty-install fallback waits until the first payload settles.
+ * @param {boolean} requested @param {boolean} settled @param {string} slug @param {number} sessions */
+export const assemblyOpen = (requested, settled, slug, sessions) =>
+  !!settled && (!!requested || assemblyGated(slug, sessions));
+
+export const ADD_KEY = "add";
+
+/** pickerKey is the request the overlay answers: an add keeps it until it ends, so
+ * an escalation arriving mid-add waits its turn. Empty is no overlay.
+ * @param {string} added @param {string} shown @param {string} pendingID */
+export const pickerKey = (added, shown, pendingID) => {
+  if (!shown) return "";
+  if (added === shown) return ADD_KEY;
+  return pendingID ?? "";
+};
 
 /** An add-repositories picker closes when its originating session is no longer shown.
+ * @param {string} added
  * @param {string} shown
- * @param {boolean} pending
- * @param {string} added the session add-repos was pressed on */
-export const pickerOpen = (shown, pending, added) => !!shown && (!!pending || added === shown);
+ * @param {string} pendingID */
+export const pickerOpen = (added, shown, pendingID) => !!pickerKey(added, shown, pendingID);
 
 /**
  * refusal is how the footer says what Go refused, which names the field before

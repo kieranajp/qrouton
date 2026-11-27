@@ -1,7 +1,9 @@
 package core
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
@@ -104,4 +106,80 @@ func ptySize(p *PTY) (cols, rows int, err error) {
 		return 0, 0, err
 	}
 	return int(size.Cols), int(size.Rows), nil
+}
+
+// Catches a switch copying the conversation while the runner the supervisor
+// started is still writing it: Stop returns once the supervisor alone has exited.
+func TestStopGroupReturnsOnlyOnceAGrandchildIgnoringSIGTERMIsGone(t *testing.T) {
+	marker := t.TempDir() + "/grandchild.pid"
+	p := startTestPTY(t, deafGrandchild(marker)...)
+	grandchild := readPID(t, marker)
+	t.Cleanup(func() { _ = syscall.Kill(grandchild, syscall.SIGKILL) })
+
+	stopped := make(chan error, 1)
+	go func() { stopped <- p.StopGroup() }()
+	select {
+	case err := <-stopped:
+		if err != nil {
+			t.Fatalf("StopGroup = %v, want a drained group", err)
+		}
+	case <-time.After(waitCeiling):
+		t.Fatal("StopGroup never returned")
+	}
+	if executing(t, grandchild) {
+		t.Fatal("StopGroup returned with the grandchild still running")
+	}
+}
+
+// Catches StopGroup reporting a drained group while a process it could not kill
+// is still running, which lets a switch copy under a live writer.
+func TestStopGroupReportsAGroupThatOutlivesSIGKILL(t *testing.T) {
+	marker := t.TempDir() + "/grandchild.pid"
+	p := startTestPTY(t, deafGrandchild(marker)...)
+	grandchild := readPID(t, marker)
+	t.Cleanup(func() { _ = syscall.Kill(grandchild, syscall.SIGKILL) })
+	p.signal, p.drain = ignoreSIGKILL, 50*time.Millisecond
+
+	if err := p.StopGroup(); !errors.Is(err, ErrGroupNotDrained) {
+		t.Fatalf("StopGroup = %v, want %v", err, ErrGroupNotDrained)
+	}
+}
+
+func ignoreSIGKILL(pid int, sig syscall.Signal) error {
+	if sig == syscall.SIGKILL {
+		return nil
+	}
+	return syscall.Kill(pid, sig)
+}
+
+func readPID(t *testing.T, path string) int {
+	t.Helper()
+	var pid int
+	waitFor(t, "a pid in "+path, func() bool {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return false
+		}
+		pid, err = strconv.Atoi(strings.TrimSpace(string(b)))
+		return err == nil && pid > 0
+	})
+	return pid
+}
+
+// executing is false for a pid that has gone and for a zombie, which kill(pid, 0)
+// still answers for until its parent reaps it.
+func executing(t *testing.T, pid int) bool {
+	t.Helper()
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	if _, exited := err.(*exec.ExitError); err != nil && !exited {
+		t.Fatalf("ps: %v", err)
+	}
+	state := strings.TrimSpace(string(out))
+	return state != "" && !strings.HasPrefix(state, "Z")
+}
+
+// deafGrandchild starts a grandchild that ignores SIGTERM and SIGHUP, and writes
+// its pid to marker only once it does, so no stop can land before the trap.
+func deafGrandchild(marker string) []string {
+	return []string{"/bin/sh", "-c", "/bin/sh -c 'trap \"\" TERM HUP; echo $$ > " + marker + "; exec sleep 300' & wait"}
 }

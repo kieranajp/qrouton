@@ -15,6 +15,8 @@ export const BUG_REPORTS_CONFIRM = "github.com/kieranajp/qrouton/internal/deskto
 export const BUG_REPORTS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.BugReports.Load";
 export const CHROME_AGENT_TREE = "github.com/kieranajp/qrouton/internal/desktop.Chrome.AgentTree";
 export const CHROME_SNAPSHOT = "github.com/kieranajp/qrouton/internal/desktop.Chrome.Snapshot";
+export const DASHBOARD_REFRESH = "github.com/kieranajp/qrouton/internal/desktop.Dashboard.Refresh";
+export const DASHBOARD_SNAPSHOT = "github.com/kieranajp/qrouton/internal/desktop.Dashboard.Snapshot";
 export const FIRST_RUN_CHOOSE_ROOT = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.ChooseRoot";
 export const FIRST_RUN_LOGIN = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.Login";
 export const FIRST_RUN_SAVE = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.Save";
@@ -23,6 +25,7 @@ export const OLLAMA_CANCEL_PULL = "github.com/kieranajp/qrouton/internal/desktop
 export const OLLAMA_CHECK = "github.com/kieranajp/qrouton/internal/desktop.Ollama.Check";
 export const OLLAMA_PULL = "github.com/kieranajp/qrouton/internal/desktop.Ollama.Pull";
 export const ORGS_LIST = "github.com/kieranajp/qrouton/internal/desktop.Orgs.List";
+export const PICKER_ABORT = "github.com/kieranajp/qrouton/internal/desktop.Picker.Abort";
 export const PICKER_CANCEL = "github.com/kieranajp/qrouton/internal/desktop.Picker.Cancel";
 export const PICKER_CONFIRM = "github.com/kieranajp/qrouton/internal/desktop.Picker.Confirm";
 export const PICKER_ESCALATE = "github.com/kieranajp/qrouton/internal/desktop.Picker.Escalate";
@@ -35,6 +38,14 @@ export const PRESENTER_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Pr
 export const PRESENTER_NOTE = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Note";
 export const PRESENTER_OPEN = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Open";
 export const PRESENTER_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Show";
+export const PROFILES_ADD = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Add";
+export const PROFILES_CHOOSE_FOLDER = "github.com/kieranajp/qrouton/internal/desktop.Profiles.ChooseFolder";
+export const PROFILES_DELETE = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Delete";
+export const PROFILES_RENAME = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Rename";
+export const PROFILES_SIGN_IN = "github.com/kieranajp/qrouton/internal/desktop.Profiles.SignIn";
+export const PROFILES_STATUS = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Status";
+export const PROFILES_SUGGEST = "github.com/kieranajp/qrouton/internal/desktop.Profiles.Suggest";
+export const PROFILES_VIEW = "github.com/kieranajp/qrouton/internal/desktop.Profiles.View";
 export const REPOSITORIES_BRANCHES = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Branches";
 export const REPOSITORIES_CACHED = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Cached";
 export const REPOSITORIES_REFRESH = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Refresh";
@@ -47,6 +58,8 @@ export const SESSIONS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.S
 export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reveal";
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
+export const SESSIONS_SHOW_DASHBOARD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.ShowDashboard";
+export const SESSIONS_SWITCH_PROFILE = "github.com/kieranajp/qrouton/internal/desktop.Sessions.SwitchProfile";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
 export const SESSIONS_UNLOAD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Unload";
 export const SETTINGS_ADJUST_UI_SCALE = "github.com/kieranajp/qrouton/internal/desktop.Settings.AdjustUIScale";
@@ -82,6 +95,7 @@ export const AGENT_TREE_EVENT = "agents:tree:";
 export const ASSEMBLY_PROGRESS_EVENT = "assembly:progress";
 export const ASSEMBLY_REQUESTED_EVENT = "assembly:requested";
 export const CHROME_EVENT = "chrome:update";
+export const DASHBOARD_EVENT = "dashboard:update";
 export const OLLAMA_EVENT = "ollama:status";
 export const ORGS_CHANGED_EVENT = "orgs:changed";
 export const PRESENTER_CLOSED_EVENT = "presenter:closed";
@@ -168,6 +182,14 @@ export const BUG_REPORT_STATUSES = Object.freeze({
   UNKNOWN: "unknown",
 });
 
+/** @typedef {"pending"|"answered"|"unavailable"|"none"} DashboardPullState */
+export const DASHBOARD_PULL_STATES = Object.freeze({
+  PENDING: "pending",
+  ANSWERED: "answered",
+  UNAVAILABLE: "unavailable",
+  NONE: "none",
+});
+
 /** @typedef {"diff"|"assets"|"markdown"} DocumentFormat */
 export const DOCUMENT_FORMATS = Object.freeze({
   DIFF: "diff",
@@ -248,6 +270,12 @@ export const PROGRESS_STATUSES = Object.freeze({
   ADVANCED: "advanced",
 });
 
+/** @typedef {"approved"|"changes-requested"} PullRequestReview */
+export const PULL_REQUEST_REVIEWS = Object.freeze({
+  APPROVED: "approved",
+  CHANGES_REQUESTED: "changes-requested",
+});
+
 /** @typedef {"open"|"draft"|"merged"|"closed"} PullRequestState */
 export const PULL_REQUEST_STATES = Object.freeze({
   OPEN: "open",
@@ -285,6 +313,13 @@ export const SETTINGS_FIELDS = Object.freeze({
   STICKERS: "stickers",
   UI_SCALE: "uiScale",
   THOUGHTS: "thoughts",
+});
+
+/** @typedef {"signed-in"|"signed-out"|"unknown"} SignInState */
+export const SIGN_IN_STATES = Object.freeze({
+  SIGNED_IN: "signed-in",
+  SIGNED_OUT: "signed-out",
+  UNKNOWN: "unknown",
 });
 
 /** @typedef {"running"|"succeeded"|"failed"|"waiting"|"idle"} TabStatus */
@@ -326,7 +361,21 @@ export const SESSION_UNLOAD_LABEL = "Unload";
 
 export const SESSION_UNLOAD_FAILED = "Session could not be unloaded";
 
+export const SESSION_SHOW_FAILED = "Session could not be opened";
+
 export const SESSION_REORDER_FAILED = "Session could not be moved";
+
+export const SESSION_SWITCH_PROFILE_LABEL = "Switch profile";
+
+export const SESSION_SWITCH_PROFILE_FAILED = "Profile could not be switched";
+
+export const SESSION_SWITCH_PROFILE_NEEDS_MESSAGE = "Send one message, then switch profile";
+
+export const PROFILE_CURRENT_META = "current";
+
+export const PROFILE_DEFAULT_LABEL = "Default";
+
+export const NO_CONVERSATION_REFUSAL = "send the session one message before switching its profile";
 
 export const SWITCHER_LABEL = "Switch session";
 
@@ -366,7 +415,7 @@ export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green
 /** @type {readonly StickerSymbol[]} */
 export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, placing: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, pickerID: string, welcoming: boolean, placing: boolean, stickers: any[], profiles: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -393,9 +442,11 @@ export const CHROME_DEFAULTS = {
   },
   root: "",
   picker: false,
+  pickerID: "",
   welcoming: false,
   placing: false,
   stickers: [],
+  profiles: [],
   sessionSummary: {
     text: "",
     stage: "",

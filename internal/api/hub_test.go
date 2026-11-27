@@ -144,6 +144,21 @@ func TestAnEventWithInvalidUTF8CrossesTheStream(t *testing.T) {
 	}
 }
 
+// Catches a repair that walks a map field as a message, which panics on the
+// dashboard's sessions and leaves an invalid slug or title to end the stream.
+func TestADashboardWithInvalidUTF8CrossesTheStream(t *testing.T) {
+	p, hub := served(t)
+	sub := subscribeAfter(t, p, 0)
+	hub.Dashboard(core.DashboardStatus{Sessions: map[string]core.DashboardSession{
+		"slug\xff": {PullRequests: []status.PullRequest{{Title: "fix\xfe"}}},
+	}})
+	sessions := sub.next().GetDashboard().GetSessions()
+	got, ok := sessions["slug\uFFFD"]
+	if !ok || len(sessions) != 1 || got.GetPullRequests()[0].GetTitle() != "fix\uFFFD" {
+		t.Fatalf("the dashboard arrived as %v", sessions)
+	}
+}
+
 // Catches a backlog bounded only by count, which a run of large documents
 // would grow by every one of them.
 func TestTheBacklogStaysWithinItsByteBudget(t *testing.T) {

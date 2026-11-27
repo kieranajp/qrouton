@@ -11,7 +11,7 @@ import (
 func home(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv(homeEnvVar, dir)
+	t.Setenv(HomeEnvVar, dir)
 	if body != "" {
 		if err := os.WriteFile(filepath.Join(dir, configFile), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
@@ -51,7 +51,7 @@ func TestConfiguredMaxDepthReadsBothSpellings(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home(t, tc.body)
-			if got := MaxDepth(nil); got != tc.want {
+			if got := MaxDepth("", nil); got != tc.want {
 				t.Fatalf("MaxDepth(nil) = %d, want %d", got, tc.want)
 			}
 		})
@@ -80,7 +80,7 @@ func TestArgvOverridesTheConfigFile(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home(t, "[agents]\nmax_depth = 3\n")
-			if got := MaxDepth(tc.argv); got != tc.want {
+			if got := MaxDepth("", tc.argv); got != tc.want {
 				t.Fatalf("MaxDepth(%v) = %d, want %d", tc.argv, got, tc.want)
 			}
 		})
@@ -92,7 +92,7 @@ func TestArgvOverridesTheConfigFile(t *testing.T) {
 func TestMaxDepthSettingIsReadBackByMaxDepth(t *testing.T) {
 	home(t, "")
 	argv := []string{Binary, ConfigFlag, MaxDepthSetting(RequiredMaxDepth)}
-	if got := MaxDepth(argv); got != RequiredMaxDepth {
+	if got := MaxDepth("", argv); got != RequiredMaxDepth {
 		t.Fatalf("MaxDepth(%v) = %d, want the depth just set (%d)", argv, got, RequiredMaxDepth)
 	}
 }
@@ -103,5 +103,19 @@ func TestCodexDefaultIsTooShallowForALead(t *testing.T) {
 	if DefaultMaxDepth >= RequiredMaxDepth {
 		t.Fatalf("default depth %d already meets the required %d, so the injection is pointless",
 			DefaultMaxDepth, RequiredMaxDepth)
+	}
+}
+
+func TestMaxDepthReadsTheGivenHome(t *testing.T) {
+	home(t, "[agents]\nmax_depth = 3\n")
+	profile := t.TempDir()
+	if err := os.WriteFile(filepath.Join(profile, configFile), []byte("[agents]\nmax_depth = 5\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := MaxDepth(profile, nil); got != 5 {
+		t.Fatalf("MaxDepth(profile) = %d, want the profile's 5", got)
+	}
+	if got := MaxDepth("", nil); got != 3 {
+		t.Fatalf("MaxDepth(\"\") = %d, want CODEX_HOME's 3", got)
 	}
 }

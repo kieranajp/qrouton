@@ -16,16 +16,16 @@ import (
 
 type fakeClient struct{}
 
-func (f *fakeClient) Focused() bool                    { return false }
-func (f *fakeClient) Raise()                           {}
-func (f *fakeClient) SessionShown(string)              {}
-func (f *fakeClient) Supports(core.Capability) bool    { return false }
-func (f *fakeClient) Reveal(string) error              { return core.ErrNoRevealCommand }
-func (f *fakeClient) OpenText(string) error            { return core.ErrNoOpenTextCommand }
-func (f *fakeClient) CopyImage(string) error           { return core.ErrNoCopyImageCommand }
-func (f *fakeClient) CopyFile(string) error            { return core.ErrNoCopyFileCommand }
-func (f *fakeClient) ChooseDirectory() (string, error) { return "", core.ErrNoDirectoryPicker }
-func (f *fakeClient) Chime(string)                     {}
+func (f *fakeClient) Focused() bool                        { return false }
+func (f *fakeClient) Raise()                               {}
+func (f *fakeClient) SessionShown(string)                  {}
+func (f *fakeClient) Supports(core.Capability) bool        { return false }
+func (f *fakeClient) Reveal(string) error                  { return core.ErrNoRevealCommand }
+func (f *fakeClient) OpenText(string) error                { return core.ErrNoOpenTextCommand }
+func (f *fakeClient) CopyImage(string) error               { return core.ErrNoCopyImageCommand }
+func (f *fakeClient) CopyFile(string) error                { return core.ErrNoCopyFileCommand }
+func (f *fakeClient) ChooseDirectory(bool) (string, error) { return "", core.ErrNoDirectoryPicker }
+func (f *fakeClient) Chime(string)                         {}
 
 // fakeOllama has no model and holds a pull open until its context ends.
 type fakeOllama struct {

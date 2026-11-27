@@ -39,6 +39,34 @@ const (
 // supervisor signals; the two bound different processes and need not agree.
 const terminateGrace = 3 * time.Second
 
+const groupPollInterval = 20 * time.Millisecond
+
+const noConversationRefusal = "send the session one message before switching its profile"
+
+const (
+	// dashboardInterval paces the refresh of every session's pull requests and
+	// git stats; dashboardShownInterval paces pull requests alone while a session is shown.
+	dashboardInterval      = 5 * time.Minute
+	dashboardShownInterval = 60 * time.Second
+	dashboardTimeout       = 10 * time.Second
+	dashboardLogFormat     = "pull requests: %v"
+
+	pullsCacheSchemaVersion = 1
+	pullsCacheDirMode       = 0o755
+	pullsCacheFileMode      = 0o600
+	// pullsCacheLogKey files a failed write apart from the refresh and each alias.
+	pullsCacheLogKey = "pulls.json"
+)
+
+// A session's pull requests are pending until each of its branches is answered,
+// unavailable while any branch failed its last answer, and none with no branch to ask about.
+const (
+	dashboardPullsPending     = "pending"
+	dashboardPullsAnswered    = "answered"
+	dashboardPullsUnavailable = "unavailable"
+	dashboardPullsNone        = "none"
+)
+
 const (
 	ollamaStateReady       = "ready"
 	ollamaStateMissing     = "missing"
@@ -112,11 +140,6 @@ const (
 
 	// repoStatInterval paces the git stats: three subprocesses per active repo.
 	repoStatInterval = 15 * time.Second
-
-	// pullRequestInterval paces the shown session's GitHub pull request fetch.
-	pullRequestInterval  = 60 * time.Second
-	pullRequestTimeout   = 10 * time.Second
-	pullRequestLogFormat = "pull requests: %s: %v"
 
 	// activityQuiet is how long the conversation PTY has to stay silent before
 	// the agent counts as idle. A runner redraws its spinner far faster.
@@ -203,6 +226,7 @@ const (
 	stickerFieldFormat    = "%s.%d"
 	stickerDuplicate      = "another sticker already uses this colour and symbol"
 	stickerIDBytes        = 4
+	pickerIDBytes         = 8
 	uiScaleRefusal        = "choose a scale from 80% to 150% in steps of 10%"
 	unknownUIScaleAction  = "unknown UI scale action"
 )
@@ -219,4 +243,18 @@ const (
 	// which fills in after the screen has already drawn.
 	loginTimeout       = 5 * time.Second
 	githubCheckTimeout = 4 * time.Second
+)
+
+const (
+	profileProbeTimeout = 8 * time.Second
+
+	signInLabelFormat        = "Sign in · %s"
+	signInProfileLabelFormat = "Sign in · %s · %s"
+
+	credentialWarningFormat = "Every %[2]s profile signs in with %[1]s from qrouton's environment, not its own stored login."
+	credentialJoin          = ", "
+
+	profileTakenFormat   = "%w: %q"
+	profileFolderFormat  = "%w: %q"
+	profileMissingFormat = "%w: runner %q has no profile %q"
 )

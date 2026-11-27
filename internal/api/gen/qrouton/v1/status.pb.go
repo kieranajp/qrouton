@@ -48,6 +48,8 @@ type ChromeFields struct {
 	SessionSummary      *SessionSummary        `protobuf:"bytes,21,opt,name=session_summary,json=sessionSummary,proto3" json:"session_summary,omitempty"`
 	PullRequests        *PullRequestList       `protobuf:"bytes,22,opt,name=pull_requests,json=pullRequests,proto3" json:"pull_requests,omitempty"`
 	SessionDigest       *SessionDigest         `protobuf:"bytes,23,opt,name=session_digest,json=sessionDigest,proto3" json:"session_digest,omitempty"`
+	PickerId            string                 `protobuf:"bytes,24,opt,name=picker_id,json=pickerID,proto3" json:"picker_id,omitempty"`
+	Profiles            []*RunnerProfiles      `protobuf:"bytes,25,rep,name=profiles,proto3" json:"profiles,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -243,6 +245,20 @@ func (x *ChromeFields) GetSessionDigest() *SessionDigest {
 	return nil
 }
 
+func (x *ChromeFields) GetPickerId() string {
+	if x != nil {
+		return x.PickerId
+	}
+	return ""
+}
+
+func (x *ChromeFields) GetProfiles() []*RunnerProfiles {
+	if x != nil {
+		return x.Profiles
+	}
+	return nil
+}
+
 type SessionSummary struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
@@ -414,6 +430,10 @@ type GitHubPullRequest struct {
 	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
 	Url           string                 `protobuf:"bytes,4,opt,name=url,proto3" json:"url,omitempty"`
 	State         string                 `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	Author        string                 `protobuf:"bytes,6,opt,name=author,proto3" json:"author,omitempty"`
+	Review        string                 `protobuf:"bytes,7,opt,name=review,proto3" json:"review,omitempty"`
+	ChecksFailing bool                   `protobuf:"varint,8,opt,name=checks_failing,json=checksFailing,proto3" json:"checks_failing,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -483,6 +503,34 @@ func (x *GitHubPullRequest) GetState() string {
 	return ""
 }
 
+func (x *GitHubPullRequest) GetAuthor() string {
+	if x != nil {
+		return x.Author
+	}
+	return ""
+}
+
+func (x *GitHubPullRequest) GetReview() string {
+	if x != nil {
+		return x.Review
+	}
+	return ""
+}
+
+func (x *GitHubPullRequest) GetChecksFailing() bool {
+	if x != nil {
+		return x.ChecksFailing
+	}
+	return false
+}
+
+func (x *GitHubPullRequest) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
 type SessionRow struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -496,6 +544,8 @@ type SessionRow struct {
 	Unseen        int32                  `protobuf:"varint,9,opt,name=unseen,proto3" json:"unseen,omitempty"`
 	Opened        *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=opened,proto3" json:"opened,omitempty"`
 	Sticker       string                 `protobuf:"bytes,11,opt,name=sticker,proto3" json:"sticker,omitempty"`
+	Runner        string                 `protobuf:"bytes,12,opt,name=runner,proto3" json:"runner,omitempty"`
+	Profile       string                 `protobuf:"bytes,13,opt,name=profile,proto3" json:"profile,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -607,6 +657,125 @@ func (x *SessionRow) GetSticker() string {
 	return ""
 }
 
+func (x *SessionRow) GetRunner() string {
+	if x != nil {
+		return x.Runner
+	}
+	return ""
+}
+
+func (x *SessionRow) GetProfile() string {
+	if x != nil {
+		return x.Profile
+	}
+	return ""
+}
+
+// RunnerProfiles is one runner's named profiles, for the sessions that can switch between them.
+type RunnerProfiles struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Runner        string                 `protobuf:"bytes,1,opt,name=runner,proto3" json:"runner,omitempty"`
+	Profiles      []*Profile             `protobuf:"bytes,2,rep,name=profiles,proto3" json:"profiles,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunnerProfiles) Reset() {
+	*x = RunnerProfiles{}
+	mi := &file_qrouton_v1_status_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunnerProfiles) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunnerProfiles) ProtoMessage() {}
+
+func (x *RunnerProfiles) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_status_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunnerProfiles.ProtoReflect.Descriptor instead.
+func (*RunnerProfiles) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *RunnerProfiles) GetRunner() string {
+	if x != nil {
+		return x.Runner
+	}
+	return ""
+}
+
+func (x *RunnerProfiles) GetProfiles() []*Profile {
+	if x != nil {
+		return x.Profiles
+	}
+	return nil
+}
+
+type Profile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Profile) Reset() {
+	*x = Profile{}
+	mi := &file_qrouton_v1_status_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Profile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Profile) ProtoMessage() {}
+
+func (x *Profile) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_status_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Profile.ProtoReflect.Descriptor instead.
+func (*Profile) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *Profile) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Profile) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
 type Sticker struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -619,7 +788,7 @@ type Sticker struct {
 
 func (x *Sticker) Reset() {
 	*x = Sticker{}
-	mi := &file_qrouton_v1_status_proto_msgTypes[6]
+	mi := &file_qrouton_v1_status_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -631,7 +800,7 @@ func (x *Sticker) String() string {
 func (*Sticker) ProtoMessage() {}
 
 func (x *Sticker) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_status_proto_msgTypes[6]
+	mi := &file_qrouton_v1_status_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -644,7 +813,7 @@ func (x *Sticker) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Sticker.ProtoReflect.Descriptor instead.
 func (*Sticker) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{6}
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Sticker) GetId() string {
@@ -686,7 +855,7 @@ type Stages struct {
 
 func (x *Stages) Reset() {
 	*x = Stages{}
-	mi := &file_qrouton_v1_status_proto_msgTypes[7]
+	mi := &file_qrouton_v1_status_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -698,7 +867,7 @@ func (x *Stages) String() string {
 func (*Stages) ProtoMessage() {}
 
 func (x *Stages) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_status_proto_msgTypes[7]
+	mi := &file_qrouton_v1_status_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -711,7 +880,7 @@ func (x *Stages) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Stages.ProtoReflect.Descriptor instead.
 func (*Stages) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{7}
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Stages) GetResearch() bool {
@@ -752,7 +921,7 @@ type AgentSummary struct {
 
 func (x *AgentSummary) Reset() {
 	*x = AgentSummary{}
-	mi := &file_qrouton_v1_status_proto_msgTypes[8]
+	mi := &file_qrouton_v1_status_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -764,7 +933,7 @@ func (x *AgentSummary) String() string {
 func (*AgentSummary) ProtoMessage() {}
 
 func (x *AgentSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_status_proto_msgTypes[8]
+	mi := &file_qrouton_v1_status_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -777,7 +946,7 @@ func (x *AgentSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentSummary.ProtoReflect.Descriptor instead.
 func (*AgentSummary) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{8}
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AgentSummary) GetAttention() string {
@@ -853,7 +1022,7 @@ type SessionRepo struct {
 
 func (x *SessionRepo) Reset() {
 	*x = SessionRepo{}
-	mi := &file_qrouton_v1_status_proto_msgTypes[9]
+	mi := &file_qrouton_v1_status_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -865,7 +1034,7 @@ func (x *SessionRepo) String() string {
 func (*SessionRepo) ProtoMessage() {}
 
 func (x *SessionRepo) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_status_proto_msgTypes[9]
+	mi := &file_qrouton_v1_status_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -878,7 +1047,7 @@ func (x *SessionRepo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionRepo.ProtoReflect.Descriptor instead.
 func (*SessionRepo) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{9}
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SessionRepo) GetName() string {
@@ -909,7 +1078,7 @@ type SessionDocument struct {
 
 func (x *SessionDocument) Reset() {
 	*x = SessionDocument{}
-	mi := &file_qrouton_v1_status_proto_msgTypes[10]
+	mi := &file_qrouton_v1_status_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -921,7 +1090,7 @@ func (x *SessionDocument) String() string {
 func (*SessionDocument) ProtoMessage() {}
 
 func (x *SessionDocument) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_status_proto_msgTypes[10]
+	mi := &file_qrouton_v1_status_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -934,7 +1103,7 @@ func (x *SessionDocument) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionDocument.ProtoReflect.Descriptor instead.
 func (*SessionDocument) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{10}
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SessionDocument) GetName() string {
@@ -982,7 +1151,7 @@ type RepositoryDocuments struct {
 
 func (x *RepositoryDocuments) Reset() {
 	*x = RepositoryDocuments{}
-	mi := &file_qrouton_v1_status_proto_msgTypes[11]
+	mi := &file_qrouton_v1_status_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -994,7 +1163,7 @@ func (x *RepositoryDocuments) String() string {
 func (*RepositoryDocuments) ProtoMessage() {}
 
 func (x *RepositoryDocuments) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_status_proto_msgTypes[11]
+	mi := &file_qrouton_v1_status_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1007,7 +1176,7 @@ func (x *RepositoryDocuments) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepositoryDocuments.ProtoReflect.Descriptor instead.
 func (*RepositoryDocuments) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{11}
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RepositoryDocuments) GetName() string {
@@ -1039,7 +1208,7 @@ type RepoStat struct {
 
 func (x *RepoStat) Reset() {
 	*x = RepoStat{}
-	mi := &file_qrouton_v1_status_proto_msgTypes[12]
+	mi := &file_qrouton_v1_status_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1051,7 +1220,7 @@ func (x *RepoStat) String() string {
 func (*RepoStat) ProtoMessage() {}
 
 func (x *RepoStat) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_status_proto_msgTypes[12]
+	mi := &file_qrouton_v1_status_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1064,7 +1233,7 @@ func (x *RepoStat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepoStat.ProtoReflect.Descriptor instead.
 func (*RepoStat) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{12}
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *RepoStat) GetName() string {
@@ -1124,13 +1293,14 @@ type AgentTree struct {
 	Coverage      string                 `protobuf:"bytes,3,opt,name=coverage,proto3" json:"coverage,omitempty"`
 	Tools         bool                   `protobuf:"varint,4,opt,name=tools,proto3" json:"tools,omitempty"`
 	Nodes         []*AgentNode           `protobuf:"bytes,5,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	ProfileLabel  string                 `protobuf:"bytes,6,opt,name=profile_label,json=profileLabel,proto3" json:"profile_label,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AgentTree) Reset() {
 	*x = AgentTree{}
-	mi := &file_qrouton_v1_status_proto_msgTypes[13]
+	mi := &file_qrouton_v1_status_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1142,7 +1312,7 @@ func (x *AgentTree) String() string {
 func (*AgentTree) ProtoMessage() {}
 
 func (x *AgentTree) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_status_proto_msgTypes[13]
+	mi := &file_qrouton_v1_status_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1155,7 +1325,7 @@ func (x *AgentTree) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentTree.ProtoReflect.Descriptor instead.
 func (*AgentTree) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{13}
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *AgentTree) GetProvider() string {
@@ -1193,6 +1363,13 @@ func (x *AgentTree) GetNodes() []*AgentNode {
 	return nil
 }
 
+func (x *AgentTree) GetProfileLabel() string {
+	if x != nil {
+		return x.ProfileLabel
+	}
+	return ""
+}
+
 type AgentNode struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1222,7 +1399,7 @@ type AgentNode struct {
 
 func (x *AgentNode) Reset() {
 	*x = AgentNode{}
-	mi := &file_qrouton_v1_status_proto_msgTypes[14]
+	mi := &file_qrouton_v1_status_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1234,7 +1411,7 @@ func (x *AgentNode) String() string {
 func (*AgentNode) ProtoMessage() {}
 
 func (x *AgentNode) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_status_proto_msgTypes[14]
+	mi := &file_qrouton_v1_status_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1247,7 +1424,7 @@ func (x *AgentNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentNode.ProtoReflect.Descriptor instead.
 func (*AgentNode) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{14}
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *AgentNode) GetId() string {
@@ -1411,7 +1588,7 @@ type AgentToolEvent struct {
 
 func (x *AgentToolEvent) Reset() {
 	*x = AgentToolEvent{}
-	mi := &file_qrouton_v1_status_proto_msgTypes[15]
+	mi := &file_qrouton_v1_status_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1423,7 +1600,7 @@ func (x *AgentToolEvent) String() string {
 func (*AgentToolEvent) ProtoMessage() {}
 
 func (x *AgentToolEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_status_proto_msgTypes[15]
+	mi := &file_qrouton_v1_status_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1436,7 +1613,7 @@ func (x *AgentToolEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentToolEvent.ProtoReflect.Descriptor instead.
 func (*AgentToolEvent) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{15}
+	return file_qrouton_v1_status_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AgentToolEvent) GetTool() string {
@@ -1486,7 +1663,7 @@ var File_qrouton_v1_status_proto protoreflect.FileDescriptor
 const file_qrouton_v1_status_proto_rawDesc = "" +
 	"\n" +
 	"\x17qrouton/v1/status.proto\x12\n" +
-	"qrouton.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xca\a\n" +
+	"qrouton.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9f\b\n" +
 	"\fChromeFields\x12\"\n" +
 	"\rbug_report_id\x18\x01 \x01(\tR\vbugReportID\x12*\n" +
 	"\x11bug_report_status\x18\x02 \x01(\tR\x0fbugReportStatus\x12(\n" +
@@ -1512,7 +1689,9 @@ const file_qrouton_v1_status_proto_rawDesc = "" +
 	"\bstickers\x18\x14 \x03(\v2\x13.qrouton.v1.StickerR\bstickers\x12C\n" +
 	"\x0fsession_summary\x18\x15 \x01(\v2\x1a.qrouton.v1.SessionSummaryR\x0esessionSummary\x12@\n" +
 	"\rpull_requests\x18\x16 \x01(\v2\x1b.qrouton.v1.PullRequestListR\fpullRequests\x12@\n" +
-	"\x0esession_digest\x18\x17 \x01(\v2\x19.qrouton.v1.SessionDigestR\rsessionDigest\"J\n" +
+	"\x0esession_digest\x18\x17 \x01(\v2\x19.qrouton.v1.SessionDigestR\rsessionDigest\x12\x1b\n" +
+	"\tpicker_id\x18\x18 \x01(\tR\bpickerID\x126\n" +
+	"\bprofiles\x18\x19 \x03(\v2\x1a.qrouton.v1.RunnerProfilesR\bprofiles\"J\n" +
 	"\x0eSessionSummary\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x14\n" +
 	"\x05stage\x18\x02 \x01(\tR\x05stage\x12\x0e\n" +
@@ -1523,13 +1702,18 @@ const file_qrouton_v1_status_proto_rawDesc = "" +
 	"\x0fPullRequestList\x123\n" +
 	"\x05items\x18\x01 \x03(\v2\x1d.qrouton.v1.GitHubPullRequestR\x05items\x12\x1d\n" +
 	"\n" +
-	"signed_out\x18\x02 \x01(\bR\tsignedOut\"}\n" +
+	"signed_out\x18\x02 \x01(\bR\tsignedOut\"\x8f\x02\n" +
 	"\x11GitHubPullRequest\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x16\n" +
 	"\x06number\x18\x02 \x01(\x05R\x06number\x12\x14\n" +
 	"\x05title\x18\x03 \x01(\tR\x05title\x12\x10\n" +
 	"\x03url\x18\x04 \x01(\tR\x03url\x12\x14\n" +
-	"\x05state\x18\x05 \x01(\tR\x05state\"\xe5\x02\n" +
+	"\x05state\x18\x05 \x01(\tR\x05state\x12\x16\n" +
+	"\x06author\x18\x06 \x01(\tR\x06author\x12\x16\n" +
+	"\x06review\x18\a \x01(\tR\x06review\x12%\n" +
+	"\x0echecks_failing\x18\b \x01(\bR\rchecksFailing\x129\n" +
+	"\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x97\x03\n" +
 	"\n" +
 	"SessionRow\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
@@ -1543,7 +1727,15 @@ const file_qrouton_v1_status_proto_rawDesc = "" +
 	"\x06unseen\x18\t \x01(\x05R\x06unseen\x122\n" +
 	"\x06opened\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\x06opened\x12\x18\n" +
-	"\asticker\x18\v \x01(\tR\asticker\"_\n" +
+	"\asticker\x18\v \x01(\tR\asticker\x12\x16\n" +
+	"\x06runner\x18\f \x01(\tR\x06runner\x12\x18\n" +
+	"\aprofile\x18\r \x01(\tR\aprofile\"Y\n" +
+	"\x0eRunnerProfiles\x12\x16\n" +
+	"\x06runner\x18\x01 \x01(\tR\x06runner\x12/\n" +
+	"\bprofiles\x18\x02 \x03(\v2\x13.qrouton.v1.ProfileR\bprofiles\"/\n" +
+	"\aProfile\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\"_\n" +
 	"\aSticker\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06colour\x18\x02 \x01(\tR\x06colour\x12\x16\n" +
@@ -1584,13 +1776,14 @@ const file_qrouton_v1_status_proto_rawDesc = "" +
 	"insertions\x18\x05 \x01(\x05R\n" +
 	"insertions\x12\x1c\n" +
 	"\tdeletions\x18\x06 \x01(\x05R\tdeletions\x12\x1a\n" +
-	"\bmeasured\x18\a \x01(\bR\bmeasured\"\xad\x01\n" +
+	"\bmeasured\x18\a \x01(\bR\bmeasured\"\xd2\x01\n" +
 	"\tAgentTree\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12%\n" +
 	"\x0eprovider_label\x18\x02 \x01(\tR\rproviderLabel\x12\x1a\n" +
 	"\bcoverage\x18\x03 \x01(\tR\bcoverage\x12\x14\n" +
 	"\x05tools\x18\x04 \x01(\bR\x05tools\x12+\n" +
-	"\x05nodes\x18\x05 \x03(\v2\x15.qrouton.v1.AgentNodeR\x05nodes\"\xff\x04\n" +
+	"\x05nodes\x18\x05 \x03(\v2\x15.qrouton.v1.AgentNodeR\x05nodes\x12#\n" +
+	"\rprofile_label\x18\x06 \x01(\tR\fprofileLabel\"\xff\x04\n" +
 	"\tAgentNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03run\x18\x02 \x01(\tR\x03run\x12\x16\n" +
@@ -1635,7 +1828,7 @@ func file_qrouton_v1_status_proto_rawDescGZIP() []byte {
 	return file_qrouton_v1_status_proto_rawDescData
 }
 
-var file_qrouton_v1_status_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_qrouton_v1_status_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_qrouton_v1_status_proto_goTypes = []any{
 	(*ChromeFields)(nil),          // 0: qrouton.v1.ChromeFields
 	(*SessionSummary)(nil),        // 1: qrouton.v1.SessionSummary
@@ -1643,47 +1836,52 @@ var file_qrouton_v1_status_proto_goTypes = []any{
 	(*PullRequestList)(nil),       // 3: qrouton.v1.PullRequestList
 	(*GitHubPullRequest)(nil),     // 4: qrouton.v1.GitHubPullRequest
 	(*SessionRow)(nil),            // 5: qrouton.v1.SessionRow
-	(*Sticker)(nil),               // 6: qrouton.v1.Sticker
-	(*Stages)(nil),                // 7: qrouton.v1.Stages
-	(*AgentSummary)(nil),          // 8: qrouton.v1.AgentSummary
-	(*SessionRepo)(nil),           // 9: qrouton.v1.SessionRepo
-	(*SessionDocument)(nil),       // 10: qrouton.v1.SessionDocument
-	(*RepositoryDocuments)(nil),   // 11: qrouton.v1.RepositoryDocuments
-	(*RepoStat)(nil),              // 12: qrouton.v1.RepoStat
-	(*AgentTree)(nil),             // 13: qrouton.v1.AgentTree
-	(*AgentNode)(nil),             // 14: qrouton.v1.AgentNode
-	(*AgentToolEvent)(nil),        // 15: qrouton.v1.AgentToolEvent
-	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
+	(*RunnerProfiles)(nil),        // 6: qrouton.v1.RunnerProfiles
+	(*Profile)(nil),               // 7: qrouton.v1.Profile
+	(*Sticker)(nil),               // 8: qrouton.v1.Sticker
+	(*Stages)(nil),                // 9: qrouton.v1.Stages
+	(*AgentSummary)(nil),          // 10: qrouton.v1.AgentSummary
+	(*SessionRepo)(nil),           // 11: qrouton.v1.SessionRepo
+	(*SessionDocument)(nil),       // 12: qrouton.v1.SessionDocument
+	(*RepositoryDocuments)(nil),   // 13: qrouton.v1.RepositoryDocuments
+	(*RepoStat)(nil),              // 14: qrouton.v1.RepoStat
+	(*AgentTree)(nil),             // 15: qrouton.v1.AgentTree
+	(*AgentNode)(nil),             // 16: qrouton.v1.AgentNode
+	(*AgentToolEvent)(nil),        // 17: qrouton.v1.AgentToolEvent
+	(*timestamppb.Timestamp)(nil), // 18: google.protobuf.Timestamp
 }
 var file_qrouton_v1_status_proto_depIdxs = []int32{
 	5,  // 0: qrouton.v1.ChromeFields.sessions:type_name -> qrouton.v1.SessionRow
-	10, // 1: qrouton.v1.ChromeFields.documents:type_name -> qrouton.v1.SessionDocument
-	11, // 2: qrouton.v1.ChromeFields.repository_documents:type_name -> qrouton.v1.RepositoryDocuments
-	12, // 3: qrouton.v1.ChromeFields.repos:type_name -> qrouton.v1.RepoStat
-	7,  // 4: qrouton.v1.ChromeFields.stages:type_name -> qrouton.v1.Stages
-	7,  // 5: qrouton.v1.ChromeFields.stages_live:type_name -> qrouton.v1.Stages
-	6,  // 6: qrouton.v1.ChromeFields.stickers:type_name -> qrouton.v1.Sticker
+	12, // 1: qrouton.v1.ChromeFields.documents:type_name -> qrouton.v1.SessionDocument
+	13, // 2: qrouton.v1.ChromeFields.repository_documents:type_name -> qrouton.v1.RepositoryDocuments
+	14, // 3: qrouton.v1.ChromeFields.repos:type_name -> qrouton.v1.RepoStat
+	9,  // 4: qrouton.v1.ChromeFields.stages:type_name -> qrouton.v1.Stages
+	9,  // 5: qrouton.v1.ChromeFields.stages_live:type_name -> qrouton.v1.Stages
+	8,  // 6: qrouton.v1.ChromeFields.stickers:type_name -> qrouton.v1.Sticker
 	1,  // 7: qrouton.v1.ChromeFields.session_summary:type_name -> qrouton.v1.SessionSummary
 	3,  // 8: qrouton.v1.ChromeFields.pull_requests:type_name -> qrouton.v1.PullRequestList
 	2,  // 9: qrouton.v1.ChromeFields.session_digest:type_name -> qrouton.v1.SessionDigest
-	4,  // 10: qrouton.v1.PullRequestList.items:type_name -> qrouton.v1.GitHubPullRequest
-	9,  // 11: qrouton.v1.SessionRow.repos:type_name -> qrouton.v1.SessionRepo
-	8,  // 12: qrouton.v1.SessionRow.summary:type_name -> qrouton.v1.AgentSummary
-	16, // 13: qrouton.v1.SessionRow.opened:type_name -> google.protobuf.Timestamp
-	16, // 14: qrouton.v1.SessionDocument.at:type_name -> google.protobuf.Timestamp
-	10, // 15: qrouton.v1.RepositoryDocuments.documents:type_name -> qrouton.v1.SessionDocument
-	14, // 16: qrouton.v1.AgentTree.nodes:type_name -> qrouton.v1.AgentNode
-	16, // 17: qrouton.v1.AgentNode.started:type_name -> google.protobuf.Timestamp
-	16, // 18: qrouton.v1.AgentNode.finished:type_name -> google.protobuf.Timestamp
-	10, // 19: qrouton.v1.AgentNode.documents:type_name -> qrouton.v1.SessionDocument
-	15, // 20: qrouton.v1.AgentNode.tools:type_name -> qrouton.v1.AgentToolEvent
-	16, // 21: qrouton.v1.AgentToolEvent.start:type_name -> google.protobuf.Timestamp
-	16, // 22: qrouton.v1.AgentToolEvent.end:type_name -> google.protobuf.Timestamp
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	6,  // 10: qrouton.v1.ChromeFields.profiles:type_name -> qrouton.v1.RunnerProfiles
+	4,  // 11: qrouton.v1.PullRequestList.items:type_name -> qrouton.v1.GitHubPullRequest
+	18, // 12: qrouton.v1.GitHubPullRequest.updated_at:type_name -> google.protobuf.Timestamp
+	11, // 13: qrouton.v1.SessionRow.repos:type_name -> qrouton.v1.SessionRepo
+	10, // 14: qrouton.v1.SessionRow.summary:type_name -> qrouton.v1.AgentSummary
+	18, // 15: qrouton.v1.SessionRow.opened:type_name -> google.protobuf.Timestamp
+	7,  // 16: qrouton.v1.RunnerProfiles.profiles:type_name -> qrouton.v1.Profile
+	18, // 17: qrouton.v1.SessionDocument.at:type_name -> google.protobuf.Timestamp
+	12, // 18: qrouton.v1.RepositoryDocuments.documents:type_name -> qrouton.v1.SessionDocument
+	16, // 19: qrouton.v1.AgentTree.nodes:type_name -> qrouton.v1.AgentNode
+	18, // 20: qrouton.v1.AgentNode.started:type_name -> google.protobuf.Timestamp
+	18, // 21: qrouton.v1.AgentNode.finished:type_name -> google.protobuf.Timestamp
+	12, // 22: qrouton.v1.AgentNode.documents:type_name -> qrouton.v1.SessionDocument
+	17, // 23: qrouton.v1.AgentNode.tools:type_name -> qrouton.v1.AgentToolEvent
+	18, // 24: qrouton.v1.AgentToolEvent.start:type_name -> google.protobuf.Timestamp
+	18, // 25: qrouton.v1.AgentToolEvent.end:type_name -> google.protobuf.Timestamp
+	26, // [26:26] is the sub-list for method output_type
+	26, // [26:26] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_qrouton_v1_status_proto_init() }
@@ -1697,7 +1895,7 @@ func file_qrouton_v1_status_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_qrouton_v1_status_proto_rawDesc), len(file_qrouton_v1_status_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

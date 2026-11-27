@@ -1,16 +1,58 @@
 package github
 
-// PullStateClosed is GitHub's state for a closed or merged pull request.
-const PullStateClosed = "closed"
+import "time"
+
+// GitHub GraphQL enum values a pull request reports.
+const (
+	PullStateOpen   = "OPEN"
+	PullStateClosed = "CLOSED"
+	PullStateMerged = "MERGED"
+
+	ReviewApproved         = "APPROVED"
+	ReviewChangesRequested = "CHANGES_REQUESTED"
+
+	CheckFailure = "FAILURE"
+	CheckError   = "ERROR"
+)
 
 const (
-	IssueRepository        = "kieranajp/qrouton"
-	IssueListURL           = WebBase + "/" + IssueRepository + "/issues"
-	issueAPIURL            = APIBaseDefault + "/repos/" + IssueRepository + "/issues"
-	issueContentTypeHeader = "Content-Type"
-	issueJSONType          = "application/json"
-	issueResponseLimit     = 1 << 20
-	issueRejectedFormat    = "%w (HTTP %d): check GitHub access and the report, then propose it again"
+	graphQLPath          = "/graphql"
+	contentTypeHeader    = "Content-Type"
+	jsonContentType      = "application/json"
+	graphQLResponseLimit = 8 << 20
+
+	rateLimitRemainingHeader = "x-ratelimit-remaining"
+	rateLimitResetHeader     = "x-ratelimit-reset"
+	retryAfterHeader         = "retry-after"
+	rateLimitedType          = "RATE_LIMITED"
+	secondaryLimitPhrase     = "secondary rate limit"
+	rateLimitFallback        = time.Minute
+	rateLimitedFormat        = "%v until %s"
+	// requestIDPattern is the quoted id in GitHub's generic error, such as `C0A1:2B3C:4D5E6F:7A8B9C:65A1B2C3`.
+	requestIDPattern = "`[0-9A-Fa-f]+(?::[0-9A-Fa-f]+){3,}`"
+
+	notFoundType = "NOT_FOUND"
+
+	// Every target string travels as a variable; the query text holds only indices.
+	pullsQueryFormat     = "query(%s) { viewer { login } %s }"
+	pullsVariablesFormat = "$o%[1]d: String!, $n%[1]d: String!, $b%[1]d: String!"
+	pullsAliasFormat     = "%[1]s: repository(owner: $o%[2]d, name: $n%[2]d) { pullRequests(headRefName: $b%[2]d, first: %[3]d, orderBy: {field: UPDATED_AT, direction: DESC}) { nodes { " + pullNodeFields + " } } } "
+	pullNodeFields       = "number title url state isDraft updatedAt author { login } latestOpinionatedReviews(first: 20, writersOnly: true) { nodes { state } } headRepositoryOwner { login } statusCheckRollup { state }"
+	aliasFormat          = "r%d"
+	viewerField          = "viewer"
+	ownerVariableFormat  = "o%d"
+	nameVariableFormat   = "n%d"
+	branchVariableFormat = "b%d"
+	pullsPageSize        = 50
+	variableSeparator    = ", "
+)
+
+const (
+	IssueRepository     = "kieranajp/qrouton"
+	IssueListURL        = WebBase + "/" + IssueRepository + "/issues"
+	issueAPIURL         = APIBaseDefault + "/repos/" + IssueRepository + "/issues"
+	issueResponseLimit  = 1 << 20
+	issueRejectedFormat = "%w (HTTP %d): check GitHub access and the report, then propose it again"
 
 	// APIBaseDefault is overridable in tests via githubAPIBase.
 	APIBaseDefault = "https://api.github.com"
@@ -31,9 +73,6 @@ const (
 	// branchesPath lists one repository's branches. It carries no query of its
 	// own, so pagination opens one.
 	branchesPath = "/repos/%s/%s/branches"
-
-	// The head filter names the repository's own owner, so a fork's pull request never matches.
-	pullsQuery = "/repos/%s/%s/pulls?head=%s:%s&state=all&per_page=%d"
 
 	// pageSize is GitHub's maximum; a short page means the last one.
 	pageSize        = 100
@@ -60,8 +99,6 @@ const (
 	bearerPrefix        = "Bearer "
 	acceptHeader        = "Accept"
 	acceptGitHubJSON    = "application/vnd.github+json"
-	ifNoneMatchHeader   = "If-None-Match"
-	etagHeader          = "ETag"
 
 	getMethod = "GET"
 

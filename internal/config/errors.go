@@ -8,4 +8,7 @@ var (
 	ErrStickerColour     = errors.New("not a sticker colour")
 	ErrStickerSymbol     = errors.New("not a sticker symbol")
 	ErrThoughtsHoldsRoot = errors.New("a thoughts folder must not be or contain the sessions root")
+	ErrProfileID         = errors.New("each runner profile needs an id and a label")
+	ErrProfileDuplicate  = errors.New("a runner has two profiles with one id")
+	ErrProfileDir        = errors.New("a runner profile's folder must be an absolute, clean path")
 )

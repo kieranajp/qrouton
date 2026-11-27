@@ -19,6 +19,10 @@ const (
 	fileMode        = 0o644
 	privateFileMode = 0o600
 
+	agentNoticeSeparator = "\n\n"
+
+	transcriptExt = ".jsonl"
+
 	gitBin = "git"
 
 	// dirFlag runs a git command against a directory without cd-ing to it.
@@ -138,6 +142,29 @@ const (
 // repoStatTimeout bounds one git invocation inside RepoStats, so a wedged git
 // cannot hang the caller.
 const repoStatTimeout = 5 * time.Second
+
+// gitNoPromptEnv stops git asking for credentials on a terminal nobody can see.
+const gitNoPromptEnv = "GIT_TERMINAL_PROMPT=0"
+
+// gitWaitDelay bounds the wait for git's output to close once git has exited
+// or been killed.
+const gitWaitDelay = 5 * time.Second
+
+// The stall windows are variables so tests can shorten them.
+var (
+	gitFirstOutputStall = 2 * time.Minute
+	gitOutputStall      = time.Minute
+)
+
+const (
+	gitFirstOutputStallText = "it said nothing in its first %s"
+	gitOutputStallText      = "it reported no progress for %s"
+)
+
+// partialCloneSuffix marks a mirror still being cloned.
+const partialCloneSuffix = ".partial"
+
+const worktreeCleanupTimeout = 10 * time.Second
 
 // Session slugs use a short entropy suffix to avoid collisions without making
 // paths and branches cumbersome.

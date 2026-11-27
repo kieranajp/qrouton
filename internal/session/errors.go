@@ -52,3 +52,9 @@ func mismatchedManifest(dir, slug string) error {
 
 // ErrUnreadableNumstat means git diff --numstat printed a line that is not two counts and a path.
 var ErrUnreadableNumstat = errors.New("unreadable git numstat output")
+
+// ErrInvalidConversation means a conversation ID or transcript path is not one a runner writes.
+var ErrInvalidConversation = errors.New("invalid conversation record")
+
+// ErrGitStalled means git was stopped after a stretch with nothing on stderr.
+var ErrGitStalled = errors.New("git stalled and was stopped")

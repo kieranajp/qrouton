@@ -3,6 +3,7 @@ syntax = "proto3";
 package qrouton.v1;
 
 import "qrouton/v1/assembly.proto";
+import "qrouton/v1/dashboard.proto";
 import "qrouton/v1/documents.proto";
 import "qrouton/v1/ollama.proto";
 import "qrouton/v1/repositories.proto";
@@ -44,6 +45,7 @@ message Event {
     OrgsChanged orgs_changed = 13;
     UIScaleChanged ui_scale = 14;
     Resync resync = 15;
+    DashboardStatus dashboard = 16;
   }
 }
 

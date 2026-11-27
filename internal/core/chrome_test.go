@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -88,6 +87,40 @@ func TestSelectedRepoStatsFollowTheSelectedSlug(t *testing.T) {
 	}
 }
 
+// fakePulls is the Dashboard as the chrome loop sees it: rows per root, and a
+// channel that reports each Request.
+type fakePulls struct {
+	mu        sync.Mutex
+	lists     map[string]status.PullRequestList
+	requested chan struct{}
+}
+
+func newFakePulls() *fakePulls {
+	return &fakePulls{lists: map[string]status.PullRequestList{}, requested: make(chan struct{}, 16)}
+}
+
+func (f *fakePulls) rows(root string) status.PullRequestList {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if list, ok := f.lists[root]; ok {
+		return list
+	}
+	return status.PullRequestList{Items: []status.PullRequest{}}
+}
+
+func (f *fakePulls) Request() {
+	select {
+	case f.requested <- struct{}{}:
+	default:
+	}
+}
+
+func (f *fakePulls) set(root string, rows ...status.PullRequest) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lists[root] = status.PullRequestList{Items: rows}
+}
+
 func TestCachedPullRequestsReachOnlyTheShownSession(t *testing.T) {
 	root := t.TempDir()
 	alphaRoot := sessionDir(t, root, "alpha")
@@ -97,10 +130,8 @@ func TestCachedPullRequestsReachOnlyTheShownSession(t *testing.T) {
 	beta := reg.add(betaRoot, []string{"/bin/cat"}, os.Environ())
 	renderer := newFakeClient()
 	row := status.PullRequest{Repo: "acme/web", Number: 7, Title: "Add pulls", URL: "https://github.com/acme/web/pull/7"}
-	pulls := map[string]sessionPulls{alphaRoot: {
-		order: []string{"acme/web"},
-		repos: map[string]repoPulls{"acme/web": {rows: []status.PullRequest{row}}},
-	}}
+	pulls := newFakePulls()
+	pulls.set(alphaRoot, row)
 
 	reg.reveal(alpha)
 	pushChrome(reg, root, nil, nil, pulls, nil, emitFunc(renderer.Emit).Chrome)
@@ -113,162 +144,131 @@ func TestCachedPullRequestsReachOnlyTheShownSession(t *testing.T) {
 	if got := pushedChrome(t, renderer).PullRequests; got.Items == nil || len(got.Items) != 0 || got.SignedOut {
 		t.Fatalf("beta inherited alpha's pull requests: %+v", got)
 	}
-}
 
-func TestPullRequestsFetchOnArrivalAndFollowASwitchMadeMidFetch(t *testing.T) {
-	root := t.TempDir()
-	alphaRoot := sessionDir(t, root, "alpha")
-	betaRoot := sessionDir(t, root, "beta")
-	reg := newSessions()
-	alpha := reg.add(alphaRoot, []string{"/bin/cat"}, os.Environ())
-	beta := reg.add(betaRoot, []string{"/bin/cat"}, os.Environ())
-	reg.reveal(alpha)
-
-	asked := make(chan string, 4)
-	release := make(chan struct{})
-	fetch := func(_ context.Context, root string, _ sessionPulls) sessionPulls {
-		asked <- root
-		<-release
-		row := status.PullRequest{Repo: "acme/web", Number: 1, Title: filepath.Base(root)}
-		return sessionPulls{order: []string{"acme/web"}, repos: map[string]repoPulls{"acme/web": {rows: []status.PullRequest{row}}}}
-	}
-	updates := make(chan status.Fields, 64)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	defer close(release)
-	go watch(ctx, reg, root, nil, emitFunc(func(event string, payload any) {
-		if event == chromeName {
-			select {
-			case updates <- payload.(status.Fields):
-			default:
-			}
-		}
-	}).Chrome,
-
-		time.Hour, time.Hour, time.Hour, unseenCounts{
-			all: func(string) map[string]int { return map[string]int{} },
-			in:  func(string) (int, bool) { return 0, false },
-		}, fetch)
-
-	waitAsked := func(want string) {
-		t.Helper()
-		select {
-		case got := <-asked:
-			if got != want {
-				t.Fatalf("fetched %s, want %s", got, want)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatalf("no fetch for %s", want)
-		}
-	}
-	waitAsked(alphaRoot)
-	reg.reveal(beta)
-	select {
-	case got := <-asked:
-		t.Fatalf("fetched %s while another fetch was pending", got)
-	case <-time.After(50 * time.Millisecond):
-	}
-	release <- struct{}{}
-	waitAsked(betaRoot)
-	release <- struct{}{}
-
-	deadline := time.After(5 * time.Second)
-	for {
-		select {
-		case fields := <-updates:
-			if items := fields.PullRequests.Items; fields.Slug == "beta" && len(items) == 1 && items[0].Title == "beta" {
-				return
-			}
-		case <-deadline:
-			t.Fatal("beta's pull requests never reached the page")
-		}
+	reg.reveal(nil)
+	pushChrome(reg, root, nil, nil, pulls, nil, emitFunc(renderer.Emit).Chrome)
+	if got := pushedChrome(t, renderer).PullRequests; got.Items == nil || len(got.Items) != 0 {
+		t.Fatalf("the dashboard carried pull requests: %+v", got)
 	}
 }
 
-// pullWatch runs the chrome loop with alpha shown and a pull request fetch that
-// reports each root it is asked for, then waits for release.
-func pullWatch(t *testing.T) (reg *Sessions, alphaRoot, betaRoot string, beta *SessionState, asked chan string, release chan struct{}) {
+// pullWatch runs the chrome loop with alpha shown over fake pull requests, and
+// returns every pushed chrome payload on a channel.
+func pullWatch(t *testing.T, field time.Duration) (reg *Sessions, alpha, beta *SessionState, pulls *fakePulls, pushed chan status.Fields) {
 	t.Helper()
 	root := t.TempDir()
-	alphaRoot = sessionDir(t, root, "alpha")
-	betaRoot = sessionDir(t, root, "beta")
 	reg = newSessions()
-	alpha := reg.add(alphaRoot, []string{"/bin/cat"}, os.Environ())
-	beta = reg.add(betaRoot, []string{"/bin/cat"}, os.Environ())
+	alpha = reg.add(sessionDir(t, root, "alpha"), []string{"/bin/cat"}, os.Environ())
+	beta = reg.add(sessionDir(t, root, "beta"), []string{"/bin/cat"}, os.Environ())
 	reg.reveal(alpha)
-
-	asked = make(chan string, 4)
-	release = make(chan struct{})
-	fetch := func(_ context.Context, root string, previous sessionPulls) sessionPulls {
-		asked <- root
-		<-release
-		return previous
-	}
+	pulls = newFakePulls()
+	pushed = make(chan status.Fields, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	t.Cleanup(func() { close(release) })
-	go watch(ctx, reg, root, nil, emitFunc(func(string, any) {}).Chrome, time.Hour, time.Hour, time.Hour, unseenCounts{
+	go watch(ctx, reg, root, nil, emitFunc(func(event string, payload any) {
+		if event != chromeName {
+			return
+		}
+		select {
+		case <-pushed:
+		default:
+		}
+		pushed <- payload.(status.Fields)
+	}).Chrome, field, time.Hour, unseenCounts{
 		all: func(string) map[string]int { return map[string]int{} },
 		in:  func(string) (int, bool) { return 0, false },
-	}, fetch)
-
-	return reg, alphaRoot, betaRoot, beta, asked, release
+	}, pulls)
+	return reg, alpha, beta, pulls, pushed
 }
 
-func expectFetch(t *testing.T, asked chan string, want string) {
+func expectRequest(t *testing.T, pulls *fakePulls) {
 	t.Helper()
 	select {
-	case got := <-asked:
-		if got != want {
-			t.Fatalf("fetched %s, want %s", got, want)
-		}
+	case <-pulls.requested:
 	case <-time.After(5 * time.Second):
-		t.Fatalf("no fetch for %s", want)
+		t.Fatal("no pull request refresh was requested")
 	}
 }
 
-func expectNoFetch(t *testing.T, asked chan string) {
+func expectNoRequest(t *testing.T, pulls *fakePulls) {
 	t.Helper()
 	select {
-	case got := <-asked:
-		t.Fatalf("fetched %s unprompted", got)
+	case <-pulls.requested:
+		t.Fatal("a pull request refresh was requested unprompted")
 	case <-time.After(100 * time.Millisecond):
 	}
 }
 
-// Without clearing lastPulled, a new pull request waited for the 60 s poll or a session switch.
-func TestAStalePullRequestMarkOnTheShownSessionFetchesAgain(t *testing.T) {
-	reg, alphaRoot, _, _, asked, release := pullWatch(t)
-	expectFetch(t, asked, alphaRoot)
-	release <- struct{}{}
-	expectNoFetch(t, asked)
+// Catches a push that asks for a refresh: the two-second push would keep GitHub busy for ever.
+func TestAFinishedRefreshDoesNotRequestAnother(t *testing.T) {
+	_, alpha, _, pulls, pushed := pullWatch(t, 5*time.Millisecond)
+	expectRequest(t, pulls)
 
-	reg.pullRequestsChanged(alphaRoot)
-	expectFetch(t, asked, alphaRoot)
+	pulls.set(alpha.Root(), status.PullRequest{Repo: "acme/web", Number: 1, Title: "fresh"})
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case fields := <-pushed:
+			if items := fields.PullRequests.Items; len(items) == 1 && items[0].Title == "fresh" {
+				expectNoRequest(t, pulls)
+				return
+			}
+		case <-deadline:
+			t.Fatal("the finished refresh's rows never reached the page")
+		}
+	}
 }
 
-// The single-flight guard drops a mark that lands mid-fetch unless the fetch's return picks it up.
-func TestAStalePullRequestMarkMidFetchFetchesAgainWhenItReturns(t *testing.T) {
-	reg, alphaRoot, _, _, asked, release := pullWatch(t)
-	expectFetch(t, asked, alphaRoot)
-	reg.pullRequestsChanged(alphaRoot)
-	expectNoFetch(t, asked)
-
-	release <- struct{}{}
-	expectFetch(t, asked, alphaRoot)
-}
-
-// Pull requests are fetched for the shown session only, so a hidden one's mark waits for arrival.
-func TestAStalePullRequestMarkOnAHiddenSessionWaitsForArrival(t *testing.T) {
-	reg, alphaRoot, betaRoot, beta, asked, release := pullWatch(t)
-	expectFetch(t, asked, alphaRoot)
-	release <- struct{}{}
-
-	reg.pullRequestsChanged(betaRoot)
-	expectNoFetch(t, asked)
+// Catches arrival asking on every wake-up, and a return from the dashboard to the same session not asking.
+func TestArrivalRequestsOnceAndStaysQuietUntilTheNextSwitch(t *testing.T) {
+	reg, alpha, beta, pulls, _ := pullWatch(t, time.Hour)
+	expectRequest(t, pulls)
+	reg.Touch()
+	expectNoRequest(t, pulls)
 
 	reg.reveal(beta)
-	expectFetch(t, asked, betaRoot)
+	expectRequest(t, pulls)
+	reg.Touch()
+	expectNoRequest(t, pulls)
+
+	reg.reveal(nil)
+	expectNoRequest(t, pulls)
+	reg.reveal(beta)
+	expectRequest(t, pulls)
+	reg.reveal(alpha)
+	expectRequest(t, pulls)
+}
+
+// Catches a gh pr create or a repository change on the shown session waiting for the 60 s tick.
+func TestACreatedMarkAndARepositoryChangeEachRequestARefresh(t *testing.T) {
+	reg, alpha, beta, pulls, _ := pullWatch(t, time.Hour)
+	expectRequest(t, pulls)
+
+	reg.pullRequestsChanged(alpha.Root())
+	expectRequest(t, pulls)
+	reg.RepositoriesChanged(alpha.Root())
+	expectRequest(t, pulls)
+
+	reg.RepositoriesChanged(beta.Root())
+	expectNoRequest(t, pulls)
+}
+
+// Catches a gh pr create behind the dashboard, or in a session not shown, waiting for the five-minute tick.
+func TestACreatedMarkOnAnySessionRequestsARefreshWithTheDashboardShown(t *testing.T) {
+	reg, alpha, beta, pulls, _ := pullWatch(t, time.Hour)
+	expectRequest(t, pulls)
+
+	reg.pullRequestsChanged(beta.Root())
+	expectRequest(t, pulls)
+
+	reg.reveal(nil)
+	expectNoRequest(t, pulls)
+	reg.pullRequestsChanged(alpha.Root())
+	expectRequest(t, pulls)
+	reg.pullRequestsChanged(beta.Root())
+	expectRequest(t, pulls)
+	reg.Touch()
+	expectNoRequest(t, pulls)
 }
 
 func TestAColdSessionsTreeNamesItsManifestRunner(t *testing.T) {
@@ -277,7 +277,7 @@ func TestAColdSessionsTreeNamesItsManifestRunner(t *testing.T) {
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "cold", Runner: agentProviderCodex}); err != nil {
 		t.Fatal(err)
 	}
-	tree := agentTree(agentActivitySnapshot{}, manifestRunner(dir), "")
+	tree := coldTree(nil, dir)
 	if tree.Provider != agentProviderCodex || len(tree.Nodes) != 0 || tree.Coverage != "" {
 		t.Fatalf("cold tree = %+v", tree)
 	}
@@ -348,7 +348,6 @@ func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
 				t.Errorf("chrome published unknown labels: %+v", fields.Stickers)
 			}
 		}).Chrome)
-
 	}
 	<-done
 }
@@ -405,18 +404,16 @@ func TestRepositoryChangeImmediatelyReplacesCachedMeasurementsWithManifestRows(t
 		if event == chromeName {
 			updates <- payload.(status.Fields)
 		}
-	}).Chrome,
+	}).Chrome, time.Hour, time.Hour, unseenCounts{
+		all: func(string) map[string]int { return map[string]int{} },
+		in:  func(string) (int, bool) { return 0, false },
+	}, newFakePulls())
 
-		time.Hour, time.Hour, time.Hour, unseenCounts{
-			all: func(string) map[string]int { return map[string]int{} },
-			in:  func(string) (int, bool) { return 0, false },
-		}, noPulls)
-
-	for pushes := 0; pushes < 3; pushes++ {
+	for pushes := 0; pushes < 2; pushes++ {
 		select {
 		case <-updates:
 		case <-time.After(5 * time.Second):
-			t.Fatal("initial repository measurement and pull request fetch did not settle")
+			t.Fatal("initial repository measurement did not settle")
 		}
 	}
 	updated := initial
@@ -637,5 +634,22 @@ func TestWelcomingHidesThePlacementOverlay(t *testing.T) {
 	pushChrome(reg, root, &config.Config{Root: root, Welcomed: true}, nil, nil, nil, emitFunc(func(_ string, payload any) { fields = payload.(status.Fields) }).Chrome)
 	if fields.Welcoming || !fields.Placing {
 		t.Fatalf("welcoming %v, placing %v", fields.Welcoming, fields.Placing)
+	}
+}
+
+// Catches the rail offering a switch for a runner whose conversation qrouton
+// cannot carry, or missing a named claude profile.
+func TestChromeListsOnlySwitchableRunnersProfiles(t *testing.T) {
+	root := t.TempDir()
+	reg := testRegistry(t, sessionDir(t, root, "octopus"))
+	renderer := newFakeClient()
+	cfg := &config.Config{Profiles: map[string][]config.RunnerProfile{
+		"claude": {{ID: "work", Label: "Work", Dir: "/w"}, {ID: "home", Label: "Home", Dir: "/h"}},
+		"codex":  {{ID: "alt", Label: "Alt", Dir: "/a"}},
+	}}
+	pushChrome(reg, root, cfg, nil, nil, nil, emitFunc(renderer.Emit).Chrome)
+	want := []status.RunnerProfiles{{Runner: "claude", Profiles: []status.Profile{{ID: "work", Label: "Work"}, {ID: "home", Label: "Home"}}}}
+	if got := pushedChrome(t, renderer).Profiles; !reflect.DeepEqual(got, want) {
+		t.Fatalf("profiles = %#v, want %#v", got, want)
 	}
 }

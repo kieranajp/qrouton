@@ -38,6 +38,8 @@ const (
 	configPackage    = "../../config"
 	placementPackage = "../../placement"
 	vaultPackage     = "../../vault"
+	launchPackage    = "../../launch"
+	corePackage      = "../../core"
 	moduleFile       = "../../../go.mod"
 	generatedPage    = "../frontend/src/lib/bridge/generated.js"
 	fixturePalette   = "../frontend/tests/theme.css"
@@ -70,6 +72,7 @@ var valueSets = []valueSet{
 	{name: "ARTIFACT_KINDS", typedef: "ArtifactKind", dir: statusPackage, prefix: "Kind", derived: kindLabels()},
 	{name: "AUDIT_HEADINGS", typedef: "AuditHeading", dir: promptsPackage, prefix: "AuditHeading"},
 	{name: "BUG_REPORT_STATUSES", typedef: "BugReportStatus", dir: workbenchPackage, prefix: "BugReport"},
+	{name: "DASHBOARD_PULL_STATES", typedef: "DashboardPullState", dir: corePackage, prefix: "dashboardPulls"},
 	{name: "DOCUMENT_FORMATS", typedef: "DocumentFormat", dir: workbenchPackage, goType: "DocumentFormat", prefix: "Format"},
 	{name: "DRAFT_FIELDS", typedef: "DraftField", dir: assemblyPackage, goType: "Field", prefix: "Field"},
 	{name: "GITHUB_CREDENTIALS", typedef: "GitHubCredential", dir: githubPackage, goType: "Credential", prefix: "Credential"},
@@ -80,11 +83,13 @@ var valueSets = []valueSet{
 	{name: "PLACEMENT_REASONS", typedef: "PlacementReason", dir: placementPackage, goType: "Reason", prefix: "Reason"},
 	{name: "PLACEMENT_RESULTS", typedef: "PlacementResult", dir: placementPackage, goType: "Result", prefix: "Result"},
 	{name: "PROGRESS_STATUSES", typedef: "ProgressStatus", dir: sessionPackage, goType: "ProgressStatus", prefix: "Progress"},
+	{name: "PULL_REQUEST_REVIEWS", typedef: "PullRequestReview", dir: statusPackage, prefix: "PullRequestReview"},
 	{name: "PULL_REQUEST_STATES", typedef: "PullRequestState", dir: statusPackage, prefix: "PullRequestState"},
 	{name: "REFRESH_STATES", typedef: "RefreshState", dir: githubPackage, goType: "RefreshState", prefix: "Refresh"},
 	{name: "REPO_ROLES", typedef: "RepoRole", dir: sessionPackage, goType: "RepoRole", prefix: "RepoRole"},
 	{name: "SESSION_MODES", typedef: "SessionMode", dir: sessionPackage, goType: "SessionMode", prefix: "Mode"},
 	{name: "SETTINGS_FIELDS", typedef: "SettingsField", dir: desktopPackage, prefix: "settingsField"},
+	{name: "SIGN_IN_STATES", typedef: "SignInState", dir: launchPackage, goType: "SignInState", prefix: "SignIn"},
 	{name: "TAB_STATUSES", typedef: "TabStatus", dir: desktopPackage, prefix: "tabStatus"},
 	{name: "UI_SCALE_ACTIONS", typedef: "UIScaleAction", dir: desktopPackage, prefix: "uiScaleAction"},
 	{name: "WINDOW_ICONS", typedef: "WindowIcon", dir: workbenchPackage, goType: "WindowIcon", prefix: "Icon"},
@@ -107,7 +112,14 @@ var valueNames = []valueName{
 	{desktopPackage, "stickerDuplicate"},
 	{desktopPackage, "sessionUnloadLabel"},
 	{desktopPackage, "sessionUnloadFailed"},
+	{desktopPackage, "sessionShowFailed"},
 	{desktopPackage, "sessionReorderFailed"},
+	{desktopPackage, "sessionSwitchProfileLabel"},
+	{desktopPackage, "sessionSwitchProfileFailed"},
+	{desktopPackage, "sessionSwitchProfileNeedsMessage"},
+	{desktopPackage, "profileCurrentMeta"},
+	{desktopPackage, "profileDefaultLabel"},
+	{corePackage, "noConversationRefusal"},
 	{desktopPackage, "switcherLabel"},
 	{desktopPackage, "switcherSearch"},
 	{desktopPackage, "switcherClose"},

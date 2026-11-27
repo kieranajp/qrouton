@@ -4,6 +4,7 @@ import "github.com/kieranajp/qrouton/internal/status"
 
 const (
 	ollamaName            = "ollama:status"
+	dashboardName         = "dashboard:update"
 	ptyDataName           = "pty:data:"
 	ptyExitName           = "pty:exit:"
 	chromeName            = "chrome:update"
@@ -24,8 +25,9 @@ const (
 // record every kind of event through one func.
 type emitFunc func(event string, payload any)
 
-func (e emitFunc) Ollama(s OllamaStatus)  { e(ollamaName, s) }
-func (e emitFunc) Chrome(f status.Fields) { e(chromeName, f) }
+func (e emitFunc) Ollama(s OllamaStatus)       { e(ollamaName, s) }
+func (e emitFunc) Chrome(f status.Fields)      { e(chromeName, f) }
+func (e emitFunc) Dashboard(s DashboardStatus) { e(dashboardName, s) }
 func (e emitFunc) AgentTree(slug string, tree status.AgentTree) {
 	e(agentTreeName+slug, tree)
 }

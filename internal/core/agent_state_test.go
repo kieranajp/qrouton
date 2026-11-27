@@ -227,27 +227,40 @@ func (e *emitted) count() int {
 	return len(e.events)
 }
 
+// armedFlushes stands in for the interval timer, so a test decides when the
+// interval has elapsed.
+type armedFlushes []func()
+
+func (a *armedFlushes) after(_ time.Duration, flush func()) { *a = append(*a, flush) }
+
+func (a *armedFlushes) elapse(t *testing.T, want int) {
+	t.Helper()
+	if len(*a) != want {
+		t.Fatalf("%d flushes armed, want %d", len(*a), want)
+	}
+	armed := *a
+	*a = nil
+	for _, flush := range armed {
+		flush()
+	}
+}
+
 func TestAgentTreeEmitCoalescesABurstAndFlushesAfterIt(t *testing.T) {
 	reg := testRegistry(t, t.TempDir())
 	shown := reg.Current()
-	var mu sync.Mutex
 	version := 0
 	out := &emitted{}
 	trees := newAgentTrees(emitFunc(out.emit), 50*time.Millisecond, reg.Current, func(*SessionState) status.AgentTree {
-		mu.Lock()
-		defer mu.Unlock()
 		return status.AgentTree{Provider: string(rune('a' + version))}
 	})
+	timers := &armedFlushes{}
+	trees.after = timers.after
 
 	for range 20 {
-		mu.Lock()
 		version++
-		mu.Unlock()
 		trees.schedule(shown)
-		time.Sleep(time.Millisecond)
 	}
-	waitFor(t, "the burst's one push", func() bool { return out.count() >= 1 })
-	time.Sleep(150 * time.Millisecond)
+	timers.elapse(t, 1)
 	if got := out.count(); got != 1 {
 		t.Fatalf("20 changes in a burst pushed %d trees", got)
 	}
@@ -256,16 +269,17 @@ func TestAgentTreeEmitCoalescesABurstAndFlushesAfterIt(t *testing.T) {
 	}
 
 	trees.schedule(shown)
-	time.Sleep(150 * time.Millisecond)
+	timers.elapse(t, 1)
 	if got := out.count(); got != 1 {
 		t.Fatal("an unchanged tree was pushed again")
 	}
 
-	mu.Lock()
 	version++
-	mu.Unlock()
 	trees.schedule(shown)
-	waitFor(t, "the change after a quiet spell", func() bool { return out.count() == 2 })
+	timers.elapse(t, 1)
+	if got := out.count(); got != 2 {
+		t.Fatalf("the change after a quiet spell pushed %d trees in all, want 2", got)
+	}
 }
 
 func TestAgentTreeEmitSkipsASessionNotOnScreen(t *testing.T) {
@@ -273,8 +287,10 @@ func TestAgentTreeEmitSkipsASessionNotOnScreen(t *testing.T) {
 	hidden := reg.add(t.TempDir(), []string{"/bin/cat"}, nil)
 	out := &emitted{}
 	trees := newAgentTrees(emitFunc(out.emit), time.Millisecond, reg.Current, func(*SessionState) status.AgentTree { return status.AgentTree{} })
+	timers := &armedFlushes{}
+	trees.after = timers.after
 	trees.schedule(hidden)
-	time.Sleep(30 * time.Millisecond)
+	timers.elapse(t, 1)
 	if out.count() != 0 {
 		t.Fatal("a background session's tree was pushed")
 	}

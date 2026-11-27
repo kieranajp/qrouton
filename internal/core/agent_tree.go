@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/codex"
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -69,6 +70,20 @@ func agentTree(snapshot agentActivitySnapshot, fallback, root string) status.Age
 	return tree
 }
 
+// profileLabel answers the raw id for a profile config no longer has, so the
+// pane still says which account the session is pinned to.
+func profileLabel(cfg *config.Config, runner, id string) string {
+	if id == "" {
+		return ""
+	}
+	if cfg != nil {
+		if profile, ok := cfg.Profile(runner, id); ok {
+			return profile.Label
+		}
+	}
+	return id
+}
+
 func writtenDocuments(root string, files []string) []status.Document {
 	documents := []status.Document{}
 	if root == "" {
@@ -108,6 +123,7 @@ type agentTrees struct {
 	interval time.Duration
 	shown    func() *SessionState
 	build    func(*SessionState) status.AgentTree
+	after    func(time.Duration, func())
 
 	mu      sync.Mutex
 	pending map[*SessionState]bool
@@ -117,6 +133,7 @@ type agentTrees struct {
 func newAgentTrees(events Events, interval time.Duration, shown func() *SessionState, build func(*SessionState) status.AgentTree) *agentTrees {
 	return &agentTrees{
 		events: events, interval: interval, shown: shown, build: build,
+		after:   func(d time.Duration, f func()) { time.AfterFunc(d, f) },
 		pending: map[*SessionState]bool{}, last: map[string]status.AgentTree{},
 	}
 }
@@ -131,7 +148,7 @@ func (t *agentTrees) schedule(state *SessionState) {
 		return
 	}
 	t.pending[state] = true
-	time.AfterFunc(t.interval, func() { t.flush(state) })
+	t.after(t.interval, func() { t.flush(state) })
 }
 
 func (t *agentTrees) flush(state *SessionState) {

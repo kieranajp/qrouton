@@ -25,6 +25,8 @@ type Runner struct {
 	Command  []string
 	Path     string
 	Override bool
+	// Profile is the account the runner launches on; the zero value is the default.
+	Profile config.RunnerProfile
 }
 
 type runnerSpec struct {
@@ -33,6 +35,9 @@ type runnerSpec struct {
 	Command []string
 	// Resume turns a fresh argv into one continuing the last conversation.
 	Resume func(argv []string) []string
+	// ResumeID continues the conversation it names. A runner without one cannot
+	// name a conversation, so it always resumes the last.
+	ResumeID func(argv []string, conversation string) []string
 	// Prompt appends the opening message the way this runner accepts it.
 	Prompt func(argv []string, message string) []string
 	// MCP points the runner at a qrouton MCP server, which is the part of the
@@ -44,6 +49,15 @@ type runnerSpec struct {
 	// Hooks are the agent-event hooks Inject wires, which is everything the
 	// workbench can learn about the runner's agents.
 	Hooks []string
+	// ProfileEnv names the variable that moves the runner's state to a profile
+	// folder, and is empty for a runner without profiles.
+	ProfileEnv string
+	// CredentialEnv are the variables that outrank a stored login.
+	CredentialEnv []string
+	LoginArgs     []string
+	StatusArgs    []string
+	ReadStatus    func(out []byte, exit int) SignIn
+	Conversation  *conversationSpec
 }
 
 type injectContext struct {
@@ -52,6 +66,7 @@ type injectContext struct {
 	handle     workbench.Handle
 	mcpArgs    []string
 	generation uint64
+	profileDir string
 	// override is true when the user replaced this runner's command, which
 	// OpenCode reads before it writes a permission default over their config.
 	override bool
@@ -61,27 +76,40 @@ var claudeHooks = []string{
 	agentevent.HookSubagentStart, agentevent.HookSubagentStop,
 	agentevent.HookNotification, agentevent.HookStop, agentevent.HookStopFailure,
 	agentevent.HookPreToolUse, agentevent.HookPostToolUse, agentevent.HookPostToolUseFailure,
-	agentevent.HookUserPromptSubmit,
+	agentevent.HookUserPromptSubmit, agentevent.HookSessionStart,
 }
 
 var runnerSpecs = []runnerSpec{
 	{
 		ID: runnerIDClaude, Label: runnerLabelClaude,
-		Command: []string{runnerIDClaude, claudeSkipPermissionsFlag},
-		Resume:  resumeWith(claudeContinueFlag),
-		Prompt:  promptAsArgument,
-		MCP:     claudeMCP,
-		Inject:  injectClaude,
-		Hooks:   claudeHooks,
+		Command:    []string{runnerIDClaude, claudeSkipPermissionsFlag},
+		Resume:     resumeWith(claudeContinueFlag),
+		ResumeID:   resumeClaude,
+		Prompt:     promptAsArgument,
+		MCP:        claudeMCP,
+		Inject:     injectClaude,
+		Hooks:      claudeHooks,
+		ProfileEnv: claudeConfigDirEnvVar,
+		CredentialEnv: []string{claudeUseBedrockEnvVar, claudeUseVertexEnvVar, claudeUseFoundryEnvVar,
+			anthropicAuthTokenEnvVar, anthropicAPIKeyEnvVar, claudeOAuthTokenEnvVar},
+		LoginArgs:    []string{claudeAuthCmd, claudeLoginCmd},
+		StatusArgs:   []string{claudeAuthCmd, claudeStatusCmd, claudeJSONFlag},
+		ReadStatus:   readClaudeStatus,
+		Conversation: claudeConversation,
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,
-		Command: []string{runnerIDCodex, codexBypassSandboxFlag},
-		Resume:  resumeWith(codexResumeCmd, codexResumeLast),
-		Prompt:  promptAsArgument,
-		MCP:     codexMCP,
-		Inject:  injectCodex,
-		Hooks:   []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
+		Command:       []string{runnerIDCodex, codexBypassSandboxFlag},
+		Resume:        resumeWith(codexResumeCmd, codexResumeLast),
+		Prompt:        promptAsArgument,
+		MCP:           codexMCP,
+		Inject:        injectCodex,
+		Hooks:         []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
+		ProfileEnv:    codex.HomeEnvVar,
+		CredentialEnv: []string{codexAPIKeyEnvVar, codexAccessTokenEnvVar},
+		LoginArgs:     []string{codexLoginCmd},
+		StatusArgs:    []string{codexLoginCmd, codexStatusCmd},
+		ReadStatus:    readCodexStatus,
 	},
 	{
 		ID: runnerIDOpenCode, Label: runnerLabelOpenCode,
@@ -138,6 +166,21 @@ func resumeWith(flags ...string) func([]string) []string {
 	return func(argv []string) []string { return append(argv, flags...) }
 }
 
+// resumeClaude names the conversation. A missing one then fails the launch,
+// where --continue would silently start afresh.
+func resumeClaude(argv []string, conversation string) []string {
+	return append(argv, claudeResumeFlag, conversation)
+}
+
+// namedConversation is the recorded conversation a resume names, for a runner
+// that can name one.
+func namedConversation(r Runner, dir string) (session.Conversation, bool) {
+	if spec, ok := specFor(r.ID); !ok || spec.ResumeID == nil {
+		return session.Conversation{}, false
+	}
+	return session.ReadConversation(dir)
+}
+
 func promptAsArgument(argv []string, message string) []string {
 	return append(argv, message)
 }
@@ -171,6 +214,11 @@ func Runners(cfg *config.Config) ([]Runner, error) {
 		}
 		out[i].Command = append([]string(nil), command...)
 		out[i].Override = true
+	}
+	for id := range cfg.Profiles {
+		if spec, _ := specFor(id); spec.ProfileEnv == "" {
+			return nil, fmt.Errorf("%w: %q", ErrProfilesUnsupported, id)
+		}
 	}
 	for i := range out {
 		out[i].Path, _ = findExecutable(out[i].Command[0])
@@ -219,6 +267,21 @@ func FirstInstalled(cfg *config.Config) (Runner, error) {
 	return Runner{}, ErrNoRunnerInstalled
 }
 
+// WithProfile puts r on its profile id, and leaves it on the default for an
+// empty id. A profile missing from cfg is an error, never the default: that
+// would resume the work under another account.
+func WithProfile(cfg *config.Config, r Runner, id string) (Runner, error) {
+	if id == "" {
+		return r, nil
+	}
+	profile, ok := cfg.Profile(r.ID, id)
+	if !ok {
+		return Runner{}, fmt.Errorf(profileUnavailableFormat, ErrProfileUnavailable, r.ID, id)
+	}
+	r.Profile = profile
+	return r, nil
+}
+
 func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle workbench.Handle, generation uint64, resume bool, prompt string) ([]string, []string, error) {
 	// Runner's fields are exported, so a hand-built one can still reach here
 	// without the per-runner wiring the launch path needs.
@@ -226,15 +289,31 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedRunner, r.ID)
 	}
-	return spec.Inject(runnerArgv(spec, r, resume, sessionMode(dir), sessionTicket(dir), prompt), injectContext{
+	if r.Profile.ID != "" && spec.ProfileEnv == "" {
+		return nil, nil, fmt.Errorf("%w: %q", ErrProfilesUnsupported, r.ID)
+	}
+	var conversation string
+	if resume {
+		named, _ := namedConversation(r, dir)
+		conversation = named.ID
+	}
+	argv, env, err := spec.Inject(runnerArgv(spec, r, resume, conversation, sessionMode(dir), sessionTicket(dir), prompt), injectContext{
 		qroutonBin: qroutonBin,
 		dir:        dir,
 		handle:     handle,
 		generation: generation,
+		profileDir: r.Profile.Dir,
 		mcpArgs: []string{MCPSubcommand, sessionRootFlag, dir,
 			editorJSONFlag, editor.Marshal(), workbenchJSONFlag, handle.Marshal()},
 		override: r.Override,
 	})
+	if err != nil || r.Profile.ID == "" {
+		return argv, env, err
+	}
+	if err := PrepareProfileDir(r.Profile.Dir); err != nil {
+		return nil, nil, err
+	}
+	return argv, workbench.WithEnv(env, spec.ProfileEnv, r.Profile.Dir), nil
 }
 
 func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
@@ -250,11 +329,18 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
 		" " + generationFlag + " " + fmt.Sprint(c.generation) +
 		" " + providerFlag + " " + runnerIDClaude
-	// Async, so a tool call never waits on the workbench; the tracker accepts
-	// events in any order.
+	// Event hooks are async, so a tool call never waits on the workbench; the
+	// tracker accepts events in any order. The notice hook is synchronous so its
+	// context lands in the turn it fired in.
+	event := hookEntry{command: hookCommand, async: true}
+	notice := hookEntry{command: noticeHookCommand(c.qroutonBin, c.dir)}
 	hooks := map[string]any{}
 	for _, hook := range claudeHooks {
-		hooks[hook] = commandHook(true, hookCommand)
+		entries := []hookEntry{event}
+		if slices.Contains(noticeHooks, hook) {
+			entries = append(entries, notice)
+		}
+		hooks[hook] = commandHook(entries...)
 	}
 	// Strings and maps of them: marshalling cannot fail.
 	settings, _ := json.Marshal(map[string]any{claudeHooksKey: hooks})
@@ -272,7 +358,7 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 	// Codex defaults to one level of nesting, which is a lead that cannot spawn
 	// the specialists qrouton's topology has it delegate to. Raise it, unless
 	// the user's own command already asks for at least as much.
-	if codex.MaxDepth(argv) < codex.RequiredMaxDepth {
+	if codex.MaxDepth(c.profileDir, argv) < codex.RequiredMaxDepth {
 		argv = append(argv, codex.ConfigFlag, codex.MaxDepthSetting(codex.RequiredMaxDepth))
 	}
 	hookCommand := fmt.Sprintf(codexAgentEventCommandFormat, agentevent.QroutonBinEnvVar, AgentEventSubcommand)
@@ -280,9 +366,12 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 	if !c.override {
 		argv = append(argv, codexBypassHookTrustFlag)
 	}
+	notice := fmt.Sprintf(codexCommandHookFormat, quotedConfigString(noticeHookCommand(c.qroutonBin, c.dir)), codexHookTimeoutSeconds)
 	argv = append(argv,
 		codex.ConfigFlag, codexSubagentStartHook+hook,
 		codex.ConfigFlag, codexSubagentStopHook+hook,
+		codex.ConfigFlag, codexPostToolUseHook+notice,
+		codex.ConfigFlag, codexUserPromptSubmitHook+notice,
 	)
 	return argv, agentEventEnv(c, runnerIDCodex), nil
 }
@@ -509,11 +598,24 @@ func agyMCPConfig(existing, bin string, args []string) (string, error) {
 	return string(b), nil
 }
 
-func commandHook(async bool, commands ...string) []map[string]any {
-	entries := make([]map[string]any, len(commands))
-	for i, command := range commands {
-		entries[i] = map[string]any{claudeTypeKey: claudeCommandType, claudeCommandKey: command}
-		if async {
+type hookEntry struct {
+	command string
+	async   bool
+}
+
+// noticeHooks are the events a running agent takes queued notices on: a busy
+// one at its next tool call, an idle one at the user's next prompt.
+var noticeHooks = []string{agentevent.HookPostToolUse, agentevent.HookUserPromptSubmit}
+
+func noticeHookCommand(qroutonBin, dir string) string {
+	return fmt.Sprintf(noticeHookFormat, ShellQuote(sessionpaths.AgentNotice(dir)), ShellQuote(qroutonBin), ShellQuote(dir))
+}
+
+func commandHook(hooks ...hookEntry) []map[string]any {
+	entries := make([]map[string]any, len(hooks))
+	for i, hook := range hooks {
+		entries[i] = map[string]any{claudeTypeKey: claudeCommandType, claudeCommandKey: hook.command}
+		if hook.async {
 			entries[i][claudeAsyncKey] = true
 		}
 	}
@@ -527,10 +629,14 @@ func ShellQuote(s string) string {
 	return shellQuoteChar + strings.ReplaceAll(s, shellQuoteChar, shellQuoteEscape) + shellQuoteChar
 }
 
-func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, provider, prompt string) []string {
+func runnerArgv(spec runnerSpec, r Runner, resume bool, conversation, mode, provider, prompt string) []string {
 	argv := slices.Clone(r.Command)
 	if resume {
-		argv = spec.Resume(argv)
+		if conversation != "" && spec.ResumeID != nil {
+			argv = spec.ResumeID(argv, conversation)
+		} else {
+			argv = spec.Resume(argv)
+		}
 		if resumed := strings.TrimSpace(prompt); resumed != "" {
 			argv = spec.Prompt(argv, resumed)
 		}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/vault"
 )
 
@@ -163,5 +164,33 @@ func TestShutdownCancelsACredentialLookup(t *testing.T) {
 	case <-cancelled:
 	default:
 		t.Fatal("stop returned without the credential lookup seeing its context end")
+	}
+}
+
+// Catches Shutdown returning while the dashboard can still write pulls.json.
+func TestShutdownWaitsForADashboardRefresh(t *testing.T) {
+	opts, _ := testOptions(t)
+	opts.SessionRoot = ""
+	dir := sessionDir(t, opts.Root, "pulls")
+	if err := session.WriteManifest(dir, session.Manifest{Slug: "pulls", Repos: []session.ManifestRepo{editing("web", "feat/x")}}); err != nil {
+		t.Fatal(err)
+	}
+	c := testWorkbench(t, newFakeClient(), opts)
+	started := make(chan struct{}, 1)
+	var finished atomic.Bool
+	c.Dashboard.api.credential = func(context.Context) (github.Credential, string) { return github.CredentialCLI, "t" }
+	c.Dashboard.api.pulls = func(ctx context.Context, _ string, targets []github.BranchTarget) (string, []github.BranchResult, error) {
+		started <- struct{}{}
+		<-ctx.Done()
+		time.Sleep(20 * time.Millisecond)
+		finished.Store(true)
+		return "", make([]github.BranchResult, len(targets)), nil
+	}
+	startWorkbench(t, c, opts)
+
+	<-started
+	c.Shutdown()
+	if !finished.Load() {
+		t.Fatal("the dashboard refresh was still running after Shutdown")
 	}
 }

@@ -5,9 +5,12 @@
   import SessionIdentity from "./SessionIdentity.svelte";
   import SessionSticker from "./SessionSticker.svelte";
   import { rowLabel, summaryFacts } from "./rail.js";
+  import { shownKey } from "./switcher.js";
   import { age } from "../relative.js";
   import { SWITCHER_LABEL, SWITCHER_SEARCH, SWITCHER_CLOSE, SWITCHER_EMPTY, SWITCHER_NO_MATCHES, SWITCHER_OPENING, SWITCHER_CURRENT, SWITCHER_RESULTS, SWITCHER_HELP } from "../bridge/generated.js";
   let { controller, current, stickers = [], total = 0 } = $props();
+  let currentKey = $derived(shownKey(current));
+  let sessions = $derived(controller.matches.filter((match) => !match.row.dashboard).length);
   let input;
   let panel;
   const optionID = (slug) => "session-choice-" + encodeURIComponent(slug);
@@ -41,14 +44,18 @@
     <div class="results" id="session-switcher-results" role="listbox" aria-label={SWITCHER_LABEL}>
       {#each controller.matches as match (match.row.slug)}
         {@const row = match.row}
-        <div class="option" class:active={controller.active === row.slug} id={optionID(row.slug)} role="option" aria-selected={controller.active === row.slug} aria-label={[rowLabel(row.name, row.repos, summaryFacts(row.summary, row.unseen)), match.context, row.slug === current ? SWITCHER_CURRENT : ""].filter(Boolean).join(" · ")} onclick={() => controller.activate(row.slug)} onkeydown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); controller.activate(row.slug); } }} onmousedown={(event) => event.preventDefault()} tabindex="-1">
-          <SessionIdentity initials={row.initials} name={row.name} repos={row.repos} summary={row.summary} unseen={row.unseen} idle={row.summary?.running ? "" : age(row.opened)} context={match.context} />
-          {#if row.slug === current}<span class="current">{SWITCHER_CURRENT}</span>{/if}
-          <SessionSticker id={row.sticker} {stickers} />
+        <div class="option" class:active={controller.active === row.slug} id={optionID(row.slug)} role="option" aria-selected={controller.active === row.slug} aria-label={[row.dashboard ? row.name : rowLabel(row.name, row.repos, summaryFacts(row.summary, row.unseen)), match.context, row.slug === currentKey ? SWITCHER_CURRENT : ""].filter(Boolean).join(" · ")} onclick={() => controller.activate(row.slug)} onkeydown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); controller.activate(row.slug); } }} onmousedown={(event) => event.preventDefault()} tabindex="-1">
+          {#if row.dashboard}
+            <div class="home"><span class="tile"><Icon name="dashboard" inherit /></span><span class="title">{row.name}</span></div>
+          {:else}
+            <SessionIdentity initials={row.initials} name={row.name} repos={row.repos} summary={row.summary} unseen={row.unseen} idle={row.summary?.running ? "" : age(row.opened)} context={match.context} />
+          {/if}
+          {#if row.slug === currentKey}<span class="current">{SWITCHER_CURRENT}</span>{/if}
+          {#if !row.dashboard}<SessionSticker id={row.sticker} {stickers} />{/if}
         </div>
       {/each}
     </div>
-    <div role="status" aria-live="polite">{controller.busy ? SWITCHER_OPENING : !total ? SWITCHER_EMPTY : !controller.matches.length ? SWITCHER_NO_MATCHES : `${controller.matches.length} ${SWITCHER_RESULTS}`}</div>
+    <div role="status" aria-live="polite">{controller.busy ? SWITCHER_OPENING : !total ? SWITCHER_EMPTY : !controller.matches.length ? SWITCHER_NO_MATCHES : `${sessions} ${SWITCHER_RESULTS}`}</div>
     {#if controller.error}<div class="error" role="alert">{controller.error}</div>{/if}
     <footer>{SWITCHER_HELP}</footer>
   </div>
@@ -66,4 +73,7 @@ input { width:100%; box-sizing:border-box; padding:calc(10px * var(--ui-scale));
 .option:hover { background:var(--surface-raised); }
 .current, footer { font:var(--machine-xs); color:var(--text-muted); }
 .error { color:var(--state-failed); }
+.home { display:flex; align-items:center; gap:calc(10px * var(--ui-scale)); min-width:0; flex:1; }
+.tile { width:calc(30px * var(--ui-scale)); height:calc(30px * var(--ui-scale)); flex:none; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-subtle); color:var(--accent-action); }
+.title { font:var(--machine-md); font-size:calc(11px * var(--ui-scale)); color:var(--text-secondary); }
 </style>

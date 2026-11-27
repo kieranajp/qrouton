@@ -27,6 +27,9 @@ type Config struct {
 	// a runner.
 	Launch map[string][]string `json:"launch,omitempty"`
 
+	// A runner's default profile is never listed.
+	Profiles map[string][]RunnerProfile `json:"profiles,omitempty"`
+
 	Editor []string `json:"editor,omitempty"`
 
 	// ThoughtsPlacement is the fingerprint of the thoughts folders the last
@@ -69,6 +72,13 @@ func (c *Config) Warnings() []string { return slices.Clone(c.warnings) }
 type Thoughts struct {
 	Default string         `json:"default,omitempty"`
 	Roots   []ThoughtsRoot `json:"roots,omitempty"`
+}
+
+// RunnerProfile is one account a runner launches on, kept in its own folder.
+type RunnerProfile struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Dir   string `json:"dir"`
 }
 
 type ThoughtsRoot struct {
@@ -141,6 +151,7 @@ func (c *Config) Replace(next *Config) {
 	c.Orgs = replacement.Orgs
 	c.Root = replacement.Root
 	c.Launch = replacement.Launch
+	c.Profiles = replacement.Profiles
 	c.Editor = replacement.Editor
 	c.Author = replacement.Author
 	c.ThoughtsPlacement = replacement.ThoughtsPlacement
@@ -171,6 +182,12 @@ func clone(c *Config) *Config {
 		out.Launch = make(map[string][]string, len(c.Launch))
 		for runner, argv := range c.Launch {
 			out.Launch[runner] = append([]string(nil), argv...)
+		}
+	}
+	if c.Profiles != nil {
+		out.Profiles = make(map[string][]RunnerProfile, len(c.Profiles))
+		for runner, profiles := range c.Profiles {
+			out.Profiles[runner] = slices.Clone(profiles)
 		}
 	}
 	if c.Stickers != nil {
@@ -267,6 +284,35 @@ func validateThoughts(roots []ThoughtsRoot) error {
 	return vault.Validate(profiles)
 }
 
+func (c *Config) Profile(runner, id string) (RunnerProfile, bool) {
+	c.mutex().RLock()
+	defer c.mutex().RUnlock()
+	for _, p := range c.Profiles[runner] {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	return RunnerProfile{}, false
+}
+
+func checkProfiles(profiles map[string][]RunnerProfile) error {
+	for runner, list := range profiles {
+		seen := map[string]bool{}
+		for _, p := range list {
+			switch {
+			case strings.TrimSpace(p.ID) == "" || strings.TrimSpace(p.Label) == "":
+				return fmt.Errorf("%w: %s %q", ErrProfileID, runner, p.ID)
+			case seen[p.ID]:
+				return fmt.Errorf("%w: %s %q", ErrProfileDuplicate, runner, p.ID)
+			case !filepath.IsAbs(p.Dir) || filepath.Clean(p.Dir) != p.Dir:
+				return fmt.Errorf("%w: %s %q %q", ErrProfileDir, runner, p.ID, p.Dir)
+			}
+			seen[p.ID] = true
+		}
+	}
+	return nil
+}
+
 // EffectiveStickers answers the sticker list, or the four legacy stickers
 // labelled from stickerLabels when config.json has no list yet.
 func (c *Config) EffectiveStickers() []Sticker {
@@ -359,6 +405,10 @@ func CachePath() string {
 	return filepath.Join(CacheDir(), cacheFileName)
 }
 
+func PullsCachePath() string {
+	return filepath.Join(CacheDir(), pullsCacheFileName)
+}
+
 // WebGLLogPath records the page's WebGL renderers coming and going, under QROUTON_INSPECT.
 func WebGLLogPath() string {
 	return filepath.Join(CacheDir(), webglLogFileName)
@@ -382,6 +432,9 @@ func Load() (*Config, error) {
 	resolvePaths(cfg)
 	roots := cfg.ThoughtsRoots()
 	if err := validateThoughts(roots); err != nil {
+		return nil, fmt.Errorf("%s: %w", Path(), err)
+	}
+	if err := checkProfiles(cfg.Profiles); err != nil {
 		return nil, fmt.Errorf("%s: %w", Path(), err)
 	}
 	if r, held := holdingRoot(cfg.Root, roots); held {
@@ -416,11 +469,21 @@ func resolvePaths(cfg *Config) {
 	for i := range cfg.Thoughts.Roots {
 		cfg.Thoughts.Roots[i].Path = expandHome(cfg.Thoughts.Roots[i].Path)
 	}
+	for _, profiles := range cfg.Profiles {
+		for i := range profiles {
+			profiles[i].Dir = expandHome(profiles[i].Dir)
+		}
+	}
 }
 
 func Save(cfg *Config) error {
 	snapshot := cfg.Snapshot()
 	if err := CheckThoughts(snapshot); err != nil {
+		return err
+	}
+	resolved := clone(snapshot)
+	resolvePaths(resolved)
+	if err := checkProfiles(resolved.Profiles); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(Path()), dirMode); err != nil {

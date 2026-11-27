@@ -2,6 +2,9 @@ package launch
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -60,6 +63,10 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if tookHandoff(dir) {
 			resume = false
 		}
+		var named session.Conversation
+		if resume {
+			named, resume = resumable(r, dir)
+		}
 		notice, err := takeAgentNotice(dir)
 		if err != nil {
 			return err
@@ -73,14 +80,24 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if err := announceRunnerGeneration(handle, r.ID, generation); err != nil {
 			return err
 		}
+		// After the announcement, so the workbench drops any late hook from the runner this one replaces.
+		if !resume {
+			if err := session.ClearConversation(dir); err != nil {
+				return err
+			}
+		}
 		argv, env, err := runnerLaunch(r, qroutonBin, dir, editor, handle, generation, resume, prompt)
 		if err != nil {
 			return err
 		}
 		initialPrompt = ""
 		env = workbench.WithEnv(env, EditorEnvVar, editor.Marshal())
+		before, _ := os.Stat(named.Transcript)
 		signalled, err := runAgent(argv, env, dir, relaunch)
-		// A missing transcript gets one fresh start with the notice as its opening prompt.
+		if err != nil && !signalled && named.ID != "" {
+			return keepForReload(dir, named, notice, before, err)
+		}
+		// A resume of the last conversation that finds none gets one fresh start, with the notice as its opening prompt.
 		if err != nil && !signalled && resume && freshStart {
 			freshStart = false
 			resume = false
@@ -91,11 +108,50 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if err != nil || !signalled {
 			return err
 		}
-		// Every later relaunch keeps the conversation: de-escalation, and a second
-		// trip through the picker that merely adds repositories.
+		// Signal-driven reloads keep the conversation unless a handoff is pending.
 		generation++
 		resume = true
 	}
+}
+
+// resumable is the recorded conversation a resume names, with the transcript
+// where this launch's runner will look for it. A transcript known to be missing
+// there means no resume: the runner could not find it.
+func resumable(r Runner, dir string) (session.Conversation, bool) {
+	c, ok := namedConversation(r, dir)
+	if !ok {
+		return session.Conversation{}, true
+	}
+	if state, err := StateDir(r.ID, r.Profile, os.Environ()); err == nil {
+		if located, err := TranscriptIn(r.ID, c.Transcript, state); err == nil {
+			c.Transcript = located
+		}
+	}
+	if _, err := os.Stat(c.Transcript); errors.Is(err, fs.ErrNotExist) {
+		return session.Conversation{}, false
+	}
+	return c, true
+}
+
+// keepForReload ends the supervisor with the record kept. The notice goes back
+// on the queue unless a write to the transcript since the launch shows the
+// conversation took it.
+func keepForReload(dir string, c session.Conversation, notice string, before fs.FileInfo, failed error) error {
+	var requeued error
+	if notice != "" && !transcriptChanged(c.Transcript, before) {
+		requeued = session.QueueAgentNotice(dir, notice)
+	}
+	return errors.Join(fmt.Errorf("%w: %s: %w", ErrKeptForReload, c.ID, failed), requeued)
+}
+
+// transcriptChanged compares stats, not the wall clock: Linux stamps mtimes from
+// a coarse clock that can trail time.Now by milliseconds.
+func transcriptChanged(path string, before fs.FileInfo) bool {
+	after, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return before == nil || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime())
 }
 
 var firstRunnerGeneration = func() uint64 { return uint64(time.Now().UnixNano()) }
@@ -111,7 +167,8 @@ func takeInitialPrompt(dir string) (string, error) {
 }
 
 func takeAgentNotice(dir string) (string, error) {
-	return takePrompt(sessionpaths.AgentNotice(dir))
+	notices, err := session.TakeAgentNotices(dir)
+	return session.JoinAgentNotices(notices), err
 }
 
 func takePrompt(path string) (string, error) {

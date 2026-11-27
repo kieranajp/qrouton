@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package qrouton.v1;
+
+import "google/protobuf/timestamp.proto";
+import "qrouton/v1/status.proto";
+
+option go_package = "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1";
+
+// DashboardStatus is every session's pull requests and git stats, and how fresh they are.
+message DashboardStatus {
+  string viewer = 1;
+  google.protobuf.Timestamp checked_at = 2;
+  bool refreshing = 3;
+  bool failed = 4;
+  bool signed_out = 5;
+  google.protobuf.Timestamp paused_until = 6;
+  map<string, DashboardSession> sessions = 7;
+}
+
+message DashboardSession {
+  repeated GitHubPullRequest pull_requests = 1;
+  string pull_state = 2;
+  repeated RepoStat repos = 3;
+}

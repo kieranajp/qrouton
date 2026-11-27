@@ -25,6 +25,9 @@ func writeSupport(dir string) error {
 func superviseArgv(qroutonBin, dir string, r Runner, handle workbench.Handle, editor EditorCommand, resume bool) []string {
 	argv := []string{qroutonBin, AgentSubcommand, sessionRootFlag, dir, runnerFlag, r.ID,
 		workbenchJSONFlag, handle.Marshal(), editorJSONFlag, editor.Marshal()}
+	if r.Profile.ID != "" {
+		argv = append(argv, profileFlag, r.Profile.ID)
+	}
 	if resume {
 		argv = append(argv, resumeFlag)
 	}

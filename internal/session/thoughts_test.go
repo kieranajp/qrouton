@@ -105,8 +105,9 @@ func TestCreateFallsBackToTheDefaultRootWhenTheMappedOneIsMissing(t *testing.T) 
 	if m := loadManifest(t, dir); m.ThoughtsRoot != config.DefaultThoughtsID {
 		t.Fatalf("thoughtsRoot = %q", m.ThoughtsRoot)
 	}
-	notice, err := os.ReadFile(sessionpaths.AgentNotice(dir))
-	if err != nil || !strings.Contains(string(notice), `"work"`) || !strings.Contains(string(notice), shared) {
+	notices, err := TakeAgentNotices(dir)
+	notice := JoinAgentNotices(notices)
+	if err != nil || !strings.Contains(notice, `"work"`) || !strings.Contains(notice, shared) {
 		t.Fatalf("notice = %q, %v", notice, err)
 	}
 	if _, err := os.Stat(shared); !os.IsNotExist(err) {

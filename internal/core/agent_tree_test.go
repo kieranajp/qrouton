@@ -14,7 +14,10 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/agentevent"
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -319,5 +322,65 @@ func TestCoverageRemovalIsLimitedToCodex(t *testing.T) {
 	}
 	if note := coverageNote("other", agentCapabilities{Children: true}); !strings.Contains(note, "reports its agents starting and stopping") {
 		t.Fatalf("generic lifecycle coverage = %q", note)
+	}
+}
+
+func TestAgentTreeNamesTheProfile(t *testing.T) {
+	cfg := &config.Config{Profiles: map[string][]config.RunnerProfile{
+		"claude": {{ID: "lifesum", Label: "Lifesum", Dir: "/tmp/claude-lifesum"}},
+	}}
+	dir := profiledSession(t, t.TempDir(), "profiled", "claude", "lifesum")
+	booted := newSessions().add(dir, []string{"/bin/cat"}, os.Environ())
+	booted.provider, booted.profile = "claude", "lifesum"
+
+	for name, tree := range map[string]status.AgentTree{
+		"booted": sessionTree(cfg, booted), "cold": coldTree(cfg, dir),
+	} {
+		if tree.ProviderLabel != "Claude Code" || tree.ProfileLabel != "Lifesum" {
+			t.Fatalf("%s tree names %q · %q, want Claude Code · Lifesum", name, tree.ProviderLabel, tree.ProfileLabel)
+		}
+	}
+	wire, _ := json.Marshal(coldTree(cfg, dir))
+	if !strings.Contains(string(wire), `"profileLabel":"Lifesum"`) {
+		t.Fatalf("tree on the wire = %s", wire)
+	}
+	if label := coldTree(cfg, profiledSession(t, t.TempDir(), "plain", "claude", "")).ProfileLabel; label != "" {
+		t.Fatalf("a default-profile session names profile %q", label)
+	}
+
+	// A workbench started from the command line boots the default account even
+	// when the manifest names a profile.
+	defaulted := newSessions().add(dir, []string{"/bin/cat"}, os.Environ())
+	defaulted.provider = "claude"
+	if label := sessionTree(cfg, defaulted).ProfileLabel; label != "" {
+		t.Fatalf("a session booted on the default account names profile %q", label)
+	}
+}
+
+// A deleted profile still pins its sessions, so the pane names the id they are
+// waiting on rather than nothing.
+func TestAgentTreeFallsBackToTheProfileID(t *testing.T) {
+	dir := profiledSession(t, t.TempDir(), "orphaned", "claude", "gone")
+	if label := coldTree(&config.Config{}, dir).ProfileLabel; label != "gone" {
+		t.Fatalf("a session on a deleted profile names %q, want its id", label)
+	}
+}
+
+func TestTheWorkbenchNamesARunningSessionsProfileFromConfig(t *testing.T) {
+	opts, _ := testOptions(t)
+	opts.Config = &config.Config{Profiles: map[string][]config.RunnerProfile{
+		"claude": {{ID: "lifesum", Label: "Lifesum Work", Dir: "/tmp/claude-lifesum"}},
+	}}
+	if err := session.UpdateManifest(opts.SessionRoot, func(m session.Manifest) (session.Manifest, error) {
+		m.Runner, m.Profile = "claude", "lifesum"
+		return m, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := testWorkbench(t, newFakeClient(), opts)
+	startWorkbench(t, c, opts)
+
+	if label := c.Chrome.AgentTree("octopus").ProfileLabel; label != "Lifesum Work" {
+		t.Fatalf("the running session's tree names profile %q, want its config label", label)
 	}
 }

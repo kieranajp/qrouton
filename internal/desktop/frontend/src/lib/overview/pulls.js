@@ -5,7 +5,7 @@ import { PULL_REQUEST_STATES } from "../bridge/generated.js";
 export const SIGNED_OUT = "GitHub is not signed in";
 
 /** @type {Record<string, import("../core/icons.js").IconName>} */
-const ICONS = {
+export const ICONS = {
   [PULL_REQUEST_STATES.OPEN]: "pull-open",
   [PULL_REQUEST_STATES.DRAFT]: "pull-draft",
   [PULL_REQUEST_STATES.MERGED]: "pull-merged",

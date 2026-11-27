@@ -59,10 +59,38 @@ test("assistant mode replaces RPI marks with a cube escalation action", async ({
       mode: "ASSISTANT",
       terminal: "term-1",
       picker: true,
+      pickerID: "e1",
       repos: [],
     }),
   );
   await expect(page.locator(".dialog").getByRole("button", { name: "Escalate", exact: true })).toBeVisible();
+});
+
+// An overlay keyed on the session relabels a running add when an escalation
+// arrives, then keeps its spent state, leaving both buttons dead.
+test("an escalation arriving during an add waits for it, then opens with live buttons", async ({ page }) => {
+  await open(page, "window-1", "ASSISTANT");
+  await page.getByRole("button", { name: "Add repos", exact: true }).click();
+  const dialog = page.locator(".dialog");
+  const add = dialog.getByRole("button", { name: "Add repositories" });
+  await add.click();
+  await expect(add).toBeDisabled();
+
+  await page.evaluate(() =>
+    window.shell.chrome({ identity: "Octopus", mode: "ASSISTANT", terminal: "term-1", picker: true, pickerID: "e1", repos: [] }),
+  );
+  await expect(add).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Escalate", exact: true })).toHaveCount(0);
+
+  await page.evaluate(() => window.shell.finishAdd());
+  const escalate = dialog.getByRole("button", { name: "Escalate", exact: true });
+  await expect(escalate).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  await escalate.click();
+  await expect.poll(() => page.evaluate(() => window.shell.confirms())).toEqual([
+    ["octopus", ""],
+    ["octopus", "e1"],
+  ]);
 });
 
 test("RPI mode keeps its workflow marks and has no escalation action", async ({ page }) => {
@@ -344,4 +372,55 @@ test("the Overview keeps its rows through chrome and tree updates", async ({ pag
   await expect(row).toContainText("Bash sleep 20");
   expect(await row.evaluate((el) => el === window.agentRow)).toBe(true);
   await expect(page.locator(".human .orchestrator")).toContainText("Bash sleep 20");
+});
+
+const ON_DISK = [{ slug: "octopus", name: "Octopus", initials: "OC", terminal: "term-1", repos: [] }];
+const dashboard = (page) => page.getByRole("region", { name: "Dashboard" });
+const assembly = (page) => page.getByRole("button", { name: "Choose repositories" });
+
+test("showing the dashboard releases the keyboard from the hidden agent terminal", async ({ page }) => {
+  await page.goto("/tests/shell.html");
+  await page.evaluate((sessions) => window.shell.snapshot({ identity: "Octopus", mode: "RPI", terminal: "term-1", sessions }), ON_DISK);
+  await expect(page.locator('[data-terminal-id="term-1"] textarea')).toBeAttached();
+  await page.evaluate(() => window.shell.focus("term-1"));
+  await expect.poll(() => page.evaluate(() => window.shell.focused())).toBe("term-1");
+  // Kept rendered, so Chromium's own release of a hidden element's focus cannot stand in for the page's, which WebKit needs.
+  await page.addStyleTag({ content: ".work.hidden { display: contents !important; } .agent .pane:has([data-terminal-id]) { display: flex !important; }" });
+  await page.evaluate(() => window.shell.snapshot({ slug: "", terminal: "" }));
+  await expect(dashboard(page)).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest(".work")))).toBe(false);
+});
+
+// An identity button with no session would open a menu of disabled items under an empty name.
+test("on the dashboard the titlebar says Dashboard as plain text, and a session brings back its name and menu", async ({ page }) => {
+  await page.goto("/tests/shell.html");
+  await page.evaluate((sessions) => window.shell.snapshot({ slug: "", identity: "", terminal: "", sessions }), ON_DISK);
+  const titlebar = page.locator(".titlebar .identity");
+  await expect(titlebar).toHaveText("Dashboard");
+  await expect(titlebar.getByRole("button")).toHaveCount(0);
+  await page.evaluate(() => window.shell.snapshot({ slug: "octopus", identity: "Octopus", terminal: "term-1" }));
+  await expect(titlebar.getByRole("button", { name: "Octopus" })).toBeVisible();
+});
+
+// Gated, Escape would trap the user in the dialog; opening unasked, it would cover the dashboard on every cold start.
+test("with sessions on disk the dialog waits to be asked, and Escape returns to the dashboard", async ({ page }) => {
+  await page.goto("/tests/shell.html");
+  await page.evaluate((sessions) => window.shell.snapshot({ slug: "", terminal: "", sessions }), ON_DISK);
+  await expect(page.locator('[data-session-slug="octopus"]')).toBeVisible();
+  await expect(dashboard(page)).toBeVisible();
+  await expect(assembly(page)).toHaveCount(0);
+  await page.getByRole("button", { name: "New session" }).click();
+  await expect(assembly(page)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(assembly(page)).toHaveCount(0);
+  await expect(dashboard(page)).toBeVisible();
+});
+
+test("with no sessions the dialog opens itself and Escape keeps it", async ({ page }) => {
+  await page.goto("/tests/shell.html");
+  await page.evaluate(() => window.shell.snapshot({ slug: "", terminal: "", sessions: [] }));
+  await expect(assembly(page)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(assembly(page)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel" })).toHaveCount(0);
 });

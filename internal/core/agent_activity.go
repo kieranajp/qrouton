@@ -212,6 +212,16 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 	return true
 }
 
+// whileCurrent runs fn only for the runner generation now announced, and holds
+// off the next announcement until fn returns.
+func (a *agentActivity) whileCurrent(provider string, generation uint64, fn func()) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.currentLocked(provider, generation) {
+		fn()
+	}
+}
+
 func (a *agentActivity) currentLocked(provider string, generation uint64) bool {
 	return a.running && generation == a.generation && provider == a.provider
 }

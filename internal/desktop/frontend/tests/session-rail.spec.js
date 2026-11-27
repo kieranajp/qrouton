@@ -383,38 +383,27 @@ test("the badge carries the row's state", async ({ page }) => {
   expect(await background(avatar(/^Session 2/))).toBe("rgba(0, 0, 0, 0)");
 });
 
-test("the rail headings all read at one rank, centred", async ({ page }) => {
-  const faint = await token(page, "--text-faint");
-  for (const heading of ["Sessions"]) {
-    const caps = page.locator(".caps", { hasText: heading }).first();
-    expect(await caps.evaluate((el) => getComputedStyle(el).color)).toBe(faint);
-    expect(await caps.evaluate((el) => getComputedStyle(el).textAlign)).toBe("center");
-  }
+// A centred label would sit off the left edge the badges below it share.
+test("the Sessions label reads faint and starts on the badges' left edge", async ({ page }) => {
+  const caps = page.locator(".caps", { hasText: "Sessions" }).first();
+  expect(await caps.evaluate((el) => getComputedStyle(el).color)).toBe(await token(page, "--text-faint"));
+  const label = (await caps.boundingBox()).x;
+  const badge = (await sessionButton(page, "Session 2").locator(".avatar").boundingBox()).x;
+  expect(Math.abs(label - badge)).toBeLessThan(1);
 });
 
-test("the rail's first row starts on the pane header's line", async ({ page }) => {
-  const band = page.locator(".band");
-  const header = await band.evaluate((el) => getComputedStyle(el).height);
-  const paneHeader = await page.evaluate(() => {
-    const probe = document.createElement("div");
-    probe.style.height = "var(--h-pane-header)";
-    document.body.append(probe);
-    const height = getComputedStyle(probe).height;
-    probe.remove();
-    return height;
-  });
-  expect(header).toBe(paneHeader);
-  expect(await band.evaluate((el) => getComputedStyle(el).borderBottomWidth)).toBe("0px");
-
-  // Centred in the band, not sat on its floor: the tab labels are centred in
-  // the pane header beside it, and sitting the label low left a hand's width of nothing
-  // above it.
-  const centres = await band.evaluate((el) => {
-    const caps = el.querySelector(".caps").getBoundingClientRect();
-    const outer = el.getBoundingClientRect();
-    return { label: caps.top + caps.height / 2 - outer.top, band: outer.height / 2 };
-  });
-  expect(centres.label).toBeCloseTo(centres.band, 0);
+// A band the row filled would put its border against the titlebar; a row without border-box runs two pixels past the Dashboard row.
+test("the Dashboard row stands clear of the rail's top and matches the session rows' width and left edge", async ({ page }) => {
+  const rail = await page.locator(".rail").boundingBox();
+  const home = await dashboardRow(page).boundingBox();
+  expect(home.y - rail.y).toBeGreaterThanOrEqual(12);
+  const row = await page.locator('[data-session-slug="session-2"]').boundingBox();
+  expect(row.x).toBeCloseTo(home.x, 0);
+  expect(row.width).toBeCloseTo(home.width, 0);
+  const tile = await dashboardRow(page).locator(".tile").boundingBox();
+  const badge = await sessionButton(page, "Session 2").locator(".avatar").boundingBox();
+  expect(tile.x).toBeCloseTo(badge.x, 0);
+  expect(tile.width).toBeCloseTo(badge.width, 0);
 });
 
 test("a summary without a root state falls back to the active count", async ({ page }) => {
@@ -602,8 +591,8 @@ test("Unload follows Reload and the expanded menu fits near the viewport edge", 
       bubbles: true, clientX: 1275, clientY: 415,
     }));
   });
-  await expect(page.locator(".menu button.item")).toHaveText([
-    "Reload", "Unload", "Reveal in Finder", "Clean up…",
+  await expect(page.locator(".menu > div > button.item")).toHaveText([
+    "Reload", "Switch profile", "Unload", "Reveal in Finder", "Clean up…",
   ]);
   await expect(page.getByRole("button", { name: "Unload", exact: true })).toBeEnabled();
   const box = await page.locator(".menu").boundingBox();
@@ -635,7 +624,7 @@ test("unloading a background row sends its slug, dims it and preserves selection
   await page.getByRole("button", { name: "Unload", exact: true }).click();
   await expect(page.locator(".menu")).toBeHidden();
   await expect(page.getByRole("button", { name: "Conversation focus" })).toBeFocused();
-  await expect(row.locator(".name")).toHaveCSS("color", await token(page, "--text-muted"));
+  await expect(row.locator(".name")).toHaveCSS("color", await token(page, "--text-secondary"));
   await expect(row).toContainText("Idle · 1d");
   await expect(page.getByRole("button", { name: /^Checkout migration ·/ })).toHaveAttribute(
     "aria-current", "page",
@@ -645,19 +634,16 @@ test("unloading a background row sends its slug, dims it and preserves selection
   ]);
 });
 
-test("unloading the selected row reveals a loaded fallback, then leaves dimmed resumable rows", async ({ page }) => {
+test("unloading the selected row lands on the dashboard and leaves a dimmed resumable row", async ({ page }) => {
   await page.getByRole("button", { name: /^Session 2 ·/ }).click();
   await page.getByRole("button", { name: /^Checkout migration ·/ }).click();
   const checkout = page.getByRole("button", { name: /^Checkout migration ·/ });
   const second = page.getByRole("button", { name: /^Session 2 ·/ });
   await checkout.click({ button: "right" });
   await page.getByRole("button", { name: "Unload", exact: true }).click();
-  await expect(second).toHaveAttribute("aria-current", "page");
-  await expect(checkout.locator(".name")).toHaveCSS("color", await token(page, "--text-muted"));
-  await second.click({ button: "right" });
-  await page.getByRole("button", { name: "Unload", exact: true }).click();
-  await expect(page.locator('[aria-current="page"]')).toHaveCount(0);
-  await expect(checkout).toBeVisible();
+  await expect(page.getByRole("button", { name: "Dashboard", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator('.session-list [aria-current="page"]')).toHaveCount(0);
+  await expect(checkout.locator(".name")).toHaveCSS("color", await token(page, "--text-secondary"));
   await expect(second).toBeVisible();
   await expect(page.getByRole("button", { name: "Conversation focus" })).toBeFocused();
   await checkout.click();
@@ -677,6 +663,23 @@ test("an Unload refusal leaves the row loaded and returns focus with row feedbac
   expect(await page.getByRole("alert").evaluate((node) => node.closest(".row")?.querySelector(".name")?.textContent)).toBe("Checkout migration");
   await row.click({ button: "right" });
   await expect(page.getByRole("button", { name: "Unload", exact: true })).toBeEnabled();
+});
+
+// Catches a rejected open (bad runner, no agent installed) vanishing, leaving the click looking dead.
+test("a row click whose open is refused shows the reason on that row", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.failNextShow("no supported coding agent is installed"));
+  await sessionButton(page, "Session 2").click();
+  await expect(page.getByRole("alert")).toHaveText("Session could not be opened: no supported coding agent is installed");
+  expect(await page.getByRole("alert").evaluate((node) => node.closest(".row")?.querySelector(".name")?.textContent)).toBe("Session 2");
+  await expect(sessionButton(page, "Checkout migration")).toHaveAttribute("aria-current", "page");
+});
+
+// Catches the dashboard cards opening a session by a path that skips the rail's failure notice.
+test("an open started outside the rail reports its refusal on the rail row", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.failNextShow());
+  await page.evaluate(() => window.sessionRail.openElsewhere("session-3"));
+  await expect(page.getByRole("alert")).toHaveText("Session could not be opened");
+  expect(await page.getByRole("alert").evaluate((node) => node.closest(".row")?.querySelector(".name")?.textContent)).toBe("Session 3");
 });
 
 const sessionButton = (page, name) => page.getByRole("button", { name: new RegExp("^" + name + " ·") });
@@ -878,4 +881,102 @@ test("pointer movement below the drag threshold stays a click", async ({ page })
   expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
     { method: "show", slug: "session-2" },
   ]);
+});
+
+const openRowMenu = (page, name) => page.getByRole("button", { name: new RegExp(`^${name} ·`) }).click({ button: "right" });
+const topLevel = (page) => page.locator(".menu > div > button.item");
+const profileChoices = (page) => page.locator(".menu .submenu button.item");
+
+// Catches the switch going missing from a claude row, or dropping the default profile.
+test("a claude row's menu offers Switch profile under Reload, listing Default and each named profile", async ({ page }) => {
+  await openRowMenu(page, "Checkout migration");
+  await expect(topLevel(page).nth(1)).toHaveText("Switch profile");
+  await topLevel(page).nth(1).hover();
+  await expect(profileChoices(page).locator(".label")).toHaveText(["Default", "Work", "Home"]);
+});
+
+// Catches the current profile being offered as a switch, which would restart the session for nothing.
+test("the current profile is marked, reads current and cannot be picked", async ({ page }) => {
+  await openRowMenu(page, "Checkout migration");
+  await topLevel(page).nth(1).hover();
+  const current = profileChoices(page).filter({ hasText: "Work" });
+  await expect(current).toBeDisabled();
+  await expect(current).toHaveClass(/active/);
+  await expect(current.locator(".meta")).toHaveText("current");
+  await current.evaluate((button) => button.click());
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([]);
+});
+
+// Catches a pick reaching the wrong session or the wrong profile.
+test("picking another profile switches that row to it", async ({ page }) => {
+  await openRowMenu(page, "Checkout migration");
+  await page.keyboard.press("Escape");
+  await openRowMenu(page, "Session 3");
+  await topLevel(page).nth(1).hover();
+  await expect(profileChoices(page).filter({ hasText: "Default" })).toBeDisabled();
+  await profileChoices(page).filter({ hasText: "Work" }).click();
+  await expect(page.locator(".menu")).toBeHidden();
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
+    { method: "switchProfile", slug: "session-3", profile: "work" },
+  ]);
+});
+
+// Catches the switch being offered where there is no profile to go to, or no way to carry the conversation.
+test("a codex row and a claude row with no named profiles offer no switch", async ({ page }) => {
+  const withoutSwitch = ["Reload", "Unload", "Reveal in Finder", "Clean up…"];
+  await openRowMenu(page, "Session 2");
+  await expect(topLevel(page)).toHaveText(withoutSwitch);
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => window.sessionRail.setProfiles([{ runner: "claude", profiles: [] }]));
+  await openRowMenu(page, "Checkout migration");
+  await expect(topLevel(page)).toHaveText(withoutSwitch);
+});
+
+// Catches a failed switch going unreported, and the no-conversation refusal reading as a generic failure.
+test("a failed switch shows the row notice, and an unrecorded conversation asks for a message", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.failNextSwitch());
+  await openRowMenu(page, "Checkout migration");
+  await topLevel(page).nth(1).hover();
+  await profileChoices(page).filter({ hasText: "Home" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Profile could not be switched");
+
+  await page.evaluate((message) => window.sessionRailBridge.failNextSwitch(message), "send the session one message before switching its profile");
+  await openRowMenu(page, "Checkout migration");
+  await topLevel(page).nth(1).hover();
+  await profileChoices(page).filter({ hasText: "Home" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Send one message, then switch profile");
+});
+
+const dashboardRow = (page) => page.getByRole("button", { name: "Dashboard", exact: true });
+
+test("the Dashboard row leads the rail and is selected only while no session is shown", async ({ page }) => {
+  const box = await dashboardRow(page).boundingBox();
+  const first = await sessionButton(page, "Checkout migration").boundingBox();
+  expect(box.y).toBeLessThan(first.y);
+  await expect(dashboardRow(page)).not.toHaveAttribute("aria-current", "page");
+  await expect(sessionButton(page, "Checkout migration")).toHaveAttribute("aria-current", "page");
+
+  await dashboardRow(page).click();
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([{ method: "showDashboard" }]);
+  await expect(dashboardRow(page)).toHaveAttribute("aria-current", "page");
+  await expect(dashboardRow(page).locator('[data-icon="dashboard"]')).toHaveCount(1);
+  await expect(page.locator('.session-list [aria-current="page"]')).toHaveCount(0);
+
+  await sessionButton(page, "Session 2").click();
+  await expect(dashboardRow(page)).not.toHaveAttribute("aria-current", "page");
+});
+
+// Inside the drag hit-test, the Dashboard row could be dragged into the list or reorder a session onto itself.
+test("the Dashboard row neither starts a drag nor takes a drop", async ({ page }) => {
+  await expect(dashboardRow(page)).not.toHaveAttribute("data-session-slug");
+  await beginDrag(page, sessionButton(page, "Session 2"), dashboardRow(page));
+  await expect(page.locator(".row.over")).toHaveCount(0);
+  await page.mouse.up();
+
+  await beginDrag(page, dashboardRow(page), sessionButton(page, "Session 3"));
+  await expect(page.locator(".row.dragging, .row.over")).toHaveCount(0);
+  await page.mouse.up();
+
+  expect((await page.evaluate(() => window.sessionRailBridge.calls())).filter((call) => call.method === "reorder")).toEqual([]);
+  expect((await railOrder(page)).slice(0, 3)).toEqual(["Checkout migration", "Session 2", "Session 3"]);
 });

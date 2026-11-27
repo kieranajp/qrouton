@@ -36,6 +36,27 @@ export function age(at, now = Date.now()) {
   return `${Math.floor(since / MONTH)}mo`;
 }
 
+const pad = (count) => String(count).padStart(2, "0");
+
+/** The local 24-hour time of day, as "08:41".
+ * @param {string|number|Date} at */
+export function clock(at) {
+  const then = new Date(at);
+  if (!(then.getTime() > 0)) return "";
+  return `${pad(then.getHours())}:${pad(then.getMinutes())}`;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** The clock time, with a short date in front when it falls on another day than now: "08:41", "18 Nov 17:30".
+ * @param {string|number|Date} at @param {number} [now] */
+export function stamp(at, now = Date.now()) {
+  const time = clock(at);
+  if (!time) return "";
+  const then = new Date(at);
+  return then.toDateString() === new Date(now).toDateString() ? time : `${then.getDate()} ${MONTHS[then.getMonth()]} ${time}`;
+}
+
 /** Compact ages stay numeric, prose ages turn into dates, and ago ages count weeks and months.
  * @param {string|number|Date} at @param {Style} style
  * @param {number} [now] */

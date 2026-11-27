@@ -13,6 +13,8 @@ func validStrings(m protoreflect.Message) {
 	var repairs []func()
 	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
 		switch {
+		case fd.IsMap():
+			repairs = append(repairs, validMap(fd, v.Map())...)
 		case fd.IsList():
 			list := v.List()
 			for i := range list.Len() {
@@ -37,6 +39,32 @@ func validStrings(m protoreflect.Message) {
 	for _, repair := range repairs {
 		repair()
 	}
+}
+
+// validMap repairs a map's string keys and values in place, and walks its message values.
+func validMap(fd protoreflect.FieldDescriptor, m protoreflect.Map) []func() {
+	var repairs []func()
+	m.Range(func(k protoreflect.MapKey, v protoreflect.Value) bool {
+		switch fd.MapValue().Kind() {
+		case protoreflect.MessageKind:
+			validStrings(v.Message())
+		case protoreflect.StringKind:
+			if s := v.String(); !utf8.ValidString(s) {
+				v = protoreflect.ValueOfString(validUTF8(s))
+				repairs = append(repairs, func() { m.Set(k, v) })
+			}
+		}
+		if fd.MapKey().Kind() == protoreflect.StringKind {
+			if key := k.String(); !utf8.ValidString(key) {
+				repairs = append(repairs, func() {
+					m.Clear(k)
+					m.Set(protoreflect.ValueOfString(validUTF8(key)).MapKey(), v)
+				})
+			}
+		}
+		return true
+	})
+	return repairs
 }
 
 // validUTF8 replaces each invalid byte as encoding/json does, where

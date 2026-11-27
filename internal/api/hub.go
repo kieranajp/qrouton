@@ -126,6 +126,10 @@ func (h *Hub) Ollama(s core.OllamaStatus) {
 	h.publish(&qroutonv1.Event{Payload: &qroutonv1.Event_Ollama{Ollama: ollamaStatus(s)}})
 }
 
+func (h *Hub) Dashboard(s core.DashboardStatus) {
+	h.publish(&qroutonv1.Event{Payload: &qroutonv1.Event_Dashboard{Dashboard: dashboardStatus(s)}})
+}
+
 func (h *Hub) Chrome(f status.Fields) {
 	h.publish(&qroutonv1.Event{Payload: &qroutonv1.Event_Chrome{Chrome: chromeFields(f)}})
 }

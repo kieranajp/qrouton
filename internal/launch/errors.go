@@ -13,6 +13,18 @@ var (
 
 	ErrRunnerUnavailable = errors.New("runner is unavailable")
 
+	ErrProfileUnavailable = errors.New("runner profile is not configured")
+
+	ErrProfilesUnsupported = errors.New("runner does not support profiles")
+
+	ErrProfileSwitchUnsupported = errors.New("runner cannot move a conversation between profiles")
+
+	ErrNoHome = errors.New("HOME is not set, so the default profile's folder is unknown")
+
+	ErrUnplacedTranscript = errors.New("transcript is not inside a project folder")
+
+	ErrKeptForReload = errors.New("the runner exited with an error; Reload resumes its conversation")
+
 	ErrLoginShell = errors.New("login shell could not start")
 
 	// ErrUnsupportedRunner means a Runner reached the launch path with an id no

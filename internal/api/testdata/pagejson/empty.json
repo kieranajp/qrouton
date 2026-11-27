@@ -44,6 +44,7 @@
   "AgentTree": {
     "coverage": "",
     "nodes": [],
+    "profileLabel": "",
     "provider": "",
     "providerLabel": "",
     "tools": false
@@ -86,7 +87,9 @@
     "identity": "",
     "mode": "",
     "picker": false,
+    "pickerID": "",
     "placing": false,
+    "profiles": [],
     "pullRequests": null,
     "repos": [],
     "repositoryDocuments": [],
@@ -100,6 +103,20 @@
     "stickers": [],
     "terminal": "",
     "welcoming": false
+  },
+  "DashboardSession": {
+    "pullRequests": [],
+    "pullState": "",
+    "repos": []
+  },
+  "DashboardStatus": {
+    "checkedAt": null,
+    "failed": false,
+    "pausedUntil": null,
+    "refreshing": false,
+    "sessions": {},
+    "signedOut": false,
+    "viewer": ""
   },
   "Document": {
     "assetToken": "",
@@ -127,10 +144,14 @@
     "seq": "0"
   },
   "GitHubPullRequest": {
+    "author": "",
+    "checksFailing": false,
     "number": 0,
     "repo": "",
+    "review": "",
     "state": "",
     "title": "",
+    "updatedAt": null,
     "url": ""
   },
   "HelloRequest": {
@@ -155,6 +176,10 @@
   },
   "OrgsChanged": {
     "orgs": []
+  },
+  "Profile": {
+    "id": "",
+    "label": ""
   },
   "PullRequest": {},
   "PullRequestList": {
@@ -201,6 +226,10 @@
   },
   "ResizeResponse": {},
   "Resync": {},
+  "RunnerProfiles": {
+    "profiles": [],
+    "runner": ""
+  },
   "SessionDigest": {
     "at": "",
     "text": ""
@@ -228,7 +257,9 @@
     "mode": "",
     "name": "",
     "opened": null,
+    "profile": "",
     "repos": [],
+    "runner": "",
     "slug": "",
     "sticker": "",
     "summary": null,

@@ -128,6 +128,7 @@ type Event struct {
 	//	*Event_OrgsChanged
 	//	*Event_UiScale
 	//	*Event_Resync
+	//	*Event_Dashboard
 	Payload       isEvent_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -303,6 +304,15 @@ func (x *Event) GetResync() *Resync {
 	return nil
 }
 
+func (x *Event) GetDashboard() *DashboardStatus {
+	if x != nil {
+		if x, ok := x.Payload.(*Event_Dashboard); ok {
+			return x.Dashboard
+		}
+	}
+	return nil
+}
+
 type isEvent_Payload interface {
 	isEvent_Payload()
 }
@@ -363,6 +373,10 @@ type Event_Resync struct {
 	Resync *Resync `protobuf:"bytes,15,opt,name=resync,proto3,oneof"`
 }
 
+type Event_Dashboard struct {
+	Dashboard *DashboardStatus `protobuf:"bytes,16,opt,name=dashboard,proto3,oneof"`
+}
+
 func (*Event_Ollama) isEvent_Payload() {}
 
 func (*Event_Chrome) isEvent_Payload() {}
@@ -390,6 +404,8 @@ func (*Event_OrgsChanged) isEvent_Payload() {}
 func (*Event_UiScale) isEvent_Payload() {}
 
 func (*Event_Resync) isEvent_Payload() {}
+
+func (*Event_Dashboard) isEvent_Payload() {}
 
 type AgentTreeChanged struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -721,11 +737,11 @@ var File_qrouton_v1_events_proto protoreflect.FileDescriptor
 const file_qrouton_v1_events_proto_rawDesc = "" +
 	"\n" +
 	"\x17qrouton/v1/events.proto\x12\n" +
-	"qrouton.v1\x1a\x19qrouton/v1/assembly.proto\x1a\x1aqrouton/v1/documents.proto\x1a\x17qrouton/v1/ollama.proto\x1a\x1dqrouton/v1/repositories.proto\x1a\x17qrouton/v1/status.proto\x1a\x1aqrouton/v1/terminals.proto\x1a\x18qrouton/v1/windows.proto\"/\n" +
+	"qrouton.v1\x1a\x19qrouton/v1/assembly.proto\x1a\x1aqrouton/v1/dashboard.proto\x1a\x1aqrouton/v1/documents.proto\x1a\x17qrouton/v1/ollama.proto\x1a\x1dqrouton/v1/repositories.proto\x1a\x17qrouton/v1/status.proto\x1a\x1aqrouton/v1/terminals.proto\x1a\x18qrouton/v1/windows.proto\"/\n" +
 	"\x10SubscribeRequest\x12\x1b\n" +
 	"\tafter_seq\x18\x01 \x01(\x04R\bafterSeq\"<\n" +
 	"\x11SubscribeResponse\x12'\n" +
-	"\x05event\x18\x01 \x01(\v2\x11.qrouton.v1.EventR\x05event\"\xac\a\n" +
+	"\x05event\x18\x01 \x01(\v2\x11.qrouton.v1.EventR\x05event\"\xe9\a\n" +
 	"\x05Event\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x122\n" +
 	"\x06ollama\x18\x02 \x01(\v2\x18.qrouton.v1.OllamaStatusH\x00R\x06ollama\x122\n" +
@@ -743,7 +759,8 @@ const file_qrouton_v1_events_proto_rawDesc = "" +
 	"\x12assembly_requested\x18\f \x01(\v2\x1d.qrouton.v1.AssemblyRequestedH\x00R\x11assemblyRequested\x12<\n" +
 	"\forgs_changed\x18\r \x01(\v2\x17.qrouton.v1.OrgsChangedH\x00R\vorgsChanged\x127\n" +
 	"\bui_scale\x18\x0e \x01(\v2\x1a.qrouton.v1.UIScaleChangedH\x00R\auiScale\x12,\n" +
-	"\x06resync\x18\x0f \x01(\v2\x12.qrouton.v1.ResyncH\x00R\x06resyncB\t\n" +
+	"\x06resync\x18\x0f \x01(\v2\x12.qrouton.v1.ResyncH\x00R\x06resync\x12;\n" +
+	"\tdashboard\x18\x10 \x01(\v2\x1b.qrouton.v1.DashboardStatusH\x00R\tdashboardB\t\n" +
 	"\apayload\"Q\n" +
 	"\x10AgentTreeChanged\x12\x12\n" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12)\n" +
@@ -795,9 +812,10 @@ var file_qrouton_v1_events_proto_goTypes = []any{
 	(*TerminalExit)(nil),      // 14: qrouton.v1.TerminalExit
 	(*RepositoryRefresh)(nil), // 15: qrouton.v1.RepositoryRefresh
 	(*AssemblyProgress)(nil),  // 16: qrouton.v1.AssemblyProgress
-	(*AgentTree)(nil),         // 17: qrouton.v1.AgentTree
-	(*Document)(nil),          // 18: qrouton.v1.Document
-	(*RenderedDiagram)(nil),   // 19: qrouton.v1.RenderedDiagram
+	(*DashboardStatus)(nil),   // 17: qrouton.v1.DashboardStatus
+	(*AgentTree)(nil),         // 18: qrouton.v1.AgentTree
+	(*Document)(nil),          // 19: qrouton.v1.Document
+	(*RenderedDiagram)(nil),   // 20: qrouton.v1.RenderedDiagram
 }
 var file_qrouton_v1_events_proto_depIdxs = []int32{
 	2,  // 0: qrouton.v1.SubscribeResponse.event:type_name -> qrouton.v1.Event
@@ -815,16 +833,17 @@ var file_qrouton_v1_events_proto_depIdxs = []int32{
 	7,  // 12: qrouton.v1.Event.orgs_changed:type_name -> qrouton.v1.OrgsChanged
 	8,  // 13: qrouton.v1.Event.ui_scale:type_name -> qrouton.v1.UIScaleChanged
 	9,  // 14: qrouton.v1.Event.resync:type_name -> qrouton.v1.Resync
-	17, // 15: qrouton.v1.AgentTreeChanged.tree:type_name -> qrouton.v1.AgentTree
-	18, // 16: qrouton.v1.WindowContent.document:type_name -> qrouton.v1.Document
-	19, // 17: qrouton.v1.WindowDiagram.diagram:type_name -> qrouton.v1.RenderedDiagram
-	0,  // 18: qrouton.v1.EventService.Subscribe:input_type -> qrouton.v1.SubscribeRequest
-	1,  // 19: qrouton.v1.EventService.Subscribe:output_type -> qrouton.v1.SubscribeResponse
-	19, // [19:20] is the sub-list for method output_type
-	18, // [18:19] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	17, // 15: qrouton.v1.Event.dashboard:type_name -> qrouton.v1.DashboardStatus
+	18, // 16: qrouton.v1.AgentTreeChanged.tree:type_name -> qrouton.v1.AgentTree
+	19, // 17: qrouton.v1.WindowContent.document:type_name -> qrouton.v1.Document
+	20, // 18: qrouton.v1.WindowDiagram.diagram:type_name -> qrouton.v1.RenderedDiagram
+	0,  // 19: qrouton.v1.EventService.Subscribe:input_type -> qrouton.v1.SubscribeRequest
+	1,  // 20: qrouton.v1.EventService.Subscribe:output_type -> qrouton.v1.SubscribeResponse
+	20, // [20:21] is the sub-list for method output_type
+	19, // [19:20] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_qrouton_v1_events_proto_init() }
@@ -833,6 +852,7 @@ func file_qrouton_v1_events_proto_init() {
 		return
 	}
 	file_qrouton_v1_assembly_proto_init()
+	file_qrouton_v1_dashboard_proto_init()
 	file_qrouton_v1_documents_proto_init()
 	file_qrouton_v1_ollama_proto_init()
 	file_qrouton_v1_repositories_proto_init()
@@ -854,6 +874,7 @@ func file_qrouton_v1_events_proto_init() {
 		(*Event_OrgsChanged)(nil),
 		(*Event_UiScale)(nil),
 		(*Event_Resync)(nil),
+		(*Event_Dashboard)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

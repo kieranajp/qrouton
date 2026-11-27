@@ -23,7 +23,14 @@ const (
 
 	sessionUnloadLabel   = "Unload"
 	sessionUnloadFailed  = "Session could not be unloaded"
+	sessionShowFailed    = "Session could not be opened"
 	sessionReorderFailed = "Session could not be moved"
+
+	sessionSwitchProfileLabel        = "Switch profile"
+	sessionSwitchProfileFailed       = "Profile could not be switched"
+	sessionSwitchProfileNeedsMessage = "Send one message, then switch profile"
+	profileCurrentMeta               = "current"
+	profileDefaultLabel              = "Default"
 
 	// The page URL is a directory: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.
@@ -63,6 +70,7 @@ const (
 	updateEvent = "update:status"
 
 	ollamaEvent        = "ollama:status"
+	dashboardEvent     = "dashboard:update"
 	chromeEvent        = "chrome:update"
 	agentTreeEvent     = "agents:tree:"
 	ptyDataEvent       = "pty:data:"

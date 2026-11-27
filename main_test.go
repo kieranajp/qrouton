@@ -21,6 +21,18 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// runMainEnvVar makes the test binary act as qrouton itself, so the supervisor
+// argv the workbench builds runs the real agent subcommand.
+const runMainEnvVar = "QROUTON_TEST_RUN_MAIN"
+
+func TestMain(m *testing.M) {
+	if os.Getenv(runMainEnvVar) == "1" {
+		main()
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
 // The one line the user gets back has to name something they recognise and a log
 // they can open.
 func TestOpenedLineNamesTheSessionAndItsLog(t *testing.T) {
@@ -82,40 +94,15 @@ func TestTheAgentCommandReturnsTheProviderResolvedForALegacyManifest(t *testing.
 	}
 }
 
-// Every path that opens a workbench opens it, editor or no editor: resuming a
-// session with nothing on PATH to edit with gets a window, not a terminal error.
-func TestOpeningASessionWithNoEditorStillOpensTheWorkbench(t *testing.T) {
+// A cold start opens the dashboard: a session on disk, even one opened recently,
+// boots no agent until the user picks it, and no editor on PATH keeps it shut.
+func TestAColdStartWithSessionsOnDiskOpensNoSession(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("QROUTON_ROOT", root)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
-	previous := detachProcess
-	defer func() { detachProcess = previous }()
-	var spec launch.WorkbenchSpec
-	detachProcess = func(s launch.WorkbenchSpec, _ []string) error { spec = s; return nil }
-
-	dir := t.TempDir()
-	if err := launchRunner(&config.Config{}, dir, launch.Runner{ID: "codex"}, true); err != nil {
-		t.Fatalf("resuming a session with no editor: %v", err)
-	}
-	if spec.SessionRoot != dir || !spec.Resume {
-		t.Fatalf("workbench spec = %#v, want %q resumed", spec, dir)
-	}
-	if len(spec.Editor.Argv) != 0 {
-		t.Fatalf("spec editor = %#v, want none", spec.Editor)
-	}
-}
-
-// Two workbenches would each believe they were the only one holding a session's
-// supervisor, so every path that opens on one refuses — bare qrouton included —
-// and says where a session is started instead.
-func TestOpeningASessionRefusesWhileAWorkbenchIsUp(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("QROUTON_ROOT", root)
-	// No config and nothing on PATH, so a broken guard stops at an unresolvable
-	// runner instead of detaching a second workbench out of the test binary.
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("PATH", t.TempDir())
 	dir := filepath.Join(root, "octopus")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -123,8 +110,53 @@ func TestOpeningASessionRefusesWhileAWorkbenchIsUp(t *testing.T) {
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "octopus", Mode: session.ModeAssistant}); err != nil {
 		t.Fatal(err)
 	}
-	answerOnAWorkbenchSocket(t)
+	if err := session.MarkOpened(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	previous := detachProcess
+	previousDiscovery := discoverProcess
+	defer func() { detachProcess, discoverProcess = previous, previousDiscovery }()
+	discoverProcess = func() workbench.Discovery { return workbench.Discovery{} }
+	var got launch.WorkbenchSpec
+	detachProcess = func(spec launch.WorkbenchSpec, _ []string) error {
+		got = spec
+		return nil
+	}
 
+	if err := open(rootContext(t)); err != nil {
+		t.Fatal(err)
+	}
+	if got.SessionRoot != "" || got.Resume || got.Socket == "" {
+		t.Fatalf("cold workbench spec = %+v, want a socket and no session to resume", got)
+	}
+	if len(got.Editor.Argv) != 0 {
+		t.Fatalf("spec editor = %#v, want none", got.Editor)
+	}
+}
+
+// Two workbenches would each believe they were the only one holding a session's
+// supervisor, so bare qrouton refuses while one is up and says where a session is
+// started instead.
+func TestOpeningAWorkbenchRefusesWhileOneIsUp(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("QROUTON_ROOT", root)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	previous := detachProcess
+	previousDiscovery := discoverProcess
+	defer func() { detachProcess, discoverProcess = previous, previousDiscovery }()
+	socket := filepath.Join(t.TempDir(), "workbench.sock")
+	discoverProcess = func() workbench.Discovery { return workbench.Discovery{Socket: socket} }
+	detachProcess = func(launch.WorkbenchSpec, []string) error {
+		t.Fatal("a second workbench detached")
+		return nil
+	}
+	dir := filepath.Join(root, "octopus")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.WriteManifest(dir, session.Manifest{Slug: "octopus", Mode: session.ModeAssistant}); err != nil {
+		t.Fatal(err)
+	}
 	err := open(rootContext(t))
 	if err == nil {
 		t.Fatal("qrouton opened a session with a workbench already open")
@@ -238,70 +270,6 @@ func TestLinearIssueRefusesALegacyRunningWorkbench(t *testing.T) {
 	discoverProcess = func() workbench.Discovery { return workbench.Discovery{Legacy: true} }
 	if err := open(rootContext(t, "--linear-issue", "LIF-2841")); !errors.Is(err, errLegacyWorkbench) {
 		t.Fatalf("legacy workbench refusal = %v, want %v", err, errLegacyWorkbench)
-	}
-}
-
-// Opening the app comes back to the session you were last in, not the newest one
-// on disk.
-func TestLastShownPrefersTheMostRecentlyStampedSession(t *testing.T) {
-	root := t.TempDir()
-	sessions := []session.Manifest{
-		{Slug: "octopus", CreatedAt: time.Now().Add(-72 * time.Hour)},
-		{Slug: "kraken", CreatedAt: time.Now().Add(-48 * time.Hour)},
-		{Slug: "squid", CreatedAt: time.Now()},
-	}
-	stampSession(t, root, "octopus", time.Now().Add(-2*time.Hour))
-	stampSession(t, root, "kraken", time.Now().Add(-time.Hour))
-
-	got, ok := session.Preferred(root, sessions)
-	if !ok || got.Slug != "kraken" {
-		t.Fatalf("lastShown = %q, %v; want kraken, the last one shown", got.Slug, ok)
-	}
-}
-
-func TestLastShownFallsBackToTheNewestSession(t *testing.T) {
-	sessions := []session.Manifest{
-		{Slug: "octopus", CreatedAt: time.Now().Add(-48 * time.Hour)},
-		{Slug: "kraken", CreatedAt: time.Now()},
-	}
-	got, ok := session.Preferred(t.TempDir(), sessions)
-	if !ok || got.Slug != "kraken" {
-		t.Fatalf("lastShown with nothing stamped = %q, %v; want the newest session kraken", got.Slug, ok)
-	}
-}
-
-// Nothing to come back to opens the landing list instead.
-func TestLastShownReportsNothingWithoutASession(t *testing.T) {
-	if got, ok := session.Preferred(t.TempDir(), nil); ok {
-		t.Fatalf("lastShown named %q under a root holding no sessions", got.Slug)
-	}
-}
-
-func stampSession(t *testing.T, root, slug string, at time.Time) {
-	t.Helper()
-	if err := session.MarkOpened(filepath.Join(root, slug), at); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// answerOnAWorkbenchSocket stands a workbench up as far as Running() can tell: an
-// address under the per-uid directory it scans, with something on the other end.
-func answerOnAWorkbenchSocket(t *testing.T) {
-	t.Helper()
-	socket, err := workbench.NewSocketPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	listener, err := net.Listen("unix", socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = listener.Close()
-		_ = os.Remove(socket)
-	})
-	if d := workbench.Discover(); d.Socket == "" && !d.Legacy {
-		t.Fatal("a workbench listening on its socket is not discovered")
 	}
 }
 
@@ -428,5 +396,61 @@ func TestTicketRejectsAnUnownedReferenceBeforeLaunch(t *testing.T) {
 	}
 	if called {
 		t.Fatal("an unowned ticket reached detach")
+	}
+}
+
+func TestBootFailsForAMissingProfile(t *testing.T) {
+	cfg := &config.Config{
+		Launch:   map[string][]string{"claude": {"/bin/echo"}},
+		Profiles: map[string][]config.RunnerProfile{"claude": {{ID: "work", Label: "Work", Dir: "/tmp/claude-work"}}},
+	}
+	ports := testPorts(cfg, "", launch.EditorCommand{})
+	_, err := ports.Agent(core.AgentRequest{
+		SessionRoot: t.TempDir(), Socket: "/tmp/s.sock", RunnerID: "claude", ProfileID: "gone",
+	})
+	if !errors.Is(err, launch.ErrProfileUnavailable) {
+		t.Fatalf("booting on a missing profile = %v, want %v", err, launch.ErrProfileUnavailable)
+	}
+	if !strings.Contains(err.Error(), "claude") || !strings.Contains(err.Error(), "gone") {
+		t.Fatalf("refusal %q does not name the runner and profile", err)
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	command, err := ports.Agent(core.AgentRequest{
+		SessionRoot: t.TempDir(), Socket: "/tmp/s.sock", RunnerID: "claude", ProfileID: "work",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command.ProfileID != "work" || flagValue(t, command.Argv, "--profile") != "work" {
+		t.Fatalf("supervisor %q reports profile %q, want work", command.Argv, command.ProfileID)
+	}
+}
+
+func TestRunnersPortListsDefaultThenNamedProfiles(t *testing.T) {
+	cfg := &config.Config{
+		Launch: map[string][]string{"claude": {"/bin/echo"}, "codex": {"/bin/echo"}},
+		Profiles: map[string][]config.RunnerProfile{"claude": {
+			{ID: "work", Label: "Work", Dir: "/tmp/claude-work"},
+			{ID: "lifesum", Label: "Lifesum", Dir: "/tmp/claude-lifesum"},
+		}},
+	}
+	rows, err := testPorts(cfg, "", launch.EditorCommand{}).Runners()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, row := range rows {
+		if row.ID != "claude" && row.ID != "codex" {
+			continue
+		}
+		if !row.Installed {
+			t.Fatalf("row %+v lost its runner's installed state", row)
+		}
+		got = append(got, row.ID+"/"+row.Profile+"/"+row.ProfileLabel)
+	}
+	want := []string{"claude//", "claude/work/Work", "claude/lifesum/Lifesum", "codex//"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("runner rows = %q, want %q", got, want)
 	}
 }

@@ -47,6 +47,7 @@ func TestReadScratchAssistant(t *testing.T) {
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
 		Stickers:            []Sticker{},
+		Profiles:            []RunnerProfiles{},
 		PullRequests:        PullRequestList{Items: []PullRequest{}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -81,7 +82,7 @@ func TestReadEscalatedShowsModeNameBranchAndRepos(t *testing.T) {
 func TestReadWithoutManifest(t *testing.T) {
 	want := Fields{
 		Sessions: []SessionRow{}, Documents: []Document{}, RepositoryDocuments: []RepositoryDocuments{}, Repos: []RepoStat{},
-		Stickers: []Sticker{}, PullRequests: PullRequestList{Items: []PullRequest{}},
+		Stickers: []Sticker{}, Profiles: []RunnerProfiles{}, PullRequests: PullRequestList{Items: []PullRequest{}},
 	}
 	if got := Read(t.TempDir()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("missing manifest = %#v, want %#v", got, want)
@@ -296,6 +297,17 @@ func TestSessionRowsCarryTheManifestStickerIdAsWritten(t *testing.T) {
 	}
 	if stickers["old"] != "" || stickers["known"] != "bookmark" || stickers["unknown"] != "retired" {
 		t.Fatalf("row stickers = %#v", stickers)
+	}
+}
+
+// Catches the rail building its profile menu without knowing a row's runner or
+// which profile it is on.
+func TestSessionRowsCarryTheManifestRunnerAndProfile(t *testing.T) {
+	root := t.TempDir()
+	sessionDir(t, root, session.Manifest{Slug: "s", Name: "S", Runner: "claude", Profile: "work"})
+	rows := Sessions(root)
+	if len(rows) != 1 || rows[0].Runner != "claude" || rows[0].Profile != "work" {
+		t.Fatalf("rows = %#v", rows)
 	}
 }
 
