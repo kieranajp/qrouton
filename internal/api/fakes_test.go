@@ -54,14 +54,20 @@ func (f *fakeOllama) Pull(ctx context.Context, _ func(vault.PullProgress)) error
 // both when the test ends.
 func serve(t *testing.T, ollama core.OllamaClient) *InProcess {
 	t.Helper()
+	hub := NewHub()
+	return serveHub(t, ollama, hub, hub)
+}
+
+// serveHub serves hub over a core that publishes its own events to events.
+func serveHub(t *testing.T, ollama core.OllamaClient, events core.Events, hub *Hub) *InProcess {
+	t.Helper()
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Remove(socket) })
 	root := t.TempDir()
-	hub := NewHub()
-	kernel := core.New(core.Options{Root: root, Config: &config.Config{Root: root}, Ollama: ollama}, &fakeClient{}, hub)
+	kernel := core.New(core.Options{Root: root, Config: &config.Config{Root: root}, Ollama: ollama}, &fakeClient{}, events)
 	p, err := Start(kernel, hub, socket, "test-build")
 	if err != nil {
 		t.Fatal(err)
