@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1265,4 +1266,101 @@ func TestASecondStartReplaysTheConversationToThePage(t *testing.T) {
 		data, _ := base64.StdEncoding.DecodeString(fmt.Sprint(got["encoded"]))
 		return got["replay"] == true && strings.Contains(string(data), "scrollback-marker")
 	})
+}
+
+// A page reload is the page mounting every terminal again. It must not end a
+// tab, its process or the conversation, and each tab must replay.
+func TestAPageReloadKeepsEveryTabItsProcessesAndTheConversation(t *testing.T) {
+	conversationPID := filepath.Join(t.TempDir(), "conversation.pid")
+	a := newAdapterWorkbench(t, "/bin/sh", "-c", `echo $$ > "$0"; exec cat`, conversationPID)
+	a.boot.shell = func(string) []string { return []string{"/bin/sh", "-c", "echo shell-live; exec cat"} }
+	term := &Term{terminals: a.in.terminals}
+	windows := &Windows{windows: a.kernel.Windows, terminals: a.in.terminals}
+	conversation := a.conversation(t)
+	failed := a.terminal(t, `echo failed-output; exit 7`)
+	loop := a.terminal(t, `echo $$ > "$1.loop"; sleep 600 & echo $! > "$1.child"; echo loop-live; wait`)
+	shell, err := windows.OpenShell()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mount := func(cols, rows int) {
+		t.Helper()
+		_ = windows.Surfaces(a.slug())
+		if err := term.Start(conversation, cols, rows); err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []string{failed, loop, shell} {
+			if err := windows.Start(id, cols, rows); err != nil {
+				t.Fatal(id, err)
+			}
+		}
+	}
+	painted := func(id, want string, replay bool) map[string]any {
+		t.Helper()
+		var got map[string]any
+		waitFor(t, id+" to paint "+want, func() bool {
+			got = nil
+			_ = json.Unmarshal(emitted(t, a.r, windowDataEvent+id), &got)
+			data, _ := base64.StdEncoding.DecodeString(fmt.Sprint(got["encoded"]))
+			return (!replay || got["replay"] == true) && strings.Contains(string(data), want)
+		})
+		return got
+	}
+	mount(80, 24)
+	painted(loop, "loop-live", false)
+	painted(shell, "shell-live", false)
+	pids := []int{readPID(t, conversationPID), readPID(t, a.marker+".loop"), readPID(t, a.marker+".child")}
+	waitFor(t, "the failed tab to finish", func() bool {
+		read, err := a.host.Read(context.Background(), failed, false)
+		return err == nil && read.Terminal != nil && read.Terminal.ExitCode != nil
+	})
+	opened, err := a.host.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{failed, loop, shell} {
+		a.r.mu.Lock()
+		delete(a.r.events, windowDataEvent+id)
+		a.r.mu.Unlock()
+	}
+
+	mount(100, 30)
+
+	if got := painted(failed, "failed-output", true); got["exit_code"] != float64(7) {
+		t.Fatalf("the failed tab replayed exit_code %v, want 7", got["exit_code"])
+	}
+	for id, want := range map[string]string{loop: "loop-live", shell: "shell-live"} {
+		if got := painted(id, want, true); got["exit_code"] != nil {
+			t.Fatalf("live tab %s replayed exit_code %v", id, got["exit_code"])
+		}
+	}
+	after, err := a.host.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(after, opened) {
+		t.Fatalf("a reload left windows %v, want %v", after, opened)
+	}
+	for _, pid := range pids {
+		if err := syscall.Kill(pid, 0); err != nil {
+			t.Fatalf("process %d did not survive the reload: %v", pid, err)
+		}
+	}
+	if got := a.conversation(t); got != conversation {
+		t.Fatalf("the conversation became %q, want %q", got, conversation)
+	}
+}
+
+func readPID(t *testing.T, path string) int {
+	t.Helper()
+	var pid int
+	waitFor(t, path, func() bool {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return false
+		}
+		_, err = fmt.Sscan(string(data), &pid)
+		return err == nil && pid > 0
+	})
+	return pid
 }
