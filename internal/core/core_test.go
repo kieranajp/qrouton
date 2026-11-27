@@ -3025,7 +3025,7 @@ func TestCopyAssetTakesOnlyAnAssetInsideTheSession(t *testing.T) {
 // exitedPTY is a process that has already ended, as a crashed supervisor's is.
 func exitedPTY(t *testing.T) *PTY {
 	t.Helper()
-	process, err := StartPTY([]string{"/bin/sh", "-c", "exit 0"}, nil, t.TempDir(), 80, 24)
+	process, err := StartPTY([]string{"/bin/sh", "-c", "exit 0"}, nil, t.TempDir(), "", 80, 24)
 	if err != nil {
 		t.Fatal(err)
 	}

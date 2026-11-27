@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/userscope"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -12,6 +13,8 @@ type terminals struct {
 	events   Events
 	registry *registry
 	sample   func(*PTY) (busy, ok bool)
+	// scoped starts each tab in a systemd user scope of its own.
+	scoped bool
 }
 
 func newTerminals(events Events, reg *registry) *terminals {
@@ -53,7 +56,11 @@ func (t *terminals) fork(id string, size *Size, served bool) (*terminalContent, 
 		if size == nil {
 			return ErrTerminalNotStarted
 		}
-		process, err := StartPTY(window.opts.Command, terminalEnv(), window.opts.Cwd, size.Cols, size.Rows)
+		unit := ""
+		if t.scoped {
+			unit = userscope.TabUnit()
+		}
+		process, err := StartPTY(window.opts.Command, terminalEnv(), window.opts.Cwd, unit, size.Cols, size.Rows)
 		if err != nil {
 			return err
 		}

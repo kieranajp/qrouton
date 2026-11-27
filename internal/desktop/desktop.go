@@ -39,6 +39,8 @@ type Options struct {
 	// Inspect leaves the webview its own right-click menu, for Inspect Element,
 	// and logs the page's WebGL renderers coming and going.
 	Inspect bool
+	// Scoped starts every session and tab in a systemd user scope of its own.
+	Scoped bool
 	// Ticket is a canonical ticket offered after session boot is wired and
 	// before the page can claim a blank draft. TicketPrompt is the full prompt
 	// the external tool generated for the eventual runner's first turn.
@@ -161,6 +163,7 @@ func coreOptions(opts Options, quit func()) core.Options {
 		Quit:              quit,
 		LinearCommand:     opts.LinearCommand,
 		LinearEnvironment: opts.LinearEnvironment,
+		Scoped:            opts.Scoped,
 	}
 }
 

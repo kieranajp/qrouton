@@ -35,6 +35,8 @@ const (
 	openedFormat     = "opened %s — log: %s\n"
 	noSessionSubject = "an empty workbench"
 
+	unscopedNotice = "systemd-run --user --scope is unavailable (it needs systemd 254 or later and a user manager), so sessions and tabs share the workbench's cgroup"
+
 	macOSExecutablesDirName = "MacOS"
 	macOSContentsDirName    = "Contents"
 	macOSAppExtension       = ".app"

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/userscope"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -236,5 +237,24 @@ func TestParseWorkbenchSpecRejectsAnIncompleteOne(t *testing.T) {
 	}
 	if _, err := ParseWorkbenchSpec("not json"); err == nil {
 		t.Fatal("ParseWorkbenchSpec accepted a non-JSON spec")
+	}
+}
+
+// A scoped workbench that lost its own unit or the avoid property would rank
+// alongside the sessions oomd is meant to kill first.
+func TestWorkbenchArgvScopesOnlyWhenScoped(t *testing.T) {
+	spec := WorkbenchSpec{Socket: "/tmp/a.sock"}
+	if argv := WorkbenchArgv("/bin/qrouton", spec); argv[0] != "/bin/qrouton" || len(argv) != 3 {
+		t.Fatalf("unscoped argv = %q, want it unchanged", argv)
+	}
+	if !userscope.Supported {
+		t.Skip("no systemd scopes on this platform")
+	}
+	spec.Scoped = true
+	argv := strings.Join(WorkbenchArgv("/bin/qrouton", spec), " ")
+	for _, want := range []string{"--unit=app-qrouton-", "-p ManagedOOMPreference=avoid", "-- /bin/qrouton --workbench-spec"} {
+		if !strings.Contains(argv, want) {
+			t.Fatalf("scoped argv = %q, missing %q", argv, want)
+		}
 	}
 }

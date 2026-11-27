@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"github.com/kieranajp/qrouton/internal/userscope"
 	"golang.org/x/sys/unix"
 )
 
@@ -25,7 +26,11 @@ type PTY struct {
 	signal func(pid int, sig syscall.Signal) error
 }
 
-func StartPTY(argv, env []string, dir string, cols, rows int) (*PTY, error) {
+// StartPTY starts argv in a systemd scope named unit, or as given when unit is empty.
+func StartPTY(argv, env []string, dir, unit string, cols, rows int) (*PTY, error) {
+	if unit != "" {
+		argv = userscope.Wrap(argv, unit)
+	}
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir, cmd.Env = dir, env
 	file, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})

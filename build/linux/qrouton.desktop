@@ -6,3 +6,4 @@ Exec=qrouton
 Icon=qrouton
 Terminal=false
 Categories=Development;
+StartupWMClass=org.wails.qrouton

@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/userscope"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -33,6 +34,9 @@ type WorkbenchSpec struct {
 	TicketPrompt string `json:"ticket_prompt,omitempty"`
 	// Zero when no editor resolved, which the session runs without.
 	Editor EditorCommand `json:"editor"`
+	// Scoped is the CLI's probe for a systemd user manager; the workbench and every
+	// child it starts are wrapped in scopes or none are.
+	Scoped bool `json:"scoped,omitempty"`
 }
 
 func (s WorkbenchSpec) Marshal() string {
@@ -53,8 +57,13 @@ func ParseWorkbenchSpec(s string) (WorkbenchSpec, error) {
 
 // WorkbenchArgv is the detached process's own command: this binary again, with
 // the marker that makes it run the event loop instead of assembling a session.
+// A scoped workbench gets a fresh scope of its own that systemd-oomd ranks last.
 func WorkbenchArgv(qroutonBin string, spec WorkbenchSpec) []string {
-	return []string{qroutonBin, workbenchSpecFlag, spec.Marshal()}
+	argv := []string{qroutonBin, workbenchSpecFlag, spec.Marshal()}
+	if !spec.Scoped {
+		return argv
+	}
+	return userscope.Wrap(argv, userscope.WorkbenchUnit(), userscope.AvoidOOMKill)
 }
 
 // Detach starts argv in a session of its own and returns once it answers on
