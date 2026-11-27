@@ -18,4 +18,6 @@ const (
 	sessionUnitPrefix   = "qrouton-session-"
 	tabUnitPrefix       = "qrouton-tab-"
 	workbenchUnitPrefix = "app-qrouton-"
+
+	AvoidOOMKill = "ManagedOOMPreference=avoid"
 )
