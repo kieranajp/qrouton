@@ -3,7 +3,9 @@ package desktop
 import (
 	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/api"
 	"github.com/kieranajp/qrouton/internal/api/pagetest"
@@ -48,6 +50,39 @@ func emitted(t *testing.T, r *fakeRenderer, name string) []byte {
 	return out
 }
 
+// emittedSame waits for the page JSON under name to equal want. The served core
+// pushes its own chrome and dashboard under the same names, so the latest payload
+// may be one of those for a while.
+func emittedSame(t *testing.T, r *fakeRenderer, name string, want []byte) {
+	t.Helper()
+	var wanted any
+	if err := json.Unmarshal(want, &wanted); err != nil {
+		t.Fatal(err)
+	}
+	var last []byte
+	deadline := time.Now().Add(waitCeiling)
+	for time.Now().Before(deadline) {
+		r.mu.Lock()
+		payload, ok := r.events[name]
+		r.mu.Unlock()
+		if ok {
+			var err error
+			if last, err = json.Marshal(payload); err != nil {
+				t.Fatal(err)
+			}
+			var got any
+			if json.Unmarshal(last, &got) == nil && reflect.DeepEqual(got, wanted) {
+				return
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if last == nil {
+		t.Fatalf("timed out waiting for %s", name)
+	}
+	pagetest.Same(t, last, want)
+}
+
 func marshalled(t *testing.T, v any) []byte {
 	t.Helper()
 	out, err := json.Marshal(v)
@@ -86,7 +121,7 @@ func TestEveryEventPageJSONMatchesTheCoreType(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.publish()
-			pagetest.Same(t, emitted(t, r, tc.name), marshalled(t, tc.want))
+			emittedSame(t, r, tc.name, marshalled(t, tc.want))
 		})
 	}
 }
