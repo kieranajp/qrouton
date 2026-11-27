@@ -26,6 +26,12 @@ func (t *terminals) mount(id string) {
 	t.mounted[id] = true
 }
 
+func (t *terminals) unmount(id string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.mounted, id)
+}
+
 // mountedOf keeps only the listed terminals, since the rest have closed, and
 // returns which of them the page has mounted.
 func (t *terminals) mountedOf(listed []*qroutonv1.SessionTerminal) map[string]bool {
@@ -46,6 +52,12 @@ func (t *terminals) holdPending(id string, size *qroutonv1.TerminalSize) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.pending[id] = size
+}
+
+func (t *terminals) dropPending(id string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.pending, id)
 }
 
 // resizePending follows the page's resize of a terminal still pending.

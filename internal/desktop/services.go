@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 
 	"github.com/kieranajp/qrouton/internal/api"
 	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
@@ -86,20 +87,22 @@ func (t *Term) Write(id, encoded string) error { return write(t.terminals, id, e
 func (t *Term) Resize(id string, cols, rows int) error { return t.terminals.resize(id, cols, rows) }
 
 // start is the page mounting a terminal. It starts one nothing has, and
-// otherwise replays the whole ring, since the page keeps no offset.
+// otherwise replays the whole ring, since the page keeps no offset. The mount
+// is recorded before the attach so a re-attach running meanwhile cannot skip it.
 func (t *terminals) start(id string, cols, rows int) error {
 	size := terminalSize(cols, rows)
+	t.mount(id)
+	t.holdPending(id, size)
 	_, err := t.Attach(context.Background(), &qroutonv1.AttachRequest{TerminalId: id, Size: size})
 	if api.NoSubscriber(err) {
-		t.mount(id)
-		t.holdPending(id, size)
 		return nil
 	}
-	if err != nil {
-		return api.FromStatus(err)
+	t.dropPending(id)
+	err = api.FromStatus(err)
+	if errors.Is(err, core.ErrNotFound) {
+		t.unmount(id)
 	}
-	t.mount(id)
-	return nil
+	return err
 }
 
 func write(terminals qroutonv1.TerminalServiceClient, id, encoded string) error {

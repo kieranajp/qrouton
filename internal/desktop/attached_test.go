@@ -208,6 +208,19 @@ func firstMount(t *testing.T, a *adapterWorkbench, id string) bool {
 	return painted(t, a, windowDataEvent+id, "agent-tab", true)["first"] == true
 }
 
+// passMount waits until the page has taken a hub event published now, which
+// reaches it behind every replay queued before, so the tab's latest replay is
+// the last one either attach produced.
+func passMount(t *testing.T, a *adapterWorkbench) {
+	t.Helper()
+	a.opts.hub.AssemblyRequested("after-mount")
+	waitFor(t, "the page to pass the mount", func() bool {
+		a.r.mu.Lock()
+		defer a.r.mu.Unlock()
+		return a.r.events[assemblyRequestedEvent] == "after-mount"
+	})
+}
+
 // Catches a re-attach that consumes an unmounted tab's first mount: the page
 // would then swallow the terminal queries in that tab's replay, and a program
 // waiting on a reply would hang.
@@ -229,6 +242,7 @@ func TestAReattachLeavesATabThePageNeverMountedFirst(t *testing.T) {
 	if err := windows.Start(tab, 80, 24); err != nil {
 		t.Fatal(err)
 	}
+	passMount(t, a)
 	if !firstMount(t, a, tab) {
 		t.Fatal("the page's first mount of the tab replayed without first")
 	}
@@ -295,5 +309,66 @@ func TestAReattachThatFindsNoTerminalEndsIt(t *testing.T) {
 		if got[name] != -1 {
 			t.Fatalf("%s = %v, want -1 in %v", name, got[name], got)
 		}
+	}
+}
+
+// gatedTerminals answers the first attach as a client with no live stream,
+// but only once the test lets it, and takes every later attach.
+type gatedTerminals struct {
+	qroutonv1.TerminalServiceClient
+
+	mu       sync.Mutex
+	calls    int
+	inflight chan struct{}
+	release  chan struct{}
+	attached []*qroutonv1.AttachRequest
+}
+
+func (g *gatedTerminals) Attach(_ context.Context, req *qroutonv1.AttachRequest, _ ...grpc.CallOption) (*qroutonv1.AttachResponse, error) {
+	g.mu.Lock()
+	g.calls++
+	first := g.calls == 1
+	if !first {
+		g.attached = append(g.attached, req)
+	}
+	g.mu.Unlock()
+	if first {
+		close(g.inflight)
+		<-g.release
+		return nil, status.Error(codes.FailedPrecondition, "no stream")
+	}
+	return &qroutonv1.AttachResponse{}, nil
+}
+
+// Catches a mount recorded only after its attach returns: a re-attach running
+// while Start's attach is in flight would skip the terminal, and nothing would
+// paint it once Start reported NoSubscriber.
+func TestAReattachDuringAStartsAttachStillMountsIt(t *testing.T) {
+	size := &qroutonv1.TerminalSize{Cols: 80, Rows: 24}
+	gate := &gatedTerminals{inflight: make(chan struct{}), release: make(chan struct{})}
+	terminals := newTerminals(gate)
+	tr := &translator{
+		windows: listedTerminals{terminals: []*qroutonv1.SessionTerminal{
+			{TerminalId: "window-1", Kind: qroutonv1.TerminalKind_TERMINAL_KIND_TAB, Size: size},
+		}},
+		terminals: terminals,
+		emit:      func(string, any) {},
+	}
+	started := make(chan error, 1)
+	go func() { started <- terminals.start("window-1", 100, 30) }()
+	<-gate.inflight
+	tr.reattach(context.Background())
+	close(gate.release)
+	if err := <-started; err != nil {
+		t.Fatalf("a Start with no live stream = %v, want nil", err)
+	}
+
+	gate.mu.Lock()
+	defer gate.mu.Unlock()
+	if len(gate.attached) != 1 {
+		t.Fatalf("the re-attach attached %d times, want 1", len(gate.attached))
+	}
+	if got := gate.attached[0].GetSize(); got.GetCols() != 100 || got.GetRows() != 30 {
+		t.Fatalf("the re-attach carried size %v, want the mount's 100x30", got)
 	}
 }
