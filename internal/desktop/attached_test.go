@@ -201,6 +201,58 @@ func TestAReattachKeepsAResizeFromTheStreamBreak(t *testing.T) {
 	markedFile(t, marker, "50 132")
 }
 
+// firstMount waits for the page's replay of an agent tab the page mounts after
+// a stream break, and reports whether it came marked first.
+func firstMount(t *testing.T, a *adapterWorkbench, id string) bool {
+	t.Helper()
+	return painted(t, a, windowDataEvent+id, "agent-tab", true)["first"] == true
+}
+
+// Catches a re-attach that consumes an unmounted tab's first mount: the page
+// would then swallow the terminal queries in that tab's replay, and a program
+// waiting on a reply would hang.
+func TestAReattachLeavesATabThePageNeverMountedFirst(t *testing.T) {
+	a := newAdapterWorkbench(t, "/bin/sh", "-c", `printf 'reattached\n'; exec cat`)
+	windows := &Windows{windows: a.kernel.Windows, terminals: a.in.terminals}
+	conversation := a.conversation(t)
+	if err := (&Term{terminals: a.in.terminals}).Start(conversation, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	painted(t, a, ptyDataEvent+conversation, "reattached", false)
+	tab := a.terminal(t, `printf 'agent-tab\n'; exec cat`)
+	held(t, a, tab, "agent-tab")
+	release := stall(t, a.r)
+	overflow(a)
+	release()
+	painted(t, a, ptyDataEvent+conversation, "reattached", true)
+
+	if err := windows.Start(tab, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	if !firstMount(t, a, tab) {
+		t.Fatal("the page's first mount of the tab replayed without first")
+	}
+}
+
+// Catches a replay that reached no stream counting as the tab's first mount:
+// the mount during the break must still paint as first once the stream is back.
+func TestAMountInAStreamBreakStaysFirstAfterTheResubscribe(t *testing.T) {
+	a := newAdapterWorkbench(t)
+	windows := &Windows{windows: a.kernel.Windows, terminals: a.in.terminals}
+	tab := a.terminal(t, `printf 'agent-tab\n'; exec cat`)
+	held(t, a, tab, "agent-tab")
+	release := stall(t, a.r)
+	overflow(a)
+	if err := windows.Start(tab, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	release()
+
+	if !firstMount(t, a, tab) {
+		t.Fatal("the re-attach replayed the tab without first")
+	}
+}
+
 type listedTerminals struct {
 	qroutonv1.WindowServiceClient
 	terminals []*qroutonv1.SessionTerminal
@@ -236,6 +288,8 @@ func TestAReattachThatFindsNoTerminalEndsIt(t *testing.T) {
 			got[event] = payload
 		},
 	}
+	tr.terminals.mount("term-1")
+	tr.terminals.mount("window-2")
 	tr.reattach(context.Background())
 	for _, name := range []string{ptyExitEvent + "term-1", windowExitEvent + "window-2"} {
 		if got[name] != -1 {

@@ -1693,7 +1693,7 @@ func TestTerminalsListsEachSessionsConversationAndTerminalTabs(t *testing.T) {
 	root := t.TempDir()
 	alpha := reg.add(sessionDir(t, root, "alpha"), []string{"/bin/cat"}, os.Environ())
 	beta := reg.add(sessionDir(t, root, "beta"), []string{"/bin/cat"}, os.Environ())
-	if err := term.Attach(alpha.terminal, &Size{Cols: 80, Rows: 24}, nil, func(Output) {}); err != nil {
+	if err := term.Attach(alpha.terminal, &Size{Cols: 80, Rows: 24}, nil, func(Output) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
 	command := workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "tab", Cwd: t.TempDir(), Command: []string{"/bin/cat"}}

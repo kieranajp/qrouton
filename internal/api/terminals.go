@@ -36,10 +36,11 @@ func (t *terminalService) Attach(ctx context.Context, req *qroutonv1.AttachReque
 	}
 	client := clientID(ctx)
 	replayed, reached := false, false
-	deliver := func(kind core.TerminalKind) func(core.Output) {
-		return func(out core.Output) {
+	deliver := func(kind core.TerminalKind) core.Deliver {
+		return func(out core.Output) bool {
 			replayed = true
 			reached = t.hub.deliver(client, terminalOutput(kind, id, out))
+			return reached
 		}
 	}
 	var err error

@@ -278,7 +278,7 @@ func testWorkbench(t *testing.T, r *fakeRenderer, opts *Options) *core.Core {
 }
 
 // discard is a replay nobody draws.
-func discard(core.Output) {}
+func discard(core.Output) bool { return true }
 
 // translate serves kernel in process and carries its events to r, as run does.
 func translate(t *testing.T, kernel *core.Core, opts *Options, r *fakeRenderer) *inProcess {

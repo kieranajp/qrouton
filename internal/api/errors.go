@@ -17,10 +17,7 @@ var (
 )
 
 // NoSubscriber reports an attach whose replay reached no live stream of its client.
-func NoSubscriber(err error) bool {
-	s, ok := status.FromError(err)
-	return ok && s.Code() == codes.FailedPrecondition && s.Message() == ErrNoSubscriber.Error()
-}
+func NoSubscriber(err error) bool { return status.Code(err) == codes.FailedPrecondition }
 
 func protocolMismatch(client, core uint32) error {
 	return fmt.Errorf("the client speaks protocol %d and the core speaks %d", client, core)

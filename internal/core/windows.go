@@ -86,7 +86,7 @@ func (w *Windows) openAgentWindow(owner *SessionState, opts workbench.WindowOpti
 	return id, nil
 }
 
-func (w *Windows) Attach(id string, size *Size, from *uint64, deliver func(Output)) error {
+func (w *Windows) Attach(id string, size *Size, from *uint64, deliver Deliver) error {
 	return w.terminals.attach(id, size, from, deliver)
 }
 

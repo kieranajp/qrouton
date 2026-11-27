@@ -75,8 +75,9 @@ func (t *translator) run(ctx context.Context, stream eventStream) {
 	}
 }
 
-// reattach replays every started terminal's whole ring, since output and exits
-// during the break reached no stream. Only a pending mount passes a size.
+// reattach replays the whole ring of every started terminal the page has
+// mounted, since output and exits during the break reached no stream. Only a
+// pending mount passes a size.
 func (t *translator) reattach(ctx context.Context) {
 	listed, err := t.windows.ListTerminals(ctx, &qroutonv1.ListTerminalsRequest{})
 	if err != nil {
@@ -86,10 +87,11 @@ func (t *translator) reattach(ctx context.Context) {
 		return
 	}
 	pending := t.terminals.takePending()
+	mounted := t.terminals.mountedOf(listed.GetTerminals())
 	for _, terminal := range listed.GetTerminals() {
 		id := terminal.GetTerminalId()
 		size := pending[id]
-		if terminal.GetSize() == nil {
+		if terminal.GetSize() == nil || !mounted[id] {
 			continue
 		}
 		_, err := t.terminals.Attach(ctx, &qroutonv1.AttachRequest{TerminalId: id, Size: size})

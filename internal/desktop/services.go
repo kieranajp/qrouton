@@ -91,10 +91,15 @@ func (t *terminals) start(id string, cols, rows int) error {
 	size := terminalSize(cols, rows)
 	_, err := t.Attach(context.Background(), &qroutonv1.AttachRequest{TerminalId: id, Size: size})
 	if api.NoSubscriber(err) {
+		t.mount(id)
 		t.holdPending(id, size)
 		return nil
 	}
-	return api.FromStatus(err)
+	if err != nil {
+		return api.FromStatus(err)
+	}
+	t.mount(id)
+	return nil
 }
 
 func write(terminals qroutonv1.TerminalServiceClient, id, encoded string) error {

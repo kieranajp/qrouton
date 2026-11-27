@@ -131,7 +131,7 @@ func TestTheManifestsProfileReachesTheRunnerThroughBootAndRestart(t *testing.T) 
 				}
 				time.Sleep(10 * time.Millisecond)
 			}
-			if err := kernel.Term.Attach(terminal, &core.Size{Cols: 80, Rows: 24}, nil, func(core.Output) {}); err != nil {
+			if err := kernel.Term.Attach(terminal, &core.Size{Cols: 80, Rows: 24}, nil, func(core.Output) bool { return true }); err != nil {
 				t.Fatal(err)
 			}
 

@@ -60,15 +60,16 @@ func (e emitFunc) UIScale(scale int)                { e(uiScaleName, scale) }
 
 // startTerm is a page's first attach, which starts the conversation at its size.
 func startTerm(term *Term, id string, cols, rows int) error {
-	return term.Attach(id, &Size{Cols: cols, Rows: rows}, nil, func(Output) {})
+	return term.Attach(id, &Size{Cols: cols, Rows: rows}, nil, func(Output) bool { return true })
 }
 
 // attachTab is a page attaching to a tab at its size. The replay lands in r
 // under the tab's data event, as the old replay did.
 func attachTab(w *Windows, r *fakeClient, id string, cols, rows int) error {
-	return w.Attach(id, &Size{Cols: cols, Rows: rows}, nil, func(out Output) {
+	return w.Attach(id, &Size{Cols: cols, Rows: rows}, nil, func(out Output) bool {
 		if r != nil {
 			r.Emit(windowDataName+id, out)
 		}
+		return true
 	})
 }
