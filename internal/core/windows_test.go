@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -1682,5 +1683,52 @@ func TestConcurrentLaunchAndMountStartOnlyOneTerminalProcess(t *testing.T) {
 	launches, err := os.ReadFile(filepath.Join(dir, "launches"))
 	if err != nil || string(launches) != "launched" {
 		t.Fatalf("process launches = %q, %v", launches, err)
+	}
+}
+
+// Catches a terminal left out of the set a client re-attaches after a stream
+// break, or one listed with a size before it has started.
+func TestTerminalsListsEachSessionsConversationAndTerminalTabs(t *testing.T) {
+	reg, term, windows := testKernel(t, newFakeClient().Emit)
+	root := t.TempDir()
+	alpha := reg.add(sessionDir(t, root, "alpha"), []string{"/bin/cat"}, os.Environ())
+	beta := reg.add(sessionDir(t, root, "beta"), []string{"/bin/cat"}, os.Environ())
+	if err := term.Attach(alpha.terminal, &Size{Cols: 80, Rows: 24}, nil, func(Output) {}); err != nil {
+		t.Fatal(err)
+	}
+	command := workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "tab", Cwd: t.TempDir(), Command: []string{"/bin/cat"}}
+	tab, err := windows.openAgentWindow(alpha, command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := windows.Resize(tab, 100, 30); err != nil {
+		t.Fatal(err)
+	}
+	shell, err := windows.openShell(beta, command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := windows.openWindow(beta, workbench.WindowOptions{Kind: workbench.KindDocument, Label: "notes", Content: "x"}); err != nil {
+		t.Fatal(err)
+	}
+
+	listed := func(slug string) map[string]SessionTerminal {
+		out := map[string]SessionTerminal{}
+		for _, terminal := range windows.Terminals(slug) {
+			out[terminal.ID] = terminal
+		}
+		return out
+	}
+	want := map[string]SessionTerminal{
+		alpha.terminal: {ID: alpha.terminal, Kind: TerminalConversation, Size: &Size{Cols: 80, Rows: 24}},
+		tab:            {ID: tab, Kind: TerminalTab, Size: &Size{Cols: 100, Rows: 30}},
+		beta.terminal:  {ID: beta.terminal, Kind: TerminalConversation},
+		shell:          {ID: shell, Kind: TerminalTab},
+	}
+	if got := listed(""); !reflect.DeepEqual(got, want) {
+		t.Fatalf("every session's terminals = %+v, want %+v", got, want)
+	}
+	if got := listed("beta"); !reflect.DeepEqual(got, map[string]SessionTerminal{beta.terminal: want[beta.terminal], shell: want[shell]}) {
+		t.Fatalf("beta's terminals = %+v", got)
 	}
 }

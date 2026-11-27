@@ -13,7 +13,14 @@ var (
 	ErrNoClient         = errors.New("this call carries no client id from Hello")
 	ErrSubscriberBehind = errors.New("this subscriber fell too far behind the event stream; subscribe again")
 	ErrNoSize           = errors.New("a resize names no size")
+	ErrNoSubscriber     = errors.New("this client has no live event stream to replay to; subscribe first")
 )
+
+// NoSubscriber reports an attach whose replay reached no live stream of its client.
+func NoSubscriber(err error) bool {
+	s, ok := status.FromError(err)
+	return ok && s.Code() == codes.FailedPrecondition && s.Message() == ErrNoSubscriber.Error()
+}
 
 func protocolMismatch(client, core uint32) error {
 	return fmt.Errorf("the client speaks protocol %d and the core speaks %d", client, core)

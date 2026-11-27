@@ -71,26 +71,31 @@ func (h *Hub) publish(event *qroutonv1.Event) {
 	}
 }
 
-// deliver numbers event and queues it for one client's subscribers alone.
-func (h *Hub) deliver(client string, event *qroutonv1.Event) {
+// deliver numbers event and queues it for one client's subscribers alone. It
+// reports whether any of them took it.
+func (h *Hub) deliver(client string, event *qroutonv1.Event) bool {
 	validStrings(event.ProtoReflect())
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.seq++
 	event.Seq = h.seq
+	taken := false
 	for sub := range h.subs {
-		if sub.client == client {
-			h.enqueueLocked(sub, event)
+		if sub.client == client && h.enqueueLocked(sub, event) {
+			taken = true
 		}
 	}
+	return taken
 }
 
-func (h *Hub) enqueueLocked(sub *subscriber, event *qroutonv1.Event) {
+func (h *Hub) enqueueLocked(sub *subscriber, event *qroutonv1.Event) bool {
 	select {
 	case sub.queue <- event:
+		return true
 	default:
 		delete(h.subs, sub)
 		close(sub.overflow)
+		return false
 	}
 }
 

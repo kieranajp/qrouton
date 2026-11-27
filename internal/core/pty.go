@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -23,6 +24,8 @@ type PTY struct {
 	// drain bounds the wait for a killed group to go.
 	drain  time.Duration
 	signal func(pid int, sig syscall.Signal) error
+	// size is read without mu, which a blocked Write holds.
+	size atomic.Pointer[Size]
 }
 
 func StartPTY(argv, env []string, dir string, cols, rows int) (*PTY, error) {
@@ -33,6 +36,7 @@ func StartPTY(argv, env []string, dir string, cols, rows int) (*PTY, error) {
 		return nil, err
 	}
 	p := &PTY{file: file, cmd: cmd, exited: make(chan struct{}), grace: terminateGrace, drain: terminateGrace, signal: syscall.Kill}
+	p.size.Store(&Size{Cols: cols, Rows: rows})
 	go func() {
 		err := cmd.Wait()
 		p.mu.Lock()
@@ -111,7 +115,19 @@ func (p *PTY) Resize(cols, rows int) error {
 	if p.file == nil {
 		return nil
 	}
-	return pty.Setsize(p.file, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	if err := pty.Setsize(p.file, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)}); err != nil {
+		return err
+	}
+	p.size.Store(&Size{Cols: cols, Rows: rows})
+	return nil
+}
+
+// Size is what the terminal was last sized to.
+func (p *PTY) Size() *Size {
+	if size := p.size.Load(); size != nil {
+		return &Size{Cols: size.Cols, Rows: size.Rows}
+	}
+	return nil
 }
 
 // Stop ends the process tree. pty.Start puts the child in a session of its own,

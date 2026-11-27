@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"log"
 	"strconv"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
 	"github.com/kieranajp/qrouton/internal/api/pagejson"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // emitter puts one payload in front of every page.
@@ -17,9 +20,11 @@ type emitter func(event string, payload any)
 // translator turns the core's event stream back into the page's named events.
 // It owns those names, and remembers the last event so a resubscribe resumes.
 type translator struct {
-	events qroutonv1.EventServiceClient
-	emit   emitter
-	after  uint64
+	events    qroutonv1.EventServiceClient
+	windows   qroutonv1.WindowServiceClient
+	terminals *terminals
+	emit      emitter
+	after     uint64
 }
 
 type eventStream = grpc.ServerStreamingClient[qroutonv1.SubscribeResponse]
@@ -63,7 +68,38 @@ func (t *translator) run(ctx context.Context, stream eventStream) {
 			next, err := t.subscribe(ctx)
 			if err == nil {
 				stream = next
+				t.reattach(ctx)
 				break
+			}
+		}
+	}
+}
+
+// reattach replays every started terminal's whole ring, since output and exits
+// during the break reached no stream. Only a pending mount passes a size.
+func (t *translator) reattach(ctx context.Context) {
+	listed, err := t.windows.ListTerminals(ctx, &qroutonv1.ListTerminalsRequest{})
+	if err != nil {
+		if ctx.Err() == nil {
+			log.Printf(reattachLogFormat, err)
+		}
+		return
+	}
+	pending := t.terminals.takePending()
+	for _, terminal := range listed.GetTerminals() {
+		id := terminal.GetTerminalId()
+		size := pending[id]
+		if terminal.GetSize() == nil {
+			continue
+		}
+		_, err := t.terminals.Attach(ctx, &qroutonv1.AttachRequest{TerminalId: id, Size: size})
+		switch status.Code(err) {
+		case codes.OK:
+		case codes.NotFound:
+			t.emit(terminalEvent(terminal.GetKind(), ptyExitEvent, windowExitEvent)+id, -1)
+		default:
+			if size != nil {
+				t.terminals.keepPending(id, size)
 			}
 		}
 	}
@@ -101,6 +137,8 @@ func (t *translator) deliver(event *qroutonv1.Event) {
 		t.emit(orgsChangedEvent, payload.OrgsChanged.GetOrgs())
 	case *qroutonv1.Event_UiScale:
 		t.emit(uiScaleEvent, int(payload.UiScale.GetScale()))
+	case *qroutonv1.Event_Resync:
+		log.Printf(resyncLogFormat, event.GetSeq())
 	}
 }
 

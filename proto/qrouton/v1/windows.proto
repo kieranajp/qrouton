@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package qrouton.v1;
 
+import "qrouton/v1/terminals.proto";
+
 option go_package = "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1";
 
 // Surfaces names one session's open tabs in tab order.
@@ -20,4 +22,26 @@ message Tab {
   string status = 6;
   bool pinned = 7;
   string artifact = 8;
+}
+
+// WindowService reaches a session's tabs.
+service WindowService {
+  // ListTerminals names every terminal a session holds, its conversation and
+  // its terminal tabs. An empty session lists every session's.
+  rpc ListTerminals(ListTerminalsRequest) returns (ListTerminalsResponse);
+}
+
+message ListTerminalsRequest {
+  string session = 1;
+}
+
+message ListTerminalsResponse {
+  repeated SessionTerminal terminals = 1;
+}
+
+// SessionTerminal is one terminal. size is unset while it has no process.
+message SessionTerminal {
+  string terminal_id = 1;
+  TerminalKind kind = 2;
+  TerminalSize size = 3;
 }

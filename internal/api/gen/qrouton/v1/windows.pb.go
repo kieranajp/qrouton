@@ -182,12 +182,161 @@ func (x *Tab) GetArtifact() string {
 	return ""
 }
 
+type ListTerminalsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Session       string                 `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTerminalsRequest) Reset() {
+	*x = ListTerminalsRequest{}
+	mi := &file_qrouton_v1_windows_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTerminalsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTerminalsRequest) ProtoMessage() {}
+
+func (x *ListTerminalsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_windows_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTerminalsRequest.ProtoReflect.Descriptor instead.
+func (*ListTerminalsRequest) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_windows_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListTerminalsRequest) GetSession() string {
+	if x != nil {
+		return x.Session
+	}
+	return ""
+}
+
+type ListTerminalsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Terminals     []*SessionTerminal     `protobuf:"bytes,1,rep,name=terminals,proto3" json:"terminals,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTerminalsResponse) Reset() {
+	*x = ListTerminalsResponse{}
+	mi := &file_qrouton_v1_windows_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTerminalsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTerminalsResponse) ProtoMessage() {}
+
+func (x *ListTerminalsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_windows_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTerminalsResponse.ProtoReflect.Descriptor instead.
+func (*ListTerminalsResponse) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_windows_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ListTerminalsResponse) GetTerminals() []*SessionTerminal {
+	if x != nil {
+		return x.Terminals
+	}
+	return nil
+}
+
+// SessionTerminal is one terminal. size is unset while it has no process.
+type SessionTerminal struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TerminalId    string                 `protobuf:"bytes,1,opt,name=terminal_id,json=terminalId,proto3" json:"terminal_id,omitempty"`
+	Kind          TerminalKind           `protobuf:"varint,2,opt,name=kind,proto3,enum=qrouton.v1.TerminalKind" json:"kind,omitempty"`
+	Size          *TerminalSize          `protobuf:"bytes,3,opt,name=size,proto3" json:"size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionTerminal) Reset() {
+	*x = SessionTerminal{}
+	mi := &file_qrouton_v1_windows_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionTerminal) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionTerminal) ProtoMessage() {}
+
+func (x *SessionTerminal) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_windows_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionTerminal.ProtoReflect.Descriptor instead.
+func (*SessionTerminal) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_windows_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SessionTerminal) GetTerminalId() string {
+	if x != nil {
+		return x.TerminalId
+	}
+	return ""
+}
+
+func (x *SessionTerminal) GetKind() TerminalKind {
+	if x != nil {
+		return x.Kind
+	}
+	return TerminalKind_TERMINAL_KIND_UNSPECIFIED
+}
+
+func (x *SessionTerminal) GetSize() *TerminalSize {
+	if x != nil {
+		return x.Size
+	}
+	return nil
+}
+
 var File_qrouton_v1_windows_proto protoreflect.FileDescriptor
 
 const file_qrouton_v1_windows_proto_rawDesc = "" +
 	"\n" +
 	"\x18qrouton/v1/windows.proto\x12\n" +
-	"qrouton.v1\"e\n" +
+	"qrouton.v1\x1a\x1aqrouton/v1/terminals.proto\"e\n" +
 	"\bSurfaces\x12\x18\n" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x1a\n" +
 	"\bselected\x18\x02 \x01(\tR\bselected\x12#\n" +
@@ -200,7 +349,18 @@ const file_qrouton_v1_windows_proto_rawDesc = "" +
 	"\x04kind\x18\x05 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12\x16\n" +
 	"\x06pinned\x18\a \x01(\bR\x06pinned\x12\x1a\n" +
-	"\bartifact\x18\b \x01(\tR\bartifactBDZBgithub.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1b\x06proto3"
+	"\bartifact\x18\b \x01(\tR\bartifact\"0\n" +
+	"\x14ListTerminalsRequest\x12\x18\n" +
+	"\asession\x18\x01 \x01(\tR\asession\"R\n" +
+	"\x15ListTerminalsResponse\x129\n" +
+	"\tterminals\x18\x01 \x03(\v2\x1b.qrouton.v1.SessionTerminalR\tterminals\"\x8e\x01\n" +
+	"\x0fSessionTerminal\x12\x1f\n" +
+	"\vterminal_id\x18\x01 \x01(\tR\n" +
+	"terminalId\x12,\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x18.qrouton.v1.TerminalKindR\x04kind\x12,\n" +
+	"\x04size\x18\x03 \x01(\v2\x18.qrouton.v1.TerminalSizeR\x04size2e\n" +
+	"\rWindowService\x12T\n" +
+	"\rListTerminals\x12 .qrouton.v1.ListTerminalsRequest\x1a!.qrouton.v1.ListTerminalsResponseBDZBgithub.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1b\x06proto3"
 
 var (
 	file_qrouton_v1_windows_proto_rawDescOnce sync.Once
@@ -214,18 +374,28 @@ func file_qrouton_v1_windows_proto_rawDescGZIP() []byte {
 	return file_qrouton_v1_windows_proto_rawDescData
 }
 
-var file_qrouton_v1_windows_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_qrouton_v1_windows_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_qrouton_v1_windows_proto_goTypes = []any{
-	(*Surfaces)(nil), // 0: qrouton.v1.Surfaces
-	(*Tab)(nil),      // 1: qrouton.v1.Tab
+	(*Surfaces)(nil),              // 0: qrouton.v1.Surfaces
+	(*Tab)(nil),                   // 1: qrouton.v1.Tab
+	(*ListTerminalsRequest)(nil),  // 2: qrouton.v1.ListTerminalsRequest
+	(*ListTerminalsResponse)(nil), // 3: qrouton.v1.ListTerminalsResponse
+	(*SessionTerminal)(nil),       // 4: qrouton.v1.SessionTerminal
+	(TerminalKind)(0),             // 5: qrouton.v1.TerminalKind
+	(*TerminalSize)(nil),          // 6: qrouton.v1.TerminalSize
 }
 var file_qrouton_v1_windows_proto_depIdxs = []int32{
 	1, // 0: qrouton.v1.Surfaces.tabs:type_name -> qrouton.v1.Tab
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	4, // 1: qrouton.v1.ListTerminalsResponse.terminals:type_name -> qrouton.v1.SessionTerminal
+	5, // 2: qrouton.v1.SessionTerminal.kind:type_name -> qrouton.v1.TerminalKind
+	6, // 3: qrouton.v1.SessionTerminal.size:type_name -> qrouton.v1.TerminalSize
+	2, // 4: qrouton.v1.WindowService.ListTerminals:input_type -> qrouton.v1.ListTerminalsRequest
+	3, // 5: qrouton.v1.WindowService.ListTerminals:output_type -> qrouton.v1.ListTerminalsResponse
+	5, // [5:6] is the sub-list for method output_type
+	4, // [4:5] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_qrouton_v1_windows_proto_init() }
@@ -233,15 +403,16 @@ func file_qrouton_v1_windows_proto_init() {
 	if File_qrouton_v1_windows_proto != nil {
 		return
 	}
+	file_qrouton_v1_terminals_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_qrouton_v1_windows_proto_rawDesc), len(file_qrouton_v1_windows_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   5,
 			NumExtensions: 0,
-			NumServices:   0,
+			NumServices:   1,
 		},
 		GoTypes:           file_qrouton_v1_windows_proto_goTypes,
 		DependencyIndexes: file_qrouton_v1_windows_proto_depIdxs,

@@ -264,6 +264,16 @@ func (s *SessionState) write(data []byte) error {
 	return process.Write(data)
 }
 
+func (s *SessionState) size() *Size {
+	s.mu.Lock()
+	process := s.process
+	s.mu.Unlock()
+	if process == nil {
+		return nil
+	}
+	return process.Size()
+}
+
 func (s *SessionState) resize(cols, rows int) error {
 	s.mu.Lock()
 	process := s.process
