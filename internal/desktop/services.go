@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 
 	"github.com/kieranajp/qrouton/internal/api"
 	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
@@ -76,20 +77,32 @@ func (s *Sessions) Uncommitted(slug string) ([]string, error) { return s.session
 func (s *Sessions) Cleanup(slug string) error { return s.sessions.Cleanup(slug) }
 
 type Term struct {
-	terminals qroutonv1.TerminalServiceClient
+	terminals *terminals
 }
 
-func (t *Term) Start(id string, cols, rows int) error { return attach(t.terminals, id, cols, rows) }
+func (t *Term) Start(id string, cols, rows int) error { return t.terminals.start(id, cols, rows) }
 
 func (t *Term) Write(id, encoded string) error { return write(t.terminals, id, encoded) }
 
-func (t *Term) Resize(id string, cols, rows int) error { return resize(t.terminals, id, cols, rows) }
+func (t *Term) Resize(id string, cols, rows int) error { return t.terminals.resize(id, cols, rows) }
 
-// attach is the page mounting a terminal: it starts one nothing has, and
-// otherwise replays it from the start, since the page keeps no offset.
-func attach(terminals qroutonv1.TerminalServiceClient, id string, cols, rows int) error {
-	_, err := terminals.Attach(context.Background(), &qroutonv1.AttachRequest{TerminalId: id, Size: terminalSize(cols, rows)})
-	return api.FromStatus(err)
+// start is the page mounting a terminal. It starts one nothing has, and
+// otherwise replays the whole ring, since the page keeps no offset. The mount
+// is recorded before the attach so a re-attach running meanwhile cannot skip it.
+func (t *terminals) start(id string, cols, rows int) error {
+	size := terminalSize(cols, rows)
+	t.mount(id)
+	t.holdPending(id, size)
+	_, err := t.Attach(context.Background(), &qroutonv1.AttachRequest{TerminalId: id, Size: size})
+	if api.NoSubscriber(err) {
+		return nil
+	}
+	t.dropPending(id)
+	err = api.FromStatus(err)
+	if errors.Is(err, core.ErrNotFound) {
+		t.unmount(id)
+	}
+	return err
 }
 
 func write(terminals qroutonv1.TerminalServiceClient, id, encoded string) error {
@@ -101,9 +114,13 @@ func write(terminals qroutonv1.TerminalServiceClient, id, encoded string) error 
 	return api.FromStatus(err)
 }
 
-func resize(terminals qroutonv1.TerminalServiceClient, id string, cols, rows int) error {
-	_, err := terminals.Resize(context.Background(), &qroutonv1.ResizeRequest{TerminalId: id, Size: terminalSize(cols, rows)})
-	return api.FromStatus(err)
+func (t *terminals) resize(id string, cols, rows int) error {
+	size := terminalSize(cols, rows)
+	if _, err := t.Resize(context.Background(), &qroutonv1.ResizeRequest{TerminalId: id, Size: size}); err != nil {
+		return api.FromStatus(err)
+	}
+	t.resizePending(id, size)
+	return nil
 }
 
 func terminalSize(cols, rows int) *qroutonv1.TerminalSize {
@@ -118,7 +135,7 @@ func decodeInput(encoded string) ([]byte, error) {
 
 type Windows struct {
 	windows   *core.Windows
-	terminals qroutonv1.TerminalServiceClient
+	terminals *terminals
 }
 
 func (w *Windows) OpenShell() (string, error) { return w.windows.OpenShell() }
@@ -129,11 +146,11 @@ func (w *Windows) Select(slug, id string) error { return w.windows.Select(slug, 
 
 func (w *Windows) Reorder(slug, id string, to int) error { return w.windows.Reorder(slug, id, to) }
 
-func (w *Windows) Start(id string, cols, rows int) error { return attach(w.terminals, id, cols, rows) }
+func (w *Windows) Start(id string, cols, rows int) error { return w.terminals.start(id, cols, rows) }
 
 func (w *Windows) Write(id, encoded string) error { return write(w.terminals, id, encoded) }
 
-func (w *Windows) Resize(id string, cols, rows int) error { return resize(w.terminals, id, cols, rows) }
+func (w *Windows) Resize(id string, cols, rows int) error { return w.terminals.resize(id, cols, rows) }
 
 func (w *Windows) Content(id string) (core.Document, error) { return w.windows.Content(id) }
 

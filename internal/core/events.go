@@ -45,3 +45,7 @@ type Output struct {
 }
 
 type Size struct{ Cols, Rows int }
+
+// Deliver hands a replay to the client that attached, and reports whether a
+// live stream of that client took it.
+type Deliver func(Output) bool

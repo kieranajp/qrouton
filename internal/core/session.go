@@ -163,7 +163,7 @@ func (s *SessionState) admissionClosed() bool {
 // attach launches the supervisor under a PTY sized to the terminal displaying
 // it. The page attaches on every load, so a reload replays the conversation
 // rather than forking a second agent.
-func (s *SessionState) attach(events Events, exited func(*SessionState, int), size *Size, from *uint64, deliver func(Output)) error {
+func (s *SessionState) attach(events Events, exited func(*SessionState, int), size *Size, from *uint64, deliver Deliver) error {
 	s.mu.Lock()
 	if s.stopped {
 		s.mu.Unlock()
@@ -262,6 +262,16 @@ func (s *SessionState) write(data []byte) error {
 		return ErrTerminalNotStarted
 	}
 	return process.Write(data)
+}
+
+func (s *SessionState) size() *Size {
+	s.mu.Lock()
+	process := s.process
+	s.mu.Unlock()
+	if process == nil {
+		return nil
+	}
+	return process.Size()
 }
 
 func (s *SessionState) resize(cols, rows int) error {

@@ -86,8 +86,38 @@ func (w *Windows) openAgentWindow(owner *SessionState, opts workbench.WindowOpti
 	return id, nil
 }
 
-func (w *Windows) Attach(id string, size *Size, from *uint64, deliver func(Output)) error {
+func (w *Windows) Attach(id string, size *Size, from *uint64, deliver Deliver) error {
 	return w.terminals.attach(id, size, from, deliver)
+}
+
+// SessionTerminal is one terminal a session holds. Size is nil while it has no process.
+type SessionTerminal struct {
+	ID   string
+	Kind TerminalKind
+	Size *Size
+}
+
+// Terminals lists the conversation and terminal tabs of the session named
+// slug, or of every session when slug is empty.
+func (w *Windows) Terminals(slug string) []SessionTerminal {
+	var out []SessionTerminal
+	for _, state := range w.sessions.all() {
+		if slug == "" || state.Slug() == slug {
+			out = append(out, SessionTerminal{ID: state.terminal, Kind: TerminalConversation, Size: state.size()})
+		}
+	}
+	w.each(func(id string, window *agentWindow) {
+		terminal, ok := window.terminal()
+		if !ok || (slug != "" && window.session.Slug() != slug) {
+			return
+		}
+		listed := SessionTerminal{ID: id, Kind: TerminalTab}
+		if terminal.process != nil {
+			listed.Size = terminal.process.Size()
+		}
+		out = append(out, listed)
+	})
+	return out
 }
 
 func (w *Windows) Write(id string, data []byte) error { return w.terminals.write(id, data) }

@@ -91,7 +91,7 @@ func TestAttachDuringAFloodReplaysUpToExactlyWhereLiveOutputResumes(t *testing.T
 
 // flooded is one kind of terminal flooding output, attachable the way a page is.
 type flooded struct {
-	attach func(size *Size, from *uint64, deliver func(Output)) error
+	attach func(size *Size, from *uint64, deliver Deliver) error
 	live   func() []Output
 }
 
@@ -125,7 +125,7 @@ func TestAttachToAFloodingTerminalOfEitherKindContinuesWithoutGapOrDuplicate(t *
 				}
 			}, t.TempDir(), flood, os.Environ())
 			return flooded{
-				attach: func(size *Size, from *uint64, deliver func(Output)) error {
+				attach: func(size *Size, from *uint64, deliver Deliver) error {
 					return term.Attach(state.terminal, size, from, deliver)
 				},
 				live: log.snapshot,
@@ -146,7 +146,7 @@ func TestAttachToAFloodingTerminalOfEitherKindContinuesWithoutGapOrDuplicate(t *
 				t.Fatal(err)
 			}
 			return flooded{
-				attach: func(size *Size, from *uint64, deliver func(Output)) error {
+				attach: func(size *Size, from *uint64, deliver Deliver) error {
 					return w.Attach(id, size, from, deliver)
 				},
 				live: log.snapshot,
@@ -155,8 +155,9 @@ func TestAttachToAFloodingTerminalOfEitherKindContinuesWithoutGapOrDuplicate(t *
 	} {
 		t.Run(name, func(t *testing.T) {
 			terminal := open(t)
-			if err := terminal.attach(&Size{Cols: 80, Rows: 24}, nil, func(Output) {
+			if err := terminal.attach(&Size{Cols: 80, Rows: 24}, nil, func(Output) bool {
 				t.Error("the attach that started the terminal delivered a replay")
+				return true
 			}); err != nil {
 				t.Fatal(err)
 			}
@@ -174,9 +175,10 @@ func TestAttachToAFloodingTerminalOfEitherKindContinuesWithoutGapOrDuplicate(t *
 				}
 				var a attached
 				delivered := 0
-				if err := terminal.attach(nil, from, func(out Output) {
+				if err := terminal.attach(nil, from, func(out Output) bool {
 					delivered++
 					a = attached{replay: out, next: len(terminal.live())}
+					return true
 				}); err != nil {
 					t.Fatal(err)
 				}
@@ -236,7 +238,7 @@ func TestAttachFromAnOffsetTheTabNoLongerHoldsReplaysItsWholeRingWithReset(t *te
 	replay := func(from uint64) Output {
 		t.Helper()
 		var got Output
-		if err := w.Attach(id, nil, &from, func(out Output) { got = out }); err != nil {
+		if err := w.Attach(id, nil, &from, func(out Output) bool { got = out; return true }); err != nil {
 			t.Fatal(err)
 		}
 		return got
@@ -259,16 +261,16 @@ func TestAttachWithoutASizeLeavesThePTYAsItWas(t *testing.T) {
 	sized := &Size{Cols: 80, Rows: 24}
 	t.Run("conversation", func(t *testing.T) {
 		term, state := testTerm(t, func(string, any) {}, t.TempDir(), []string{"/bin/cat"}, os.Environ())
-		if err := term.Attach(state.terminal, nil, nil, func(Output) { t.Error("an unstarted conversation replayed") }); err != ErrTerminalNotStarted {
+		if err := term.Attach(state.terminal, nil, nil, func(Output) bool { t.Error("an unstarted conversation replayed"); return true }); err != ErrTerminalNotStarted {
 			t.Fatalf("attach without a size before start = %v, want ErrTerminalNotStarted", err)
 		}
 		if state.process != nil {
 			t.Fatal("an attach without a size started the supervisor")
 		}
-		if err := term.Attach(state.terminal, sized, nil, func(Output) {}); err != nil {
+		if err := term.Attach(state.terminal, sized, nil, func(Output) bool { return true }); err != nil {
 			t.Fatal(err)
 		}
-		if err := term.Attach(state.terminal, nil, nil, func(Output) {}); err != nil {
+		if err := term.Attach(state.terminal, nil, nil, func(Output) bool { return true }); err != nil {
 			t.Fatal(err)
 		}
 		if cols, rows, err := ptySize(state.process); err != nil || cols != 80 || rows != 24 {
@@ -283,13 +285,13 @@ func TestAttachWithoutASizeLeavesThePTYAsItWas(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := w.Attach(id, nil, nil, func(Output) { t.Error("an unstarted tab replayed") }); err != ErrTerminalNotStarted {
+		if err := w.Attach(id, nil, nil, func(Output) bool { t.Error("an unstarted tab replayed"); return true }); err != ErrTerminalNotStarted {
 			t.Fatalf("attach without a size before start = %v, want ErrTerminalNotStarted", err)
 		}
-		if err := w.Attach(id, sized, nil, func(Output) {}); err != nil {
+		if err := w.Attach(id, sized, nil, func(Output) bool { return true }); err != nil {
 			t.Fatal(err)
 		}
-		if err := w.Attach(id, nil, nil, func(Output) {}); err != nil {
+		if err := w.Attach(id, nil, nil, func(Output) bool { return true }); err != nil {
 			t.Fatal(err)
 		}
 		window, _ := w.window(id)
@@ -313,8 +315,9 @@ func TestASecondAttachOnALiveConversationReplaysItsEarlierOutput(t *testing.T) {
 	pid := ptyPid(state.process)
 
 	var replays []Output
-	if err := term.Attach(state.terminal, &Size{Cols: 100, Rows: 30}, nil, func(out Output) {
+	if err := term.Attach(state.terminal, &Size{Cols: 100, Rows: 30}, nil, func(out Output) bool {
 		replays = append(replays, out)
+		return true
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +347,7 @@ func TestAReplayOfAFinishedConversationCarriesItsExitCode(t *testing.T) {
 	}
 	waitFor(t, "the exit event", func() bool { return rec.saw(ptyExitName + state.terminal) })
 	var got Output
-	if err := term.Attach(state.terminal, &Size{Cols: 80, Rows: 24}, nil, func(out Output) { got = out }); err != nil {
+	if err := term.Attach(state.terminal, &Size{Cols: 80, Rows: 24}, nil, func(out Output) bool { got = out; return true }); err != nil {
 		t.Fatal(err)
 	}
 	if !got.Replay || got.ExitCode == nil || *got.ExitCode != 3 || !strings.Contains(string(got.Data), "going") {

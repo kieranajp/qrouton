@@ -18,7 +18,7 @@ func newTerm(reg *Sessions, events Events) *Term {
 // it before the page can call Attach.
 func (t *Term) whenChildExits(f func(state *SessionState, code int)) { t.exited = f }
 
-func (t *Term) Attach(id string, size *Size, from *uint64, deliver func(Output)) error {
+func (t *Term) Attach(id string, size *Size, from *uint64, deliver Deliver) error {
 	state, ok := t.sessions.ByTerminal(id)
 	if !ok {
 		return noSuchTerminal(id)

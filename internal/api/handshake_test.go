@@ -37,13 +37,14 @@ func TestHelloAcceptsAnotherBuildAndReportsItsOwn(t *testing.T) {
 }
 
 // Catches an interceptor that lets an unidentified client past, or one that
-// accepts an id Hello never issued.
-func TestACallBeforeHelloFailsPrecondition(t *testing.T) {
+// accepts an id Hello never issued. Unauthenticated keeps it apart from an
+// attach with no live stream, which is FailedPrecondition.
+func TestACallBeforeHelloFailsUnauthenticated(t *testing.T) {
 	p := serve(t, newFakeOllama())
 	for name, conn := range map[string]grpc.ClientConnInterface{"no id": p.Conn, "unknown id": Identified(p.Conn, "forged")} {
 		_, err := qroutonv1.NewOllamaServiceClient(conn).Check(context.Background(), &qroutonv1.CheckRequest{})
-		if status.Code(err) != codes.FailedPrecondition {
-			t.Fatalf("%s: Check = %v, want FailedPrecondition", name, err)
+		if status.Code(err) != codes.Unauthenticated {
+			t.Fatalf("%s: Check = %v, want Unauthenticated", name, err)
 		}
 	}
 	if _, err := qroutonv1.NewOllamaServiceClient(hello(t, p)).Check(context.Background(), &qroutonv1.CheckRequest{}); err != nil {

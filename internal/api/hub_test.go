@@ -43,10 +43,12 @@ func (s subscription) next() *qroutonv1.Event {
 	return resp.GetEvent()
 }
 
+// served serves a hub only the test publishes to: the core's own loops publish
+// whenever they like, so they get a hub of their own nobody subscribes to.
 func served(t *testing.T) (*InProcess, *Hub) {
 	t.Helper()
-	p := serve(t, newFakeOllama())
-	return p, p.hub
+	hub := NewHub()
+	return serveHub(t, newFakeOllama(), NewHub(), hub), hub
 }
 
 // Catches a hub that reorders events or numbers them out of sequence, which

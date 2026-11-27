@@ -20,7 +20,7 @@ func newTerminals(events Events, reg *registry) *terminals {
 
 // attach serves the page: it launches the command if nothing has, and otherwise
 // replays the running or finished process to the freshly mounted view.
-func (t *terminals) attach(id string, size *Size, from *uint64, deliver func(Output)) error {
+func (t *terminals) attach(id string, size *Size, from *uint64, deliver Deliver) error {
 	terminal, started, err := t.fork(id, size, true)
 	if err != nil || started {
 		return err
@@ -77,7 +77,7 @@ func (t *terminals) fork(id string, size *Size, served bool) (*terminalContent, 
 // replay resizes under the ordering lock as well: a shell repainting for
 // SIGWINCH must follow the replay. A finished process has no PTY worth
 // resizing, and its output must still replay.
-func (t *terminals) replay(id string, terminal *terminalContent, size *Size, from *uint64, deliver func(Output)) error {
+func (t *terminals) replay(id string, terminal *terminalContent, size *Size, from *uint64, deliver Deliver) error {
 	return terminal.stream.attach(from, func(out Output) error {
 		var process *PTY
 		var state *workbench.TerminalState
@@ -99,7 +99,9 @@ func (t *terminals) replay(id string, terminal *terminalContent, size *Size, fro
 			}
 		}
 		out.First, out.ExitCode = running && first, state.ExitCode
-		deliver(out)
+		if !deliver(out) {
+			return nil
+		}
 		_ = t.registry.with(id, func(window *agentWindow) error {
 			if content, ok := window.terminal(); ok && content == terminal {
 				terminal.served = true

@@ -92,6 +92,11 @@ const (
 // ending cannot spin.
 const resubscribeDelay = 50 * time.Millisecond
 
+// resyncLogFormat notes a resubscribe that came back too late to resume.
+const resyncLogFormat = "event stream: resumed past the backlog at seq %d; events were missed"
+
+const reattachLogFormat = "event stream: cannot list terminals to attach again: %v"
+
 const viewMenuLabel = "View"
 
 const (

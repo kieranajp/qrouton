@@ -21,7 +21,8 @@ func (t *terminalService) conversation(id string) bool {
 	return ok
 }
 
-// Attach hands the replay to the caller's own queues alone.
+// Attach hands the replay to the caller's own queues alone, and fails when
+// none took it, since that replay is gone.
 func (t *terminalService) Attach(ctx context.Context, req *qroutonv1.AttachRequest) (*qroutonv1.AttachResponse, error) {
 	id := req.GetTerminalId()
 	var size *core.Size
@@ -34,14 +35,27 @@ func (t *terminalService) Attach(ctx context.Context, req *qroutonv1.AttachReque
 		from = &offset
 	}
 	client := clientID(ctx)
-	if t.conversation(id) {
-		return &qroutonv1.AttachResponse{}, t.core.Term.Attach(id, size, from, func(out core.Output) {
-			t.hub.deliver(client, terminalOutput(core.TerminalConversation, id, out))
-		})
+	replayed, reached := false, false
+	deliver := func(kind core.TerminalKind) core.Deliver {
+		return func(out core.Output) bool {
+			replayed = true
+			reached = t.hub.deliver(client, terminalOutput(kind, id, out))
+			return reached
+		}
 	}
-	return &qroutonv1.AttachResponse{}, t.core.Windows.Attach(id, size, from, func(out core.Output) {
-		t.hub.deliver(client, terminalOutput(core.TerminalTab, id, out))
-	})
+	var err error
+	if t.conversation(id) {
+		err = t.core.Term.Attach(id, size, from, deliver(core.TerminalConversation))
+	} else {
+		err = t.core.Windows.Attach(id, size, from, deliver(core.TerminalTab))
+	}
+	if err != nil {
+		return nil, err
+	}
+	if replayed && !reached {
+		return nil, status.Error(codes.FailedPrecondition, ErrNoSubscriber.Error())
+	}
+	return &qroutonv1.AttachResponse{}, nil
 }
 
 func (t *terminalService) Write(_ context.Context, req *qroutonv1.WriteRequest) (*qroutonv1.WriteResponse, error) {

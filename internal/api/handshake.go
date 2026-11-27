@@ -91,7 +91,7 @@ func (w *workbenchService) Hello(_ context.Context, req *qroutonv1.HelloRequest)
 
 func (c *clients) unary(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	if info.FullMethod != qroutonv1.WorkbenchService_Hello_FullMethodName && !c.known(ctx) {
-		return nil, status.Error(codes.FailedPrecondition, ErrNoClient.Error())
+		return nil, status.Error(codes.Unauthenticated, ErrNoClient.Error())
 	}
 	resp, err := handler(ctx, req)
 	return resp, toStatus(err)
@@ -99,7 +99,7 @@ func (c *clients) unary(ctx context.Context, req any, info *grpc.UnaryServerInfo
 
 func (c *clients) stream(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	if !c.known(ss.Context()) {
-		return status.Error(codes.FailedPrecondition, ErrNoClient.Error())
+		return status.Error(codes.Unauthenticated, ErrNoClient.Error())
 	}
 	return toStatus(handler(srv, ss))
 }

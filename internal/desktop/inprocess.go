@@ -14,7 +14,7 @@ import (
 type inProcess struct {
 	*api.InProcess
 	ollama    qroutonv1.OllamaServiceClient
-	terminals qroutonv1.TerminalServiceClient
+	terminals *terminals
 
 	stop       context.CancelFunc
 	translated chan struct{}
@@ -36,7 +36,13 @@ func startInProcess(kernel *core.Core, hub *api.Hub, socket, version string, emi
 	}
 	conn := api.Identified(served.Conn, hello.GetClientId())
 	ctx, stop := context.WithCancel(context.Background())
-	events := &translator{events: qroutonv1.NewEventServiceClient(conn), emit: emit}
+	terminals := newTerminals(qroutonv1.NewTerminalServiceClient(conn))
+	events := &translator{
+		events:    qroutonv1.NewEventServiceClient(conn),
+		windows:   qroutonv1.NewWindowServiceClient(conn),
+		terminals: terminals,
+		emit:      emit,
+	}
 	stream, err := events.subscribe(ctx)
 	if err != nil {
 		stop()
@@ -46,7 +52,7 @@ func startInProcess(kernel *core.Core, hub *api.Hub, socket, version string, emi
 	in := &inProcess{
 		InProcess:  served,
 		ollama:     qroutonv1.NewOllamaServiceClient(conn),
-		terminals:  qroutonv1.NewTerminalServiceClient(conn),
+		terminals:  terminals,
 		stop:       stop,
 		translated: make(chan struct{}),
 	}
