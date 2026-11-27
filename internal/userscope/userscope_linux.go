@@ -22,8 +22,9 @@ var run = func(ctx context.Context, argv []string) error {
 	return exec.CommandContext(ctx, argv[0], argv[1:]...).Run()
 }
 
-// Available reports whether a user manager will start a scope with every flag
-// Wrap passes, so an older systemd falls back rather than failing each child.
+// Available reports whether a user manager starts a scope with the wrap's flags.
+// systemd before 254 rejects --expand-environment=no, so it falls back here
+// rather than failing every child.
 func Available() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancel()

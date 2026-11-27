@@ -19,7 +19,7 @@ func TestWrapPrefixIsExact(t *testing.T) {
 	}
 }
 
-// A machine without a user manager must keep starting children unwrapped.
+// A failed probe read as success would wrap every child on a machine that cannot start one.
 func TestAvailableIsFalseWhenProbeFails(t *testing.T) {
 	saved := run
 	t.Cleanup(func() { run = saved })
