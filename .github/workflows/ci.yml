@@ -1,6 +1,13 @@
 name: CI
 
 on:
+  workflow_dispatch:
+    inputs:
+      build_ref:
+        description: Branch, tag, or commit to package
+        required: true
+        default: main
+        type: string
   pull_request:
     paths-ignore:
       - Casks/qrouton.rb
@@ -12,8 +19,14 @@ on:
 jobs:
   check:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
+        id: source
+        with:
+          ref: ${{ inputs.build_ref || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -24,10 +37,23 @@ jobs:
           cache-dependency-path: internal/desktop/frontend/package-lock.json
       - uses: ./.github/actions/setup-linux
       - run: cd internal/desktop/frontend && npm ci && npx playwright install chromium
+        if: github.event_name != 'workflow_dispatch'
       - run: make check
+        if: github.event_name != 'workflow_dispatch'
       - run: make deb-check VERSION=0.0.0
+      - name: Upload verified Debian package
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qrouton-ubuntu-24.04-amd64-${{ steps.source.outputs.commit }}
+          path: |
+            dist/qrouton_0.0.0_amd64.deb
+            dist/checksums-linux-amd64.txt
+          if-no-files-found: error
+          retention-days: 14
 
   macos:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
